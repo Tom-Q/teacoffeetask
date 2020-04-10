@@ -2,7 +2,9 @@ import math
 import utils
 import tensorflow as tf
 import numpy as np
-
+import seaborn as sns
+import matplotlib
+import matplotlib.pyplot as plt
 
 class holroyd2018network():
     """
@@ -61,6 +63,14 @@ class holroyd2018network():
             output_activation = utils.dense_sigmoid(hidden_activation, self._w_output, self._b_output)
         return output_activation, hidden_activation
 
+    def full_sequence(self, input_sequence, output_sequence, error_type):
+        if error_type == "mse":
+            return self.full_sequence_mse(input_sequence, output_sequence)
+        elif error_type == "cross_entropy":
+            return self.full_sequence_cross_entropy(input_sequence, output_sequence)
+        else:
+            raise ValueError("error type is unknown/not implemented")
+
     def full_sequence_cross_entropy(self, input_sequence, output_sequence):
         """
         :param input_sequence: one-hot encoded
@@ -78,16 +88,14 @@ class holroyd2018network():
                 contexts.append(context_activation.numpy())
 
             # Compute the loss
-            loss = 0.
-            for i in range(len(outputs)):
-                loss += tf.nn.softmax_cross_entropy_with_logits(output_sequence[i], outputs[i])
+            loss = sum([tf.nn.softmax_cross_entropy_with_logits(output_sequence[i], outputs[i]) for i in range(len(outputs))])
             self._update_weights(tape.gradient(loss, self._all_weights))
 
             # return the activation probabilities, not the logits
             for idx, logits in enumerate(outputs):
                 outputs[idx] = tf.exp(logits) / tf.reduce_sum(tf.exp(logits))
 
-            return loss, contexts, [output.numpy() for output in outputs]
+            return loss.numpy()[0], contexts, [output.numpy() for output in outputs]
 
     def full_sequence_mse(self, input_sequence, output_sequence):
         """
@@ -107,15 +115,12 @@ class holroyd2018network():
                 contexts.append(context_activation.numpy())
 
             # Compute the loss
-            loss = 0.
-            for i in range(len(outputs)):
-                # it is customary for mse to multiply loss by 1/2
-                loss += tf.reduce_sum(tf.square(output_sequence[i]-outputs[i])) * 0.5
+            loss = sum([tf.reduce_sum(tf.square(output_sequence[i]-outputs[i])) * 0.5 for i in range(len(outputs))])
 
             self._update_weights(tape.gradient(loss, self._all_weights))
-            return loss, contexts, [output.numpy() for output in outputs]
+            return loss.numpy(), contexts, [output.numpy() for output in outputs]
 
-    def show_results(self, error_type="cross_entropy", verbose=False):
+    def show_results(self, error_type, verbose=False):
         # Now show what happens.
         self.learning_rate = 0.  # Freeze the network
         accuracy_per_sequence = []
@@ -157,14 +162,39 @@ class holroyd2018network():
         print("\nAverage accuracy (all seqs.): {0:.3f} (Max accuracy: {1:.4f})".format(sum(accuracy_per_sequence)/4.,
                                                                                            (48.-2)/48.))
 
+    def generate_euclidian_distance_matrix(self, error_type):
+        #1. For each sequence, get the context values.
+        self.learning_rate = 0.
+        all_contexts = []
+        for i in range(len(self.input_sequences_one_hot)):
+            if error_type == "mse":
+                _, sequence_contexts, _ = self.full_sequence_mse(self.input_sequences_one_hot[i],
+                                                        self.output_sequences_one_hot[i])
+            elif error_type == "cross_entropy":
+                _, sequence_contexts, _ = self.full_sequence_mse(self.input_sequences_one_hot[i],
+                                                        self.output_sequences_one_hot[i])
+            else: raise ValueError("Undefined error type")
+            all_contexts = all_contexts + [context[0] for context in sequence_contexts]
+
+        # 2. For each context, measure the distance with each other context
+        distance_matrix = np.zeros(shape=[24, 24])
+        for i, context1 in enumerate(all_contexts):
+            for j, context2 in enumerate(all_contexts):
+                distance_matrix[i, j] = np.linalg.norm(context1-context2) # euclidian distance
+
+        return distance_matrix
+
 def main():
     verbose = False
+    error_type="cross_entropy"  #mse or cross_entropy
     holroyd_net = holroyd2018network()
     running_avg_loss = 0.
+    print("Iteration\tLoss")
     for i in range(5000):
         idx = np.random.randint(4)
-        loss, _, _ = holroyd_net.full_sequence_mse(holroyd_net.input_sequences_one_hot[idx],
-                                                   holroyd_net.output_sequences_one_hot[idx])
+        loss, _, _ = holroyd_net.full_sequence(holroyd_net.input_sequences_one_hot[idx],
+                                               holroyd_net.output_sequences_one_hot[idx],
+                                               error_type)
         if i == 0:
             running_avg_loss = loss
         elif i < 10:
@@ -175,9 +205,18 @@ def main():
             running_avg_loss = running_avg_loss * 0.99 + 0.01 * loss
 
         if i == 0 or (i+1) % 1000 == 0 or (i < 1000 and math.log(i+1, 3) % 1 == 0):
-            tf.print("Loss (running average) at iteration {0}: {1:.4f}".format(i+1, running_avg_loss))
+            print("{0:5d}:\t\t{1:8.4f}".format(i+1, running_avg_loss))
 
-    holroyd_net.show_results(error_type="mse", verbose=False)
+    holroyd_net.show_results(error_type, verbose=False)
+    matrix = holroyd_net.generate_euclidian_distance_matrix(error_type)
+
+    x_labels = [input_string for list_of_strings in holroyd_net.input_sequences_strings for input_string in list_of_strings]  # flatten the list of inputs
+    y_labels = x_labels  # labels for y-axis
+    sns.heatmap(matrix, cbar=True, square=True, xticklabels=x_labels, yticklabels=y_labels)
+    plt.show()
+
+    # export data to csv
+    np.savetxt("euclidian_dist_matrix.csv", matrix, delimiter=",")
 
 if __name__ == "__main__":
     main()
