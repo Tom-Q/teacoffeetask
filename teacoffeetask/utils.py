@@ -18,6 +18,22 @@ def one_hot_encoding(categories, sequence):
     return one_hot
 
 
+def numpy_winner_take_all(x):
+    """
+    :param x: a vector or matrix
+    :return: a one hot vector or matrix where the maximum value for every row is 1.
+    """
+    y = np.zeros_like(x)
+    y[np.argmax(x)] = 1.
+    return y
+
+def flatten_list_of_lists(list_of_lists):
+    """
+    :param list_of_lists: a list of lists
+    :return: a single flat list
+    """
+    return [item for sublist in list_of_lists for item in sublist]
+
 def dense_linear(x, W, b=None):
     """
      :param x: input
