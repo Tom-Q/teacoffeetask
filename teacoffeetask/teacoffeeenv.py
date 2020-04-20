@@ -241,9 +241,9 @@ class holroyd2018network():
 def main():
     verbose = False
     error_type = "mse"  # mse or cross_entropy
-    num_networks = 100
+    num_networks = 10
     num_accurate_networks = 0
-    training_steps_per_network = 5000
+    training_steps_per_network = 10000
 
     spearman_matrix = np.zeros([24, 24])
     euclidian_matrix = np.zeros([24, 24])
