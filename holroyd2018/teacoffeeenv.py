@@ -9,7 +9,7 @@ import warnings
 from termcolor import colored
 
 
-class holroyd2018network():
+class Holroyd2018Network(object):
     """
     This is more or less the network implemented by Holroyd et al 2018.
     """
@@ -252,7 +252,7 @@ def main():
     for i in range(num_networks):
         print("\nTraining starts for network {}".format(i+1))
         running_avg_loss = 0.
-        holroyd_net = holroyd2018network()
+        holroyd_net = Holroyd2018Network()
         print("Iteration\tLoss")
         for j in range(training_steps_per_network):
             idx = np.random.randint(4)
@@ -296,7 +296,7 @@ def main():
     spearman_matrix_s = spearman_matrix_s / num_accurate_networks
     euclidian_matrix_s = euclidian_matrix_s / num_accurate_networks
 
-    net = holroyd2018network() # This is just to have access to the input sequences strings. Not elegant but... oh well
+    net = Holroyd2018Network() # This is just to have access to the input sequences strings. Not elegant but... oh well
     x_labels = utils.flatten_list_of_lists(net.input_sequences_strings)
     y_labels = x_labels  # labels for y-axis
 
