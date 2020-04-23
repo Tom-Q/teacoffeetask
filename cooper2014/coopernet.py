@@ -18,9 +18,7 @@ class CooperNet(object):
 
 def main():
    ceMdp = coffeeenv.CoffeeEnv()
-   observation = ceMdp.set_up_coffee()
-
-   print(observation)
+   ceMdp._test_sequences()
 
 if __name__ == "__main__":
     main()
