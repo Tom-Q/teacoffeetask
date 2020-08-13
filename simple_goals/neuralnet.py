@@ -11,16 +11,21 @@ class Layer(object):
             self.b = None
 
 class NeuralNet(object):
-    def __init__(self, size_hidden=25):
-        self.size_observation = len(tce.TeaCoffeeData.observations_list)
+    def __init__(self, size_hidden=25,
+                 size_observation=len(tce.TeaCoffeeData.observations_list),
+                 size_goal1 = len(tce.TeaCoffeeData.goals1_list),
+                 size_goal2 = len(tce.TeaCoffeeData.goals2_list),
+                 size_action = len(tce.TeaCoffeeData.actions_list)):
+        self.size_observation = size_observation
         self.size_hidden = size_hidden
-        self.size_goal1 = len(tce.TeaCoffeeData.goals1_list)
-        self.size_goal2 = len(tce.TeaCoffeeData.goals2_list)
-        self.size_action = len(tce.TeaCoffeeData.actions_list)
+        self.size_goal1 = size_goal1
+        self.size_goal2 = size_goal2
+        self.size_action = size_action
 
         self.goal1 = self.goal2 = self.action = self.context = self.action_softmax =\
             self.goal1_softmax = self.goal2_softmax = None
 
+        """
         self.hidden_layer = Layer(np.random.uniform(-.15, .15, size=[self.size_observation + self.size_hidden +
                                                                      self.size_action + self.size_goal1 + self.size_goal2,
                                                                      self.size_hidden]))
@@ -28,6 +33,14 @@ class NeuralNet(object):
         self.goal1_layer = Layer(np.random.uniform(-.15, .15, size=[self.size_hidden, self.size_goal1]))
         self.goal2_layer = Layer(np.random.uniform(-.15, .15, size=[self.size_hidden, self.size_goal2]))
         self.action_layer = Layer(np.random.uniform(-.15, .15, size=[self.size_hidden, self.size_action]))
+        """
+        self.hidden_layer = Layer(np.random.normal(0., .1, size=[self.size_observation + self.size_hidden +
+                                                                 self.size_action + self.size_goal1 + self.size_goal2,
+                                                                 self.size_hidden]))
+
+        self.goal1_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_goal1]))
+        self.goal2_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_goal2]))
+        self.action_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_action]))
 
         self.all_weights = [self.hidden_layer.w, self.hidden_layer.b,
                             self.action_layer.w, self.action_layer.b,
@@ -35,7 +48,7 @@ class NeuralNet(object):
                             self.goal2_layer.w, self.goal2_layer.b]
 
         self.learning_rate = 0.1
-
+        self.L2_regularization = 0.001
         self.h_action_softmax = []
         self.h_goal1_softmax = []
         self.h_goal2_softmax = []
@@ -47,21 +60,24 @@ class NeuralNet(object):
 
     def feedforward(self, observation):
         # Not sure if thatś necessary? In theory the winner take all has no gradient anyway.
-        self.action = tf.stop_gradient(self.action)
-        self.goal1 = tf.stop_gradient(self.goal1)
-        self.goal2 = tf.stop_gradient(self.goal2)
-        network_input = tf.concat([observation, self.action, self.goal1, self.goal2, self.context], 1)
+        network_input = tf.concat([self.context, observation], 1)
+        for inputs in [self.action, self.goal1, self.goal2]:
+            if inputs is not None:
+                inputs = tf.stop_gradient(inputs)
+                network_input = tf.concat([network_input, inputs], 1)
         hidden_activation = self.dense_sigmoid(network_input, self.hidden_layer)
 
         # Three separate softmaxes for the action and the goal
-        self.action_softmax = self.dense_softmax(hidden_activation, self.action_layer)
-        self.goal1_softmax = self.dense_softmax(hidden_activation, self.goal1_layer)
-        self.goal2_softmax = self.dense_softmax(hidden_activation, self.goal2_layer)
+        self.action_softmax = self.dense_linear(hidden_activation, self.action_layer)
+        self.action = self.winner_take_all(self.action_softmax)
+        if self.size_goal1 > 0:
+            self.goal1_softmax = self.dense_linear(hidden_activation, self.goal1_layer)
+            self.goal1 = self.winner_take_all(self.goal1_softmax)
+        if self.size_goal2 > 0:
+            self.goal2_softmax = self.dense_linear(hidden_activation, self.goal2_layer)
+            self.goal2 = self.winner_take_all(self.goal2_softmax)
 
         # The actual chosen action and goal
-        self.action = self.winner_take_all(self.action_softmax)
-        self.goal1 = self.winner_take_all(self.goal1_softmax)
-        self.goal2 = self.winner_take_all(self.goal2_softmax)
 
         self.save_history()
 
@@ -98,6 +114,7 @@ class NeuralNet(object):
         :param x: input
         :param layer: Layer object with weights matrix [+ bias]
         :return: densely connected layer with softmax output
+        WARNING: DONT USE THIS METHOD FOR A LAST LAYER. TRAINING ASSUMES YOURE WORKING WITH LOGITS INSTEAD.
         """
         return tf.nn.softmax(NeuralNet.dense_linear(x, layer))
 
@@ -122,11 +139,13 @@ class NeuralNet(object):
         loss = 0.
         for i in range(len(targets_action)):
             loss += tf.nn.softmax_cross_entropy_with_logits(targets_action[i], self.h_action_softmax[i])
-            loss += tf.nn.softmax_cross_entropy_with_logits(targets_goal1[i], self.h_goal1_softmax[i])
-            loss += tf.nn.softmax_cross_entropy_with_logits(targets_goal2[i], self.h_goal2_softmax[i])
+            if targets_goal1 is not None:
+                loss += tf.nn.softmax_cross_entropy_with_logits(targets_goal1[i], self.h_goal1_softmax[i])
+            if targets_goal2 is not None:
+                loss += tf.nn.softmax_cross_entropy_with_logits(targets_goal2[i], self.h_goal2_softmax[i])
         # I'm going to assume that "weight persistence 0.999999" means L1 regularization. Multiplying by
         # the learning rate too.
-        loss += self.learning_rate * 0.001 * sum([tf.reduce_sum(weights) for weights in self.all_weights])
+        loss += self.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in self.all_weights])
         self.update_weights(tape.gradient(loss, self.all_weights))
         self.clear_history()
         return loss

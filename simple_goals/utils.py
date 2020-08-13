@@ -19,9 +19,9 @@ def str_to_onehot(str_key, keys):
 
 
 def liststr_to_onehot(list, keys):
-    onehot = np.zeros(len(list), len(keys))
+    onehot = np.zeros((len(list), len(keys)), dtype=np.float32)
     for idx, key in enumerate(list):
-        onehot[idx, key] = 1.
+        onehot[idx, keys.index(key)] = 1.
     return onehot
 
 
