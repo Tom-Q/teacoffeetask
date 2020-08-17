@@ -20,7 +20,7 @@ def mds(vectors):
     Y = mds.fit_transform(vectors_array)
     return Y
 
-def plot_mds_points(mds_y, points, labels=None):
+def plot_mds_points(mds_y, points, labels=None, style='rx-', show=True):
     toplotx = [mds_y[point, 0] for point in points]
     toploty = [mds_y[point, 1] for point in points]
 
@@ -33,8 +33,9 @@ def plot_mds_points(mds_y, points, labels=None):
             label = labels[i]
         plt.text(x * (1 + 0.01), y * (1 + 0.01), label, fontsize=9)
 
-    plt.plot(toplotx, toploty, 'rx-')
-    plt.show()
+    plt.plot(toplotx, toploty, style)
+    if show:
+        plt.show()
 
 
 #Representation dissimilarity matrices

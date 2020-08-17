@@ -59,10 +59,10 @@ class NeuralNet(object):
                         self.h_action_wta, self.h_goal1_wta, self.h_goal2_wta]
 
     def feedforward(self, observation):
-        # Not sure if thatś necessary? In theory the winner take all has no gradient anyway.
         network_input = tf.concat([self.context, observation], 1)
         for inputs in [self.action, self.goal1, self.goal2]:
             if inputs is not None:
+                # Not sure if thatś necessary? In theory the winner take all has no gradient anyway.
                 inputs = tf.stop_gradient(inputs)
                 network_input = tf.concat([network_input, inputs], 1)
         hidden_activation = self.dense_sigmoid(network_input, self.hidden_layer)

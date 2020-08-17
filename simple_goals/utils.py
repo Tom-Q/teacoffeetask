@@ -57,7 +57,7 @@ def load_object(name, latest=0):
     if not os.path.exists(SAVE_FOLDER):
         raise Exception('Folder ' + SAVE_FOLDER + 'does not exist; no files found.')
     # Load all files that match the name
-    file_names = [fn for fn in os.listdir(SAVE_FOLDER) if fn.startswith(name)]
+    file_names = [fn for fn in os.listdir(SAVE_FOLDER) if fn.startswith(name+'_')]
     # Since the timestamps are in the format YYYYMMDD_HHMMSS, an alphabetical sort will sort them chronologically
     files = sorted(file_names)
     if latest >= len(files):
