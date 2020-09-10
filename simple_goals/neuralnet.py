@@ -153,3 +153,19 @@ class NeuralNet(object):
     def update_weights(self, gradients):
         for i in range(len(self.all_weights)):
             self.all_weights[i].assign_sub(gradients[i] * self.learning_rate)
+
+    def train_MSE(self, targets_action, targets_goal1, targets_goal2, tape):
+        # Compute error + backprop.
+        loss = 0.
+        for i in range(len(targets_action)):
+            loss += tf.reduce_sum((targets_action[i] - tf.nn.sigmoid(self.h_action_softmax[i]))**2)
+            if targets_goal1 is not None:
+                loss += tf.reduce_sum((targets_goal1[i] - tf.nn.sigmoid(self.h_goal1_softmax[i])) ** 2)
+            if targets_goal2 is not None:
+                loss += tf.reduce_sum((targets_goal2[i] - tf.nn.sigmoid(self.h_goal2_softmax[i])) ** 2)
+        # I'm going to assume that "weight persistence 0.999999" means L1 regularization. Multiplying by
+        # the learning rate too.
+        loss += self.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in self.all_weights])
+        self.update_weights(tape.gradient(loss, self.all_weights))
+        self.clear_history()
+        return loss
