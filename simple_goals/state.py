@@ -4,6 +4,7 @@ import dataclasses as dc
 from dataclasses import dataclass
 from termcolor import colored
 from abc import ABC
+import abc
 
 # Practical method for the dataclass.
 def get_field_names(condition, class_type):
@@ -13,7 +14,6 @@ def get_field_names(condition, class_type):
 # Base class for TeaCoffeeData - a data class with no data
 @dataclass(repr=False)
 class AbstractData(ABC):
-
     def __post_init__(self):
         # Enforce class attributes in child classes. I tried to do this using metaclasses but couldn't make it work.
         # Fortunately __post_init__ can be used for this.
@@ -21,7 +21,6 @@ class AbstractData(ABC):
         for attribute in required_attributes:
             if not (hasattr(self, attribute)):
                 raise Exception("Child classes of AbstractData must implement the class attribute " + attribute)
-
 
     def _get_values(self, condition):
         # Return a np array with only the fields satisfying the condition, sorted alphabetically.
@@ -39,6 +38,16 @@ class AbstractData(ABC):
         # Just a wrapper over built-in setattr...
         setattr(self, field_name, value)
 
+    def _set_fields_to_value(self, condition, value):
+        # Get the fields
+        fields = []
+        for field in self.sorted_fields:  # This must be defined in the inheriting class
+            if field.name.startswith(condition):
+                fields.append(field)
+
+        for i, field in enumerate(fields):
+            self.set_field(field.name, value)
+
     def _set_fields(self, condition, nparray):
         nparray = nparray.flatten()
 
@@ -46,7 +55,7 @@ class AbstractData(ABC):
         fields = []
         for field in self.sorted_fields:  # This must be defined in the inheriting class
             if field.name.startswith(condition):
-                field += field
+                fields.append(field)
 
         if len(fields) == nparray.size:
             raise Exception("The array size must match exactly the number of fields to fill-in")
@@ -120,3 +129,26 @@ class State(object):
     def reset(self):
         self.current = self.current.__class__()  # To reinitialize to default values, make a new instance of the data.
         self.next = copy.copy(self.current)
+
+
+class Environment(ABC):
+    def __init__(self):
+        self.state = None
+
+    def do_action(self, action, verbose=False):
+        if isinstance(action, str):  # Action is a string resembling a field name, like "a_take_coffee_pack"
+            self.state.current.set_field(action, 1.)
+        else:  # Action is a numpy one-hot array
+            self.state.current.set_actions(action)  # The mapping is alphabetical
+        if verbose:
+            print(self.state.current)
+        self.transition()
+
+    @abc.abstractmethod
+    def transition(self):
+        pass
+
+    def observe(self):
+        return self.state.current.get_observable()
+
+

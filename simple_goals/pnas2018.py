@@ -11,7 +11,7 @@ seq1 = ["start", "coffee", "milk", "stir", "water", "stir", "serve_coffee"]
 seq2 = ["start", "coffee", "water", "stir", "milk", "stir", "serve_coffee"]
 seq3 = ["start", "tea", "sugar", "stir", "water", "stir", "serve_tea"]
 seq4 = ["start", "tea", "water", "stir", "sugar", "stir", "serve_tea"]
-seqs = [seq1, seq2, seq3, seq4]
+seqs = [seq2, seq1, seq4, seq3]
 goals = [[[0., 1.]]*6, [[0., 1.]]*6, [[1., 0]]*6, [[1, 0]]*6]
 goals = [np.asarray(goal, dtype=np.float32).reshape((-1, 1, 2)) for goal in goals]
 
@@ -119,7 +119,7 @@ def train_peng(mse=False, noise= 0., iterations=5000, reg= 0.0):
                     episode, rng_avg_loss, rng_avg_actions, rng_avg_goals))
     return model
 
-def train_pnas(mse=False, noise= 0., iterations=5000, reg= 0.0, lopsided = True):
+def train_pnas(mse=False, noise= 0., iterations=5000, reg= 0.0, lopsided = True, special_seq=False):
     model = nn.NeuralNet(size_hidden=15, size_observation=7, size_action=8, size_goal1=0, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = 0.5 if mse else 0.1
@@ -130,7 +130,16 @@ def train_pnas(mse=False, noise= 0., iterations=5000, reg= 0.0, lopsided = True)
     rng_avg_goals = 0.
 
     for episode in range(num_episodes):
-        seqid = np.random.randint(len(seqs))
+        seqid = episode % 4  #np.random.randint(len(seqs))
+        if special_seq:
+            if seqid == 0:
+                seqid = 1
+            elif seqid == 1:
+                seqid = 0
+            elif seqid == 2:
+                seqid = 3
+            elif seqid == 3:
+                seqid = 2
         if lopsided:
             if np.random.uniform() < 0.5:
                 seqid -= 2
@@ -174,7 +183,7 @@ def train_pnas(mse=False, noise= 0., iterations=5000, reg= 0.0, lopsided = True)
                     episode, rng_avg_loss, rng_avg_actions, rng_avg_goals))
     return model
 
-def train_pnas_with_goals(noise=0, iterations=10000, learning_rate=0.1):
+def train_pnas_with_goals(noise=0, iterations=10000, learning_rate=0.1, special_seq=False):
     model = nn.NeuralNet(size_hidden=15, size_observation=7, size_action=8, size_goal1=2, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = learning_rate
@@ -185,14 +194,16 @@ def train_pnas_with_goals(noise=0, iterations=10000, learning_rate=0.1):
     rng_avg_goals = 0.
 
     for episode in range(num_episodes):
-        seqid = np.random.randint(len(seqs))
-        """
-        if (np.random.randint(2)):
-            if seqid == 2:
+        seqid = episode % 4  #np.random.randint(len(seqs))
+        if special_seq:
+            if seqid == 0:
                 seqid = 1
-            elif seqid == 4:
+            elif seqid == 1:
+                seqid = 0
+            elif seqid == 2:
                 seqid = 3
-        """
+            elif seqid == 3:
+                seqid = 2
 
         goal = goals[seqid]
         sequence = seqs[seqid]

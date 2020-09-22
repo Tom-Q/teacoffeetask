@@ -113,8 +113,9 @@ TeaCoffeeData.all_list = [field.name for field in TeaCoffeeData.sorted_fields]
 
 
 # This class implements the transition rules: what happens to the state when we go from one time-step to the next.
-class TeaCoffeeEnv(object):
+class TeaCoffeeEnv(state.Environment):
     def __init__(self):
+        super().__init__()
         self.state = state.State(TeaCoffeeData())
 
     def do_action(self, action, verbose=False):
