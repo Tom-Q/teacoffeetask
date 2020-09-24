@@ -134,7 +134,23 @@ class NeuralNet(object):
         b[range(len(a)), a.argmax(1)] = 1
         return b
 
-    def train(self, targets_action, targets_goal1, targets_goal2, tape):
+    def train(self, targets, tape):
+        loss = 0
+        for i, target in enumerate(targets):
+            loss += tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, self.h_action_softmax[i])
+            if target.goal1_one_hot is not None:
+                loss += tf.nn.softmax_cross_entropy_with_logits(target.goal1_one_hot, self.h_goal1_softmax[i])
+            if target.goal2_one_hot is not None:
+                loss += tf.nn.softmax_cross_entropy_with_logits(target.goal2_one_hot, self.h_goal2_softmax[i])
+        # I'm going to assume that "weight persistence 0.999999" means L1 regularization. Multiplying by
+        # the learning rate too.
+        loss += self.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in self.all_weights])
+        self.update_weights(tape.gradient(loss, self.all_weights))
+        self.clear_history()
+        return loss
+
+    # TODO: refactor previous code to get rid of this.
+    def train_obsolete(self, targets_action, targets_goal1, targets_goal2, tape):
         # Compute error + backprop.
         loss = 0.
         for i in range(len(targets_action)):

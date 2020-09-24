@@ -7,6 +7,10 @@ from termcolor import colored
 import typing
 from abc import ABC
 import state
+import utils
+import neuralnet as nn
+import tensorflow as tf
+import scripts
 
 # Location constants for objects
 FRIDGE = 1
@@ -34,7 +38,6 @@ class GoalEnvData(state.AbstractData):
     # Visible or not [empty = not visible]
     # Containers
     o_fix_container_door_open: int = 0
-    #o_fix_container_door_closed: int = 0
     o_fix_cupboard: int = 0
     o_fix_fridge: int = 0
     o_fix_table: int = 0
@@ -128,6 +131,11 @@ class GoalEnvData(state.AbstractData):
     hiddens_list: typing.ClassVar[list]
     category_tuples: typing.ClassVar[list] = [('Goal', 'g_', 'green'),  ('Observable', 'o_', 'blue'),
                                               ('Hidden', 'h_', 'yellow'),  ('Action', 'a_', 'red')]
+    # More practical things to have
+    num_percepts: int = 0
+    num_actions: int = 0
+    num_goals1: int = 0
+    num_goals2: int = 0
 
     def is_fixate_action(self):
         return np.sum(self._get_values("a_fixate")) > 0
@@ -165,12 +173,90 @@ GoalEnvData.goals2_list = state.get_field_names('g_2_', GoalEnvData)
 GoalEnvData.observations_list = state.get_field_names('o_', GoalEnvData)
 GoalEnvData.hiddens_list = state.get_field_names('h_', GoalEnvData)
 GoalEnvData.all_list = [field.name for field in GoalEnvData.sorted_fields]
+GoalEnvData.num_percepts = len(GoalEnvData.observations_list)
+GoalEnvData.num_actions = len(GoalEnvData.actions_list)
+GoalEnvData.num_goals1 = len(GoalEnvData.goals1_list)
+GoalEnvData.num_goals2 = len(GoalEnvData.goals2_list)
+
+class Target(object):
+    def __init__(self, action, goal1 = None, goal2 = None):
+        self.action_str = action
+        self.goal1_str = goal1
+        self.goal2_str = goal2
+
+    @property
+    def action_str(self):
+        return self._action_str
+
+    @action_str.setter
+    def action_str(self, new_action_str):
+        self._action_str = new_action_str
+        if new_action_str is None:
+            self._action_one_hot = None
+        else:
+            self._action_one_hot = utils.str_to_onehot(new_action_str, GoalEnvData.actions_list)
+
+    @property
+    def goal1_str(self):
+        return self._goal1_str
+
+    @goal1_str.setter
+    def goal1_str(self, new_goal1_str):
+        self._goal1_str = new_goal1_str
+        if new_goal1_str is None:
+            self._goal1_one_hot = None
+        else:
+            self._goal1_one_hot = utils.str_to_onehot(new_goal1_str, GoalEnvData.goals1_list)
+
+    @property
+    def goal2_str(self):
+        return self._goal2_str
+
+    @goal2_str.setter
+    def goal2_str(self, new_goal2_str):
+        self._goal2_str = new_goal2_str
+        if new_goal2_str is None:
+            self._goal2_one_hot = None
+        else:
+            self._goal2_one_hot = utils.str_to_onehot(new_goal2_str, GoalEnvData.goals2_list)
+
+    @property
+    def action_one_hot(self):
+        return self._action_one_hot
+
+    @property
+    def goal1_one_hot(self):
+        return self._goal1_one_hot
+
+    @property
+    def goal2_one_hot(self):
+        return self._goal2_one_hot
+
+
+class BehaviorSequence(object):
+    def __init__(self, initialization_routine, targets=None):
+        self.targets = targets
+        self.initialize = initialization_routine
+
+    def get_actions_one_hot(self):
+        actions_list = [target.action_one_hot for target in self.targets]
+        return np.array(actions_list, dtype=float).reshape((-1, GoalEnvData.num_actions))
+
+    def get_goals1_one_hot(self):
+        goals1_list = [target.goal1_one_hot for target in self.targets]
+        return np.array(goals1_list, dtype=float).reshape((-1, GoalEnvData.num_goals1))
+
+    def get_goals2_one_hot(self):
+        goals2_list = [target.goal2_one_hot for target in self.targets]
+        return np.array(goals2_list, dtype=float).reshape((-1, GoalEnvData.num_goals2))
+
 
 
 class GoalEnv(state.Environment):
     def __init__(self):
         super().__init__()
         self.state = state.State(GoalEnvData())
+        self.sequences = self.initialize_sequences()
 
     def do_action(self, action, verbose=False):
         if isinstance(action, str):  # Action is a string resembling a field name, like "a_take_coffee_pack"
@@ -444,20 +530,163 @@ class GoalEnv(state.Environment):
     def reinitialize(self):
         self.state = state.State(GoalEnvData())
 
-    def test_environment(self):
-        # Action sequence 1: coffee - sugar - milk
-        sequence1 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug", "a_add_to_mug",
-                     "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir",
-                     "a_fixate_table", "a_put_down", "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_spoon", "a_take",
-                     "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take",
-                     "a_fixate_mug", "a_add_to_mug", "a_fixate_fridge", "a_put_down", "a_close", "a_fixate_spoon",
-                     "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
-                     "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
-        sequence2 = []
-        sequence3 = []
-        sequence4 = []
-        sequences = [sequence1, sequence2, sequence3, sequence4]
+    def initialize_sequences(self):
+        # Action sequence 1: black coffee
+        actions_sequence1 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+                             "a_add_to_mug",
+                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
+                             "a_take", "a_fixate_mug", "a_stir",
+                             "a_fixate_table", "a_put_down",
+                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+        sequence1 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence1])
 
-        for sequence in sequences:
-            for action in sequence:
-                self.do_action(action, verbose=True)
+        # Action sequence 2: coffee with sugar
+        actions_sequence2 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+                             "a_add_to_mug",
+                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
+                             "a_take", "a_fixate_mug", "a_stir",
+                             "a_fixate_table", "a_put_down", "a_fixate_sugar_box", "a_take", "a_fixate_mug",
+                             "a_add_to_mug", "a_fixate_spoon", "a_take",
+                             "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
+                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+        sequence2 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence2])
+
+        # Action sequence 3: coffee with sugar and milk (in this order)
+        actions_sequence3 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+                             "a_add_to_mug",
+                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
+                             "a_take", "a_fixate_mug", "a_stir",
+                             "a_fixate_table", "a_put_down",
+                             "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_spoon", "a_take",
+                             "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
+                             "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+                             "a_fixate_fridge", "a_put_down", "a_close", "a_fixate_spoon", "a_take", "a_fixate_mug",
+                             "a_stir",
+                             "a_fixate_table", "a_put_down",
+                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+        sequence3 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence3])
+
+        # Action sequence 4: coffee with milk and sugar (in this order)
+        actions_sequence4 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+                             "a_add_to_mug",
+                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
+                             "a_take", "a_fixate_mug", "a_stir",
+                             "a_fixate_table", "a_put_down",
+                             "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+                             "a_fixate_fridge", "a_put_down", "a_close", "a_fixate_spoon", "a_take", "a_fixate_mug",
+                             "a_stir",
+                             "a_fixate_table", "a_put_down",
+                             "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_spoon", "a_take",
+                             "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
+                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+        sequence4 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence4])
+
+        # Action sequence 5: coffee with cream and sugar (in this order)
+        actions_sequence5 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+                             "a_add_to_mug",
+                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
+                             "a_take", "a_fixate_mug", "a_stir",
+                             "a_fixate_table", "a_put_down",
+                             "a_fixate_fridge", "a_open", "a_fixate_cream", "a_take", "a_fixate_mug", "a_add_to_mug",
+                             "a_fixate_fridge", "a_put_down", "a_close", "a_fixate_spoon", "a_take", "a_fixate_mug",
+                             "a_stir",
+                             "a_fixate_table", "a_put_down",
+                             "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_spoon", "a_take",
+                             "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
+                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+        sequence5 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence5])
+
+        # Action sequence 6: coffee with sugar and cream (in this order)
+        actions_sequence6 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+                             "a_add_to_mug",
+                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
+                             "a_take", "a_fixate_mug", "a_stir",
+                             "a_fixate_table", "a_put_down",
+                             "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_spoon", "a_take",
+                             "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
+                             "a_fixate_fridge", "a_open", "a_fixate_cream", "a_take", "a_fixate_mug", "a_add_to_mug",
+                             "a_fixate_fridge", "a_put_down", "a_close", "a_fixate_spoon", "a_take", "a_fixate_mug",
+                             "a_stir",
+                             "a_fixate_table", "a_put_down",
+                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+        sequence6 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence6])
+        return [sequence1, sequence2, sequence3, sequence4, sequence5, sequence6]
+
+    def test_environment(self):
+        for i, sequence in enumerate(self.sequences):
+            print("\nSequence number " + str(i+1))
+            for target in sequence.targets:
+                self.do_action(target.action_str, verbose=True)
+
+def train(goals=False, num_iterations=50000, learning_rate=0.001, L2_reg = 0.000001, noise = 0., sequences=None):
+    if sequences is None:
+        sequences = [0]
+    env = GoalEnv()
+    if not goals:
+        model = nn.NeuralNet(size_hidden=50, size_observation=23, size_action=17, size_goal1=0, size_goal2=0)
+    model.learning_rate = learning_rate
+    model.L2_regularization = L2_reg
+
+    rng_avg_loss = 0.
+    rng_avg_actions = 0.
+    rng_avg_goals1 = 0.
+    rng_avg_goals2 = 0.
+
+    for iteration in range(num_iterations):
+        seqid = np.random.choice(sequences)
+        sequence = env.sequences[seqid]
+        sequence.initialize()
+        model.action = np.zeros((1, model.size_action), dtype=np.float32)
+
+        # run the network
+        with tf.GradientTape() as tape:
+            # Initialize context with random/uniform values.
+            model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            for i, target in enumerate(sequence.targets):
+                model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                # Add noise to context layer
+                model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
+                observation = env.observe()
+                model.feedforward(observation)
+
+            # Get some statistics about the percentage of correct behavior
+            actions = np.array(model.h_action_wta).reshape((-1, GoalEnvData.num_actions))
+            target_actions = sequence.get_actions_one_hot()
+            ratio_actions = scripts.ratio_correct(actions, target_actions)
+            if goals:
+                goals1 = np.array(model.h_goal1_wta).reshape((-1, GoalEnvData.num_goals1))
+                target_goals1 = sequence.get_actions_one_hot()
+                ratio_goals1 = scripts.ratio_correct(goals1, target_goals1)
+
+                goals2 = np.array(model.h_goal2_wta).reshape((-1, GoalEnvData.num_goals1))
+                target_goals2 = sequence.get_actions_one_hot()
+                ratio_goals2 = scripts.ratio_correct(goals2, target_goals2)
+
+            # Train model, record loss.
+            loss = model.train(sequence.targets, tape)
+
+        # Monitor progress using rolling averages.
+        speed = 2. / (iteration + 2) if iteration < 1000 else 0.001  # enables more useful evaluations for early trials
+        rng_avg_loss = utils.rolling_avg(rng_avg_loss, loss, speed)
+        rng_avg_actions = utils.rolling_avg(rng_avg_actions, ratio_actions, speed)
+        if goals:
+            rng_avg_goals1 = utils.rolling_avg(rng_avg_goals1, ratio_goals1, speed)  # whole action sequence correct ?
+            rng_avg_goals2 = utils.rolling_avg(rng_avg_goals2, ratio_goals2, speed)
+        # Display on the console at regular intervals
+        if (iteration < 1000 and iteration in [3 ** n for n in range(50)]) or iteration % 1000 == 0 \
+                or iteration + 1 == num_iterations:
+            print("{0}: avg loss={1}, \tactions={2}, \tfull_sequence={3}".format(
+                    iteration, rng_avg_loss, rng_avg_actions, rng_avg_goals1, rng_avg_goals2))
+    return model
+
+
+def evaluate_2(values, targets):
+    """
+    :param values: list of arrays, or 2D array
+    :param targets: list of Target objects
+    :return: ratio of values that are identical to their counterparts in targets
+    """
+    ratios = []
+    for i in range(len(values)):
+        ratios.append(scripts.ratio_correct(values, targets))
+    return ratios

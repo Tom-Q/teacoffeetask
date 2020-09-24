@@ -7,6 +7,7 @@ import utils
 import neuralnet as nn
 import analysis
 import matplotlib.pyplot as plt
+import random
 
 
 def evaluate(values, targets):
@@ -29,8 +30,8 @@ def ratio_correct(choices, targets):
     return correct / len(choices)
 
 
-def train_supervised(model, num_episodes):
-    env = tce.TeaCoffeeEnv()
+def train_supervised_teacoffeeenv(model, environment, num_episodes):
+    env = environment
 
     rng_avg_loss = 0.
     rng_avg_actions = 0.
@@ -70,7 +71,56 @@ def train_supervised(model, num_episodes):
                               targets_onehot)
             rng_avg_action1 = utils.rolling_avg(rng_avg_action1, ratio_correct([model.h_action_wta[0]], [targets_onehot[0][0]]), 2./(episode+2) if episode < 1000 else 0.001)
             # Train model, record loss.
-            loss = model.train(targets_onehot[0], targets_onehot[1], targets_onehot[2], tape)
+            loss = model.train_obsolete(targets_onehot[0], targets_onehot[1], targets_onehot[2], tape)
+
+            # Monitor progress using rolling averages.
+            speed = 2./(episode+2) if episode < 1000 else 0.001  # enables more useful evaluations for early trials
+            rng_avg_loss = utils.rolling_avg(rng_avg_loss, loss, speed)
+            rng_avg_actions = utils.rolling_avg(rng_avg_actions, ratios[0], speed)
+            rng_avg_goals = utils.rolling_avg(rng_avg_goals, ratios[0] == 1, speed)  # whole action sequence correct ?
+            rng_avg_goal1 = utils.rolling_avg(rng_avg_goal1, ratios[1], speed)
+            rng_avg_goal2 = utils.rolling_avg(rng_avg_goal2, ratios[2], speed)
+            # Display on the console at regular intervals
+            if (episode < 1000 and episode in [3**n for n in range(50)]) or episode % 1000 == 0 \
+                               or episode+1 == num_episodes:
+                print("{0}: avg loss={1}, \tactions={2}, \tfull_sequence={3}\tgoal1={4}\tgoal2={5}\tfirst_action={6}".format(
+                      episode, rng_avg_loss, rng_avg_actions, rng_avg_goals, rng_avg_goal1, rng_avg_goal2, rng_avg_action1))
+
+
+def train_supervised(model, env, num_episodes):
+    rng_avg_loss = 0.
+    rng_avg_actions = 0.
+    rng_avg_goals = 0.
+    rng_avg_goal1 = 0.
+    rng_avg_goal2 = 0.
+    rng_avg_action1 = 0.
+
+    for episode in range(num_episodes):
+        # run the network
+        with tf.GradientTape() as tape:
+            # Initialize model with random/uniform values.
+            model.context = np.zeros((1, model.size_hidden))
+
+            # Initialize environment with a random sequence
+            sequence = random.choice(env.sequences)
+            sequence.initialize()  # This is a bit weird: it's the environment that is getting initialized, not the sequence
+
+            for target in sequence.targets:
+                # Set up the input to be the correct actions and goals
+                model.action = target.action_one_hot
+                model.goal1 = target.goal1_one_hot if target.goal1_one_hot is not None else zeros
+                model.goal1 = target.goal1_one_hot if target.goal1_one_hot is not None else zeros
+
+                observation = env.observe()
+                model.feedforward(observation)
+                env.do_action(target[0])  # Transition the MDP according to the *target* action, not the chosen action!
+
+            # Get some statistics about what was correct and what wasn't
+            ratios = evaluate([model.h_action_wta, model.h_goal1_wta, model.h_goal2_wta],
+                              targets_onehot)
+            rng_avg_action1 = utils.rolling_avg(rng_avg_action1, ratio_correct([model.h_action_wta[0]], [targets_onehot[0][0]]), 2./(episode+2) if episode < 1000 else 0.001)
+            # Train model, record loss.
+            loss = model.train_obsolete(targets_onehot[0], targets_onehot[1], targets_onehot[2], tape)
 
             # Monitor progress using rolling averages.
             speed = 2./(episode+2) if episode < 1000 else 0.001  # enables more useful evaluations for early trials
@@ -89,7 +139,7 @@ def train_supervised(model, num_episodes):
 def train_and_save(num_models, name, num_episodes):
     for i in range(num_models):
         model = nn.NeuralNet()
-        train_supervised(model, num_episodes)
+        train_supervised_teacoffeeenv(model, num_episodes)
         utils.save_object(name, model)
         print('Trained and saved model #{0} of {1}\n'.format(i+1, num_models))
 
@@ -110,8 +160,6 @@ def get_model_hidden_activations(model):
             hidden.append(model.context.numpy().flatten())
             env.do_action(target[0])
     return hidden
-
-
 
 
 def run_models_with_noise(models, noise):
@@ -186,7 +234,6 @@ def make_rdm_and_mds(name):
     analysis.show_rdm(rdmatrix, labels, "Spearman rho matrix")
     mdsy = analysis.mds(hidden)
     analysis.plot_mds_points(mdsy, range(len(mdsy)), labels=labels)
-
 
 
 def plot_effects_of_noise(name):
