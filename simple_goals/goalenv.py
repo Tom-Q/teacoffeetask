@@ -178,6 +178,7 @@ GoalEnvData.num_actions = len(GoalEnvData.actions_list)
 GoalEnvData.num_goals1 = len(GoalEnvData.goals1_list)
 GoalEnvData.num_goals2 = len(GoalEnvData.goals2_list)
 
+
 class Target(object):
     def __init__(self, action, goal1 = None, goal2 = None):
         self.action_str = action
@@ -249,7 +250,6 @@ class BehaviorSequence(object):
     def get_goals2_one_hot(self):
         goals2_list = [target.goal2_one_hot for target in self.targets]
         return np.array(goals2_list, dtype=float).reshape((-1, GoalEnvData.num_goals2))
-
 
 
 class GoalEnv(state.Environment):
@@ -618,12 +618,14 @@ class GoalEnv(state.Environment):
             for target in sequence.targets:
                 self.do_action(target.action_str, verbose=True)
 
-def train(goals=False, num_iterations=50000, learning_rate=0.001, L2_reg = 0.000001, noise = 0., sequences=None):
+def train(model = None, goals=False, num_iterations=50000, learning_rate=0.001, L2_reg = 0.000001, noise = 0., sequences=None):
     if sequences is None:
         sequences = [0]
     env = GoalEnv()
-    if not goals:
-        model = nn.NeuralNet(size_hidden=50, size_observation=23, size_action=17, size_goal1=0, size_goal2=0)
+    if model is None:
+        if not goals:
+            model = nn.NeuralNet(size_hidden=50, size_observation=23, size_action=17, size_goal1=0, size_goal2=0)
+        #TODO: add goal model initialization.
     model.learning_rate = learning_rate
     model.L2_regularization = L2_reg
 
@@ -678,15 +680,3 @@ def train(goals=False, num_iterations=50000, learning_rate=0.001, L2_reg = 0.000
             print("{0}: avg loss={1}, \tactions={2}, \tfull_sequence={3}".format(
                     iteration, rng_avg_loss, rng_avg_actions, rng_avg_goals1, rng_avg_goals2))
     return model
-
-
-def evaluate_2(values, targets):
-    """
-    :param values: list of arrays, or 2D array
-    :param targets: list of Target objects
-    :return: ratio of values that are identical to their counterparts in targets
-    """
-    ratios = []
-    for i in range(len(values)):
-        ratios.append(scripts.ratio_correct(values, targets))
-    return ratios

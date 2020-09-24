@@ -19,7 +19,6 @@ class TeaCoffeeData(state.AbstractData):
     I'm using the variable names to define what they are. It would probably be more OO to use objects instead of fields
     and allow each field to have a name and a type... But this would be super bothersome to use ("Field.value")
     """
-    # TODO: I'm not using these goals after all.
     # Goals: high-level
     g_1_none: int = 0.
     g_1_make_tea: int = 0.
@@ -194,12 +193,6 @@ class TeaCoffeeEnv(state.Environment):
             raise Exception("Can't hold two things at once (or something and nothing)")
 
 
-#class TeaCoffeeSupervisor(object):
-#    """
-#   Sets (hard-coded) target goals and target actions for the TeaCoffeeEnv agent.
-#    """
-#    def __init__(self):
-#TODO: This is a mess. e.g. why is this a class instance??
 action_list = {}
 goal_list = {}
 

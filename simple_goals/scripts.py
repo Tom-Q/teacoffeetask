@@ -231,7 +231,7 @@ def make_rdm_and_mds(name):
     for goal in tce.action_list:
         for action in tce.action_list[goal]:
             labels.append(goal+'_'+action)
-    analysis.show_rdm(rdmatrix, labels, "Spearman rho matrix")
+    analysis.plot_rdm(rdmatrix, labels, "Spearman rho matrix")
     mdsy = analysis.mds(hidden)
     analysis.plot_mds_points(mdsy, range(len(mdsy)), labels=labels)
 

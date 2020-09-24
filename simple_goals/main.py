@@ -8,33 +8,49 @@ import sys
 import goalenv
 import prederror_task
 
-"""
-for i in range(1):
+for i in range(2):
     print(i+1)
-    model = peng.train_peng(iterations=15000)
-    peng.accuracy_test_peng(model)
-    utils.save_object("peng_no_goals10000", model)
+    model = prederror_task.train(iterations=5000, simulated_annealing=False)
+    prederror_task.accuracy_test(model)
+    utils.save_object("prederror_no_goals", model)
 
+for i in range(2):
+    print(i+1)
+    model = utils.load_object("prederror_no_goals", i)
+    model = prederror_task.train(model, iterations=1000, simulated_annealing=True)
+    prederror_task.accuracy_test(model)
+    utils.save_object("prederror_no_goals_simulated_annealing", model)
+
+for i in range(2):
+    print(i+1)
+    model = prederror_task.train_with_goals(iterations=5000)
+    prederror_task.accuracy_test_with_goals(model)
+    utils.save_object("prederror_goals", model)
+
+for i in range(2):
+    print(i + 1)
+    model = utils.load_object("prederror_goals", i)
+    model = prederror_task.train_with_goals(model, iterations=1000, simulated_annealing=True)
+    prederror_task.accuracy_test_with_goals(model)
+    utils.save_object("prederror_goals_simulated_annealing", model)
+
+prederror_task.make_rdm_multiple("prederror_no_goals", 2, with_goals=False, title="ce_prederror_2020-09-24")
+prederror_task.make_rdm_multiple("prederror_goals", 2, with_goals=False, title="ce_goals_prederror_2020-09-24")
+prederror_task.make_rdm_multiple("prederror_no_goals_simulated_annealing", 2, with_goals=False, title="ce_prederror_annealing2020-09-24")
+prederror_task.make_rdm_multiple("prederror_goals_simulated_annealing", 2, with_goals=False, title="ce_prederror_goals_annealing2020-09-24")
+
+"""
 for i in range(100):
+    print(i+1)
     model = peng.train_peng_with_goals(iterations=10000)
     peng.accuracy_test_peng_with_goals(model)
     utils.save_object("peng_with_goals10000", model)
-
-
-for network_number in [7, 26, 62, 83, 66]:
-    model = utils.load_object("peng_no_goals10000", network_number)
-    peng.accuracy_test_peng(model)
-    model = peng.train_peng(model=model, iterations=10)
-    peng.accuracy_test_peng(model)
-
-sys.exit("end of program")
 """
 
 #env = goalenv.GoalEnv()
 #env.test_environment()
 #goalenv.train(goals=False, num_iterations=100000, learning_rate=0.003, L2_reg=0.000003, noise=0., sequences=[0, 1 ,2 ,3 , 4, 5])
 
-prederror_task.make_rdm_multiple('peng_no_goals10000', 100, with_goals=False, title="ce_predictionerror_2020-09-24")
 #peng.make_rdm_multiple_peng('peng_with_goals10000', 100, with_goals=True, title="ce_goals_predictionerror_2020-09-24")  # reuse that 'pnas_goals_ce_5000' for probas with goals
 #pnas2018.make_rdm_and_mds_pnas('pnas2')
 

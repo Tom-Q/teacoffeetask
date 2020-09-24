@@ -20,7 +20,7 @@ def mds(vectors):
     Y = mds.fit_transform(vectors_array)
     return Y
 
-def plot_mds_points(mds_y, points, labels=None, style='rx-', show=True, title="-"):
+def plot_mds_points(mds_y, points, labels=None, style='rx-'):
     toplotx = [mds_y[point, 0] for point in points]
     toploty = [mds_y[point, 1] for point in points]
 
@@ -34,9 +34,7 @@ def plot_mds_points(mds_y, points, labels=None, style='rx-', show=True, title="-
         plt.text(x * (1 + 0.01), y * (1 + 0.01), label, fontsize=9)
 
     plt.plot(toplotx, toploty, style)
-    if show:
-        plt.title(title + "MDS")
-        plt.show()
+
 
 #  Representational dissimilarity matrices, based on a list of vectors.
 def rdm_spearman(vectors):
@@ -47,7 +45,11 @@ def rdm_spearman(vectors):
     return matrix
 
 
-def show_rdm(matrix, labels, title):
+def plot_rdm(matrix, labels, title, name, show_rdm=False):
     sns.heatmap(matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels)
     plt.title(title)
-    plt.show()
+    if show_rdm:
+        plt.show()
+    else:
+        plt.savefig(name+'_rdm')
+        plt.clf()

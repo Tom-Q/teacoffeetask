@@ -226,7 +226,7 @@ def make_rdm_and_mds_pnas(name, with_goals=False):
     for i, sequence in enumerate(seqs):
         for action in sequence[1:]:
             labels.append(str(i)+'_'+action)
-    analysis.show_rdm(rdmatrix, labels, "Spearman rho matrix")
+    analysis.plot_rdm(rdmatrix, labels, "Spearman rho matrix")
 
     for i in range(4):
         mdsy = analysis.mds(hidden[6*i:6*i+6])
@@ -235,8 +235,6 @@ def make_rdm_and_mds_pnas(name, with_goals=False):
     mdsy = analysis.mds(hidden)
     for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
         analysis.plot_mds_points(mdsy[6*i:6*i+6], range(6), labels=labels[6*i:6*i+6], style=style, show=(i==3))
-
-
 
 
 def make_rdm_multiple(name, num_networks, with_goals=False, title="-"):
@@ -266,7 +264,7 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-"):
     for i, sequence in enumerate(seqs):
         for action in sequence[1:]:
             labels.append(str(i)+'_'+action)
-    analysis.show_rdm(avg_matrix, labels, title+" spearman rho matrix")
+    analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
 
     mdsy = analysis.mds(avg_matrix)
     for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
