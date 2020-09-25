@@ -618,6 +618,7 @@ class GoalEnv(state.Environment):
             for target in sequence.targets:
                 self.do_action(target.action_str, verbose=True)
 
+
 def train(model = None, goals=False, num_iterations=50000, learning_rate=0.001, L2_reg = 0.000001, noise = 0., sequences=None):
     if sequences is None:
         sequences = [0]
@@ -675,7 +676,7 @@ def train(model = None, goals=False, num_iterations=50000, learning_rate=0.001, 
             rng_avg_goals1 = utils.rolling_avg(rng_avg_goals1, ratio_goals1, speed)  # whole action sequence correct ?
             rng_avg_goals2 = utils.rolling_avg(rng_avg_goals2, ratio_goals2, speed)
         # Display on the console at regular intervals
-        if (iteration < 1000 and iteration in [3 ** n for n in range(50)]) or iteration % 1000 == 0 \
+        if (iteration < 10000 and iteration in [3 ** n for n in range(50)]) or iteration % 10000 == 0 \
                 or iteration + 1 == num_iterations:
             print("{0}: avg loss={1}, \tactions={2}, \tfull_sequence={3}".format(
                     iteration, rng_avg_loss, rng_avg_actions, rng_avg_goals1, rng_avg_goals2))

@@ -6,11 +6,11 @@ import scripts
 import analysis
 import matplotlib.pyplot as plt
 
-all_inputs = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "stea", "scofcream", "scofmilk", "sugar"]
-all_outputs = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "stea", "scofcream", "scofmilk", "sugar"]
-seq1 = ['coffee', 'water', 'stir', 'cream', 'scofcream', 'start']  #60%
-seq2 = ['coffee', 'water', 'stir', 'milk', 'scofmilk', 'start']  # 20%
-seq3 = ['tea', 'water', 'stir', 'sugar', 'stea', 'start']  # 20%
+all_inputs = ["state_end", "coffee", "milk", "cream", "water", "stir", "tea", "stea", "scofcream", "scofmilk", "sugar"]
+all_outputs = ["state_end", "coffee", "milk", "cream", "water", "stir", "tea", "stea", "scofcream", "scofmilk", "sugar"]
+seq1 = ['coffee', 'water', 'stir', 'cream', 'scofcream', 'state_end']  #60%
+seq2 = ['coffee', 'water', 'stir', 'milk', 'scofmilk', 'state_end']  # 20%
+seq3 = ['tea', 'water', 'stir', 'sugar', 'stea', 'state_end']  # 20%
 goals = [[[0., 1.]] * 7, [[0., 1.]] * 7, [[1., 0]] * 7]
 goals = [np.asarray(goal, dtype=np.float32).reshape((-1, 1, 2)) for goal in goals]
 seqs = [seq1, seq2, seq3]
@@ -238,20 +238,18 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-"):
             avg_matrix += matrix
     avg_matrix = avg_matrix / num_networks
     # Remove every 6th column and row ("b" state)
-    for i in range(4, 5*3, 5):
-        print(i)
-    avg_matrix = np.delete(avg_matrix, range(4, 5*3, 5), axis=0)
-    avg_matrix = np.delete(avg_matrix, range(4, 5*3, 5), axis=1)
+    #avg_matrix = np.delete(avg_matrix, range(4, 5*3, 5), axis=0)
+    #avg_matrix = np.delete(avg_matrix, range(4, 5*3, 5), axis=1)
     np.savetxt(name+".csv", avg_matrix, delimiter=",")
     labels = []
     for i, sequence in enumerate(seqs):
-        for action in sequence[1:-1]:
+        for action in sequence[1:]:
             labels.append(str(i)+'_'+action)
     analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix", name)
 
     mdsy = analysis.mds(avg_matrix)
     for i, style in enumerate(['ro-', 'b|--', 'gx-.']):
-        analysis.plot_mds_points(mdsy[4 * i:4 * i + 4], range(4), labels=labels[4 * i:4 * i + 4], style=style)
+        analysis.plot_mds_points(mdsy[5 * i:5 * i + 5], range(5), labels=labels[5 * i:5 * i + 5], style=style)
     plt.title(title)
     plt.savefig(name + '_mds')
     plt.clf()
