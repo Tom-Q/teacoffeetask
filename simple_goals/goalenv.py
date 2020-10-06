@@ -239,6 +239,7 @@ class BehaviorSequence(object):
         self.targets = targets
         self.initialize = initialization_routine
 
+    # TODO: Factor all this code
     def get_actions_one_hot(self):
         actions_list = [target.action_one_hot for target in self.targets]
         return np.array(actions_list, dtype=float).reshape((-1, GoalEnvData.num_actions))
@@ -250,6 +251,33 @@ class BehaviorSequence(object):
     def get_goals2_one_hot(self):
         goals2_list = [target.goal2_one_hot for target in self.targets]
         return np.array(goals2_list, dtype=float).reshape((-1, GoalEnvData.num_goals2))
+
+    def get_actions_inputs_one_hot(self, zeroed=False):
+        if zeroed:
+            return np.zeros_like(self.get_actions_one_hot())
+        else:
+            actions_list = [target.goal1_one_hot for target in self.targets]
+            # Add a zero action at the beginning and delete the last action (which only serves as a target)
+            actions_list = np.zeros_like(actions_list[0]) + actions_list[:-1]
+            return actions_list
+
+    def get_goal1s_inputs_one_hot(self, zeroed=False):
+        if zeroed:
+            return np.zeros_like(self.get_goals1_one_hot())
+        else:
+            goals1_list = [target.goal1_one_hot for target in self.targets]
+            # Add a zero action at the beginning and delete the last action (which only serves as a target)
+            goals1_list = np.zeros_like(goals1_list[0]) + goals1_list[:-1]
+            return goals1_list
+
+    def get_goal2s_inputs_one_hot(self, zeroed=False):
+        if zeroed:
+            return np.zeros_like(self.get_goals2_one_hot())
+        else:
+            goals2_list = [target.goal2_one_hot for target in self.targets]
+            # Add a zero action at the beginning and delete the last action (which only serves as a target)
+            goals2_list = np.zeros_like(goals2_list[0]) + goals2_list[:-1]
+            return goals2_list
 
 
 class GoalEnv(state.Environment):

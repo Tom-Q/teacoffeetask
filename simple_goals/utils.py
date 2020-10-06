@@ -1,10 +1,22 @@
+# A collection of useful snippets of code
 import numpy as np
 from datetime import datetime
 import pickle
 import os
 import re
+import tensorflow as tf
 
 SAVE_FOLDER= 'models'
+
+def idx_from_probabilities(probabilities):
+    if sum(probabilities) != 1:
+        raise Warning("Probabilities don't add up to 1")
+    decider = np.random.uniform()
+    cumsum = 0
+    for idx, probability in enumerate(probabilities):
+        cumsum += probability
+        if cumsum >= decider:
+            return idx
 
 def dic_to_vec(dic, keys):
     vec = np.zeros((1, len(keys)), dtype=np.float32)
@@ -70,12 +82,47 @@ def load_object(name, latest=0):
     filehandler.close()
     return object
 
+def dense_linear(x, w, b):
+    """
+    :param x: input
+    :param layer: Layer object with weights matrix [+ bias]
+    :return: densely connected layer with no activation function
+    """
+    preactivation = tf.matmul(x, w)
+    if b is not None:
+        preactivation += b
+    return preactivation
+
+def dense_softmax(x, w, b):
+    """
+    :param x: input
+    :param layer: Layer object with weights matrix [+ bias]
+    :return: densely connected layer with softmax output
+    WARNING: DONT USE THIS METHOD FOR A LAST LAYER. TRAINING ASSUMES YOURE WORKING WITH LOGITS INSTEAD.
+    """
+    return tf.nn.softmax(dense_linear(x, w, b))
+
+def dense_sigmoid(x, w, b):
+    """
+    :param x: input
+    :param layer: Layer object with weights matrix [+ bias]
+    :return: densely connected layer with sigmoid output
+    """
+    return tf.nn.sigmoid(dense_linear(x, w, b))
+
+def winner_take_all(a):
+    # Tensorflow implementation. Actually slower, as is
+    cond = tf.equal(a, tf.reduce_max(a))
+    a_wta = tf.where(cond, tf.ones_like(a), tf.zeros_like(a))
+    return a_wta
+
 
 def load_objects(name, number):
     objects = []
     for i in range(number):
-        objects.append(load_object(name,latest=number))
+        objects.append(load_object(name, latest=number))
     return objects
+
 
 def flatten_onelevel(list):
     return [item for sublist in list for item in sublist]
