@@ -67,7 +67,7 @@ RMSPROP = "rmsprop"
 ADAM = "adam"
 
 class NeuralNet(object):
-    def __init__(self, size_hidden=15, algorithm=SGD,
+    def __init__(self, size_hidden=15, algorithm=SGD, learning_rate=0.1,
                  size_observation=len(tce.TeaCoffeeData.observations_list),
                  size_goal1 = len(tce.TeaCoffeeData.goals1_list),
                  size_goal2 = len(tce.TeaCoffeeData.goals2_list),
@@ -82,7 +82,7 @@ class NeuralNet(object):
         self.goal1 = self.goal2 = self.action = self.context = self.action_softmax =\
             self.goal1_softmax = self.goal2_softmax = None
 
-        self.hidden_layer = Layer(np.random.normal(0., .1, size=[self.size_observation + self.size_hidden +
+        self.hidden_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden + self.size_observation +
                                                                  self.size_action + self.size_goal1 + self.size_goal2,
                                                                  self.size_hidden]))
 
@@ -95,7 +95,7 @@ class NeuralNet(object):
                             self.goal1_layer.w, self.goal1_layer.b,
                             self.goal2_layer.w, self.goal2_layer.b]
 
-        self.learning_rate = 0.1
+        self.learning_rate = learning_rate
         self.L2_regularization = 0.0001
         self.h_action_softmax = []
         self.h_goal1_softmax = []
@@ -113,8 +113,6 @@ class NeuralNet(object):
             self.optimizer = AdamOptimizer(self.all_weights)
         else:
             raise ValueError("Algorithm must be SGD, RMSPROP, or ADAM. Nothing else implemented ATM.")
-
-
 
     def feedforward(self, observation):
         network_input = tf.concat([self.context, observation], 1)

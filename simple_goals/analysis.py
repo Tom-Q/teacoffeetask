@@ -45,11 +45,13 @@ def rdm_spearman(vectors):
     return matrix
 
 
-def plot_rdm(matrix, labels, title, name, show_rdm=False):
+def plot_rdm(matrix, labels, title, show_rdm=False):
     sns.heatmap(matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels)
     plt.title(title)
     if show_rdm:
         plt.show()
-    else:
-        plt.savefig(name+'_rdm')
-        plt.clf()
+
+def compare_matrices(matrix1, matrix2):
+    if matrix1.shape != matrix2.shape:
+        raise ValueError("both matrices must be the same shape")
+    return stats.spearmanr(matrix1.flatten(), matrix2.flatten())[0]

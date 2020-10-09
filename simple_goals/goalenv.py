@@ -559,20 +559,18 @@ class GoalEnv(state.Environment):
         self.state = state.State(GoalEnvData())
 
     def initialize_sequences(self):
-        # Action sequence 1: black coffee
+        # Action sequence 1: black coffee. NOTE: THIS DOESN'T CLOSE THE CUPBOARD!! CATASTROPHIC
         actions_sequence1 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
-                             "a_add_to_mug",
-                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
-                             "a_take", "a_fixate_mug", "a_stir",
-                             "a_fixate_table", "a_put_down",
+                             "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+                             "a_close",
+                             "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
                              "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
         sequence1 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence1])
 
         # Action sequence 2: coffee with sugar
         actions_sequence2 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
-                             "a_add_to_mug",
-                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
-                             "a_take", "a_fixate_mug", "a_stir",
+                             "a_add_to_mug",  "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+                             "a_fixate_spoon",  "a_take", "a_fixate_mug", "a_stir",
                              "a_fixate_table", "a_put_down", "a_fixate_sugar_box", "a_take", "a_fixate_mug",
                              "a_add_to_mug", "a_fixate_spoon", "a_take",
                              "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
@@ -653,9 +651,9 @@ def train(model = None, goals=False, num_iterations=50000, learning_rate=0.001, 
     env = GoalEnv()
     if model is None:
         if not goals:
-            model = nn.NeuralNet(size_hidden=50, size_observation=23, size_action=17, size_goal1=0, size_goal2=0)
+            model = nn.NeuralNet(size_hidden=100, size_observation=23, size_action=17,  size_goal1=0, size_goal2=0,
+                                 algorithm=nn.RMSPROP, learning_rate=learning_rate)
         #TODO: add goal model initialization.
-    model.learning_rate = learning_rate
     model.L2_regularization = L2_reg
 
     rng_avg_loss = 0.
@@ -704,7 +702,7 @@ def train(model = None, goals=False, num_iterations=50000, learning_rate=0.001, 
             rng_avg_goals1 = utils.rolling_avg(rng_avg_goals1, ratio_goals1, speed)  # whole action sequence correct ?
             rng_avg_goals2 = utils.rolling_avg(rng_avg_goals2, ratio_goals2, speed)
         # Display on the console at regular intervals
-        if (iteration < 10000 and iteration in [3 ** n for n in range(50)]) or iteration % 10000 == 0 \
+        if (iteration < 1000 and iteration in [3 ** n for n in range(50)]) or iteration % 1000 == 0 \
                 or iteration + 1 == num_iterations:
             print("{0}: avg loss={1}, \tactions={2}, \tfull_sequence={3}".format(
                     iteration, rng_avg_loss, rng_avg_actions, rng_avg_goals1, rng_avg_goals2))

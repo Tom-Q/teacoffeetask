@@ -102,6 +102,7 @@ def dense_softmax(x, w, b):
     """
     return tf.nn.softmax(dense_linear(x, w, b))
 
+
 def dense_sigmoid(x, w, b):
     """
     :param x: input
@@ -109,6 +110,7 @@ def dense_sigmoid(x, w, b):
     :return: densely connected layer with sigmoid output
     """
     return tf.nn.sigmoid(dense_linear(x, w, b))
+
 
 def winner_take_all(a):
     # Tensorflow implementation. Actually slower, as is
@@ -126,3 +128,4 @@ def load_objects(name, number):
 
 def flatten_onelevel(list):
     return [item for sublist in list for item in sublist]
+

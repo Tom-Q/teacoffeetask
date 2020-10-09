@@ -7,17 +7,18 @@ import analysis
 import matplotlib.pyplot as plt
 import timeit
 
-
-all_inputs = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "stea", "scofcream", "scofmilk", "sugar"]
-all_outputs = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "stea", "scofcream", "scofmilk", "sugar"]
-seq1 = ['start', 'coffee', 'water', 'stir', 'cream', 'scofcream']  #60%
-seq2 = ['start', 'coffee', 'water', 'stir', 'milk', 'scofmilk']  # 20%
-seq3 = ['start', 'tea', 'water', 'stir', 'sugar', 'stea']  # 20%
-goals = [[[0., 1.]] * 6, [[0., 1.]] * 6, [[1., 0]] * 6]
+np.set_printoptions(precision=3)
+all_inputs = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "servetea", "servecoffee", "sugar", "end"]
+all_outputs = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "servetea", "servecoffee", "sugar", "end"]
+seq1 = ['start', 'coffee', 'water', 'stir', 'cream', 'servecoffee', 'end']  #60%
+seq2 = ['start', 'coffee', 'water', 'stir', 'milk', 'servecoffee', 'end']  # 20%
+seq3 = ['start', 'tea', 'water', 'stir', 'sugar', 'servetea', 'end']  # 20%
+goals = [[[0., 1.]] * 7, [[0., 1.]] * 7, [[1., 0]] * 7]
 goals = [np.asarray(goal, dtype=np.float32).reshape((-1, 1, 2)) for goal in goals]
 seqs = [seq1, seq2, seq3]
 sequence_probabilities = [0.6, 0.2, 0.2]
-optimal_accuracy = np.asarray([0.8, 1., 1., 0.8, 1.])
+optimal_accuracy = np.asarray([0.8, 1., 1., 0.8, 1., 1.])
+optimal_accuracy_goals = np.asarray([1., 1., 1., 0.8, 1., 1.])
 
 def accuracy_test(model, test_number=None):
     hidden_activation = []
@@ -117,12 +118,12 @@ def train(model = None, mse=False, noise= 0., iterations=5000, l2reg=0.0, learni
     return model
 
 
-def train_with_goals(model = None, mse=False, learning_rate=0.1, noise=0., iterations=5000, reg=0.0, simulated_annealing=False, hidden_units=15):
+def train_with_goals(model = None, mse=False, learning_rate=0.1, noise=0., iterations=5000, l2reg=0.0, algorithm=nn.SGD, hidden_units=15):
     if model is None:
-        model = nn.NeuralNet(size_hidden=hidden_units, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=2, size_goal2=0)
+        model = nn.NeuralNet(size_hidden=hidden_units, algorithm=algorithm, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=2, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = 0.5 if mse else learning_rate
-    model.L2_regularization = reg
+    model.L2_regularization = l2reg
 
     rng_avg_loss = 0.
     rng_avg_actions = 0.
@@ -143,8 +144,6 @@ def train_with_goals(model = None, mse=False, learning_rate=0.1, noise=0., itera
         targets = utils.liststr_to_onehot(sequence[1:], all_outputs)
         targets_goal1 = goal
         model.action = np.zeros((1, model.size_action), dtype=np.float32)
-        if simulated_annealing:
-            model.learning_rate = learning_rate * (iterations - episode)/iterations
         # run the network
         with tf.GradientTape() as tape:
             # Initialize context with random/uniform values.
@@ -212,16 +211,18 @@ def accuracy_test_with_goals(model, test_number=None):
             if (all_choices[i][0][j] == targets[j]).all():
                 accuracy_weighted[j] += 1 * sequence_probabilities[i]
                 accuracy[j] += 1/len(all_choices)
+    optimal = np.array_equal(accuracy_weighted, optimal_accuracy_goals)
     if test_number is None:
-        print(accuracy, accuracy_weighted)
+        print(accuracy, accuracy_weighted, optimal)
     else:
-        print("{0} ({1}) - network {2}".format(accuracy, accuracy_weighted, test_number))
-    for i in range(len(seqs)):
-        print([utils.onehot_to_str(all_choices[i][0][j], all_outputs) for j in range(len(targets))])
-    return hidden_activation
+        print("{0} ({1}) - network {2} -- {3}".format(accuracy, accuracy_weighted, test_number, optimal))
+    if not optimal:
+        for i in range(len(seqs)):
+            print([utils.onehot_to_str(all_choices[i][0][j], all_outputs) for j in range(len(targets))])
+    return hidden_activation, optimal
 
 
-def make_rdm_multiple(name, num_networks, with_goals=False, title="-"):
+def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True):
     # Make one rdm for each network
     optimal_list = []
     rdmatrices = []
@@ -246,16 +247,28 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-"):
         else:
             avg_matrix += matrix
     avg_matrix = avg_matrix / num_networks
-    np.savetxt(name+".csv", avg_matrix, delimiter=",")
+
+    # delete the unwanted rows and columns:
+    avg_matrix = np.delete(avg_matrix, [0, 6, 12], 0)
+    avg_matrix = np.delete(avg_matrix, [0, 6, 12], 1)
+    nps = 5 # number of elements per sequence
+
+    if save_files:
+        np.savetxt(name+".csv", avg_matrix, delimiter=",")
     labels = []
     for i, sequence in enumerate(seqs):
-        for action in sequence[1:]:
+        for action in sequence[1:-1]:
             labels.append(str(i)+'_'+action)
-    analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix", name)
+    analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
+    if save_files:
+        plt.savefig(name+'_rdm')
+    plt.clf()
 
     mdsy = analysis.mds(avg_matrix)
     for i, style in enumerate(['ro-', 'b|--', 'gx-.']):
-        analysis.plot_mds_points(mdsy[5 * i:5 * i + 5], range(5), labels=labels[5 * i:5 * i + 5], style=style)
+        analysis.plot_mds_points(mdsy[nps * i:nps * i + nps], range(nps), labels=labels[nps * i:nps * i + nps], style=style)
     plt.title(title)
-    plt.savefig(name + '_mds')
+    if save_files:
+        plt.savefig(name + '_mds')
     plt.clf()
+    return avg_matrix
