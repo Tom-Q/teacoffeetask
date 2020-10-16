@@ -12,46 +12,45 @@ import tensorflow as tf
 import numpy as np
 import analysis
 
-start = timeit.default_timer()
+"""
+mat1 = pnas2018.make_rdm_multiple_predictive("pnas_predictivenet_rmsprop005_h25", 50,
+                                                   title="pnas_predictivenet_rmsprop005_h25_20201015", save_files=True)
+
+mat2 = prederror_task.make_rdm_multiple_predictive("prederorr_predictivenet_rmsprop001", 50,
+                                                   title="prederorr_predictivenet_rmsprop005_h25_20201015", save_files=True)
+"""
+
+#sys.exit("DONE THANK U")
+#start = timeit.default_timer()
+
 
 with tf.device('/cpu:0'):
-    """
-    #env = goalenv.GoalEnv()
-    goalenv.train(goals=False, num_iterations=200000, learning_rate=0.001, L2_reg=0.00001,
-                  sequences=[5])
-    #env = goalenv.GoalEnv()
-    goalenv.train(goals=False, num_iterations=200000, learning_rate=0.001, L2_reg=0.00001,
-                  sequences=[0, 1, 2, 3, 4, 5])
-    env = goalenv.GoalEnv()
-    goalenv.train(goals=False, num_iterations=200000, learning_rate=0.0001, L2_reg=0.00001,
-                  sequences=[0, 1, 2, 3, 4, 5])
-    stop = timeit.default_timer()
-    print('Time: ', stop - start)
-    sys.exit("PROGRAM END")
-    """
-
-    for i in range(1):
+    for i in range(100):
         print(i+1)
-        model = prederror_task.train(iterations=5000, algorithm=nn.RMSPROP, learning_rate=0.005, l2reg=0.0, hidden_units=15)
-        prederror_task.accuracy_test(model)
-        utils.save_object("prederror_rmsprop001_nogoals", model)
+        model = prederror_task.train_predictive_net(iterations=15000, algorithm=nn.RMSPROP, learning_rate=0.005, hidden_units=25)
+        prederror_task.accuracy_test_predictive(model)
+        utils.save_object("prederorr_predictivenet_rmsprop005_h25", model)
+    for i in range(50):
+        print(i + 1)
+        model = pnas2018.train_predictive_net(iterations=15000, algorithm=nn.RMSPROP, learning_rate=0.005, hidden_units=25)
+        pnas2018.accuracy_test_predictive(model)
+        utils.save_object("pnas_predictivenet_rmsprop005_h25", model)
 
-    for i in range(1):
-        print(i+1)
-        model = prederror_task.train_with_goals(iterations=5000, algorithm=nn.RMSPROP, learning_rate=0.005, l2reg=0.0, hidden_units=15)
-        prederror_task.accuracy_test_with_goals(model)
-        utils.save_object("prederror_rmsprop001_goals", model)
+with tf.device('/gpu:0'):
+
+    goalenv.train(goals=False, num_iterations=100000, learning_rate=0.001, L2_reg=0.00001, sequences=[0])
+    goalenv.train(goals=False, num_iterations=100000, learning_rate=0.001, L2_reg=0.00001, sequences=[0, 1])
+    goalenv.train(goals=False, num_iterations=100000, learning_rate=0.001, L2_reg=0.00001, sequences=[0, 1, 2, 3])
+    goalenv.train(goals=False, num_iterations=100000, learning_rate=0.001, L2_reg=0.00001, sequences=[0, 1, 2, 3, 4, 5])
 
     stop = timeit.default_timer()
-    print('Time: ', stop - start)
-    mat1 = prederror_task.make_rdm_multiple("prederror_rmsprop001_nogoals", 1, with_goals=False, title="cerms_prederror_2020-10-09", save_files=True)
-    mat2 = prederror_task.make_rdm_multiple("prederror_rmsprop001_goals", 1, with_goals=True, title="cerms_prederror_goals_2020-10-09", save_files=True)
-    #print(analysis.compare_matrices(mat1, mat2))
+    #print('Time: ', stop - start)
+
     sys.exit("DONE THANK U")
 
 env = goalenv.GoalEnv()
-goalenv.train(goals=False, num_iterations=200000, learning_rate=0.001, L2_reg=0.000001, noise=0., sequences=[0, 1, 2, 3, 4, 5])
+goalenv.train(goals=False, num_iterations=200000, learning_rate=0.001, L2_reg=0.00001, noise=0., sequences=[0, 1, 2, 3, 4, 5])
 
 env = goalenv.GoalEnv()
-goalenv.train(goals=False, num_iterations=200000, learning_rate=0.0001, L2_reg=0.0000001, noise=0., sequences=[0, 1, 2, 3, 4, 5])
+goalenv.train(goals=False, num_iterations=200000, learning_rate=0.0001, L2_reg=0.000001, noise=0., sequences=[0, 1, 2, 3, 4, 5])
 

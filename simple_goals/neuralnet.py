@@ -22,6 +22,21 @@ class Optimizer(ABC):
         pass
 
 
+class MomentumSGDOptimizer(Optimizer):
+    def __init__(self, weights_list, beta=0.9):
+        super().__init__(weights_list)
+        self.beta = beta
+        self.momentum = [tf.zeros_like(weights) for weights in self.weights_list]
+        self.t = 0
+
+    def update_weights(self, gradients, learning_rate):
+        for i in range(len(self.weights_list)):
+            self.t+=1
+            self.momentum[i] = self.beta * self.momentum[i] + (1 - self.beta) * gradients[i]
+            unbiased_momentum = self.momentum[i] / (1 - self.beta ** self.t)
+            self.weights_list[i].assign_sub(learning_rate * unbiased_momentum)
+
+
 class SGDOptimizer(Optimizer):
     def __init__(self, weights_list):
         super().__init__(weights_list)
@@ -29,6 +44,7 @@ class SGDOptimizer(Optimizer):
     def update_weights(self, gradients, learning_rate):
         for i in range(len(self.weights_list)):
             self.weights_list[i].assign_sub(gradients[i] * learning_rate)
+
 
 class AdamOptimizer(Optimizer):
     def __init__(self, weights_list):
