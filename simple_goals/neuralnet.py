@@ -43,8 +43,10 @@ class SGDOptimizer(Optimizer):
 
     def update_weights(self, gradients, learning_rate):
         for i in range(len(self.weights_list)):
-            self.weights_list[i].assign_sub(gradients[i] * learning_rate)
-
+            if gradients[i] is not None:
+                self.weights_list[i].assign_sub(gradients[i] * learning_rate)
+            else:
+                Warning("None gradient")
 
 class AdamOptimizer(Optimizer):
     def __init__(self, weights_list):
@@ -219,7 +221,7 @@ class NeuralNet(object):
         self.clear_history()
         return loss
 
-    def train_obsolete(self, targets_action, targets_goal1, targets_goal2, tape):
+    def train_obsolete(self, targets_action, targets_goal1, targets_goal2, tape, extra_loss=0.):
         # Compute error + backprop.
         loss = 0.
         for i in range(len(targets_action)):
@@ -229,6 +231,7 @@ class NeuralNet(object):
             if targets_goal2 is not None:
                 loss += tf.nn.softmax_cross_entropy_with_logits(targets_goal2[i], self.h_goal2_softmax[i])
         loss += self.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in self.all_weights])
+        loss += extra_loss
         gradients = tape.gradient(loss, self.all_weights)
         self.optimizer.update_weights(gradients, self.learning_rate)
         self.clear_history()

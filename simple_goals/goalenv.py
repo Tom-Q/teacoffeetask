@@ -35,7 +35,14 @@ class GoalEnvData(state.AbstractData):
     """
 
     # Observable state
-    # Visible or not [empty = not visible]
+    # Sequence indicators / goals
+    o_sequence1: int = 0
+    o_sequence2: int = 0
+    o_sequence3: int = 0
+    o_sequence4: int = 0
+    o_sequence5: int = 0
+    o_sequence6: int = 0
+
     # Containers
     o_fix_container_door_open: int = 0
     o_fix_cupboard: int = 0
@@ -50,7 +57,7 @@ class GoalEnvData(state.AbstractData):
     o_fix_cream_carton: int = 0
     # table contents
     o_fix_mug: int = 0
-    o_fix_mug_full: int = 1
+    o_fix_mug_full: int = 0
     o_fix_mug_milky: int = 0
     o_fix_mug_dark: int = 0
     o_fix_spoon: int = 0
@@ -82,6 +89,7 @@ class GoalEnvData(state.AbstractData):
 
     # Other non-observable things
     # Ingredient availability
+    h_mug_full: int = 1
     h_coffee_present: int = 1
     h_tea_present: int = 1
     h_milk_present: int = 1
@@ -357,6 +365,7 @@ class GoalEnv(state.Environment):
         elif c.a_fixate_mug:
             if self._can_fix(n.h_location_mug, True):
                 n.o_fix_mug = 1.
+                n.o_fix_mug_full = c.h_mug_full
                 n.o_fix_mug_milky = max(c.h_cream_poured, c.h_milk_poured)
                 n.o_fix_mug_dark = max(c.h_tea_dipped, c.h_coffee_poured)
             else:
@@ -424,7 +433,7 @@ class GoalEnv(state.Environment):
                     n.h_cupboard_open = 1
                     n.o_fix_container_door_open = 1
                     n.o_fix_coffee_jar = c.h_coffee_present * (int(c.h_location_coffee_jar == CUPBOARD))
-                    n.o_fix_sugar_box = c.h_sugar_present * (int(c.h_location_cream_carton == CUPBOARD))
+                    n.o_fix_sugar_box = c.h_sugar_present
                     n.o_fix_teabags = c.h_tea_present
                 else:
                     raise ActionException("Something went wrong in the open action")
@@ -454,9 +463,9 @@ class GoalEnv(state.Environment):
                     n.o_fix_sugar_box = 0
                     n.o_fix_teabags = 0
             elif c.o_fix_obj_open:
-                # Open the object
-                c.o_fix_obj_open = 0
-                # Keep track that it is now open
+                # Close the object
+                n.o_fix_obj_open = 0
+                # Keep track that it is now closed
                 if c.o_fix_sugar_box: n.h_sugar_box_open = 0
                 elif c.o_fix_coffee_jar: n.h_coffee_jar_open = 0
                 elif c.o_fix_teabags: n.h_teabags_box_open = 0
@@ -520,6 +529,7 @@ class GoalEnv(state.Environment):
                 raise ActionException("Impossible Action: can't stir without holding a spoon and looking at the mug")
         elif c.a_sip:
             if c.o_held_mug:
+                n.h_mug_full = 0.
                 # Reset mug
                 if c.o_fix_mug:
                     n.o_fix_mug_full = 0.
@@ -559,7 +569,7 @@ class GoalEnv(state.Environment):
         self.state = state.State(GoalEnvData())
 
     def initialize_sequences(self):
-        # Action sequence 1: black coffee. NOTE: THIS DOESN'T CLOSE THE CUPBOARD!! CATASTROPHIC
+        # Action sequence 1: black coffee.
         actions_sequence1 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
                              "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
                              "a_close",
@@ -570,11 +580,13 @@ class GoalEnv(state.Environment):
         # Action sequence 2: coffee with sugar
         actions_sequence2 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
                              "a_add_to_mug",  "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
-                             "a_fixate_spoon",  "a_take", "a_fixate_mug", "a_stir",
+                             "a_fixate_spoon",  "a_take", "a_fixate_mug", "a_stir"]
+        """
+                              ,
                              "a_fixate_table", "a_put_down", "a_fixate_sugar_box", "a_take", "a_fixate_mug",
                              "a_add_to_mug", "a_fixate_spoon", "a_take",
                              "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
-                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]"""
         sequence2 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence2])
 
         # Action sequence 3: coffee with sugar and milk (in this order)
@@ -640,6 +652,7 @@ class GoalEnv(state.Environment):
 
     def test_environment(self):
         for i, sequence in enumerate(self.sequences):
+            self.reinitialize()
             print("\nSequence number " + str(i+1))
             for target in sequence.targets:
                 self.do_action(target.action_str, verbose=True)
@@ -651,13 +664,14 @@ def train(model = None, goals=False, num_iterations=50000, learning_rate=0.001, 
     env = GoalEnv()
     if model is None:
         if not goals:
-            model = nn.NeuralNet(size_hidden=100, size_observation=23, size_action=17,  size_goal1=0, size_goal2=0,
+            model = nn.NeuralNet(size_hidden=50, size_observation=29, size_action=17,  size_goal1=0, size_goal2=0,
                                  algorithm=nn.RMSPROP, learning_rate=learning_rate)
         #TODO: add goal model initialization.
     model.L2_regularization = L2_reg
 
     rng_avg_loss = 0.
     rng_avg_actions = 0.
+    rng_avg_fullseq = 0.
     rng_avg_goals1 = 0.
     rng_avg_goals2 = 0.
 
@@ -665,6 +679,8 @@ def train(model = None, goals=False, num_iterations=50000, learning_rate=0.001, 
         seqid = np.random.choice(sequences)
         sequence = env.sequences[seqid]
         sequence.initialize()
+        if np.random.random() > 0.5:
+            env.state.current.set_field("o_sequence"+str(seqid+1), 1)
         model.action = np.zeros((1, model.size_action), dtype=np.float32)
 
         # run the network
@@ -695,9 +711,11 @@ def train(model = None, goals=False, num_iterations=50000, learning_rate=0.001, 
             loss = model.train(sequence.targets, tape)
 
         # Monitor progress using rolling averages.
+        full_sequence = int(ratio_actions == 1)
         speed = 2. / (iteration + 2) if iteration < 1000 else 0.001  # enables more useful evaluations for early trials
         rng_avg_loss = utils.rolling_avg(rng_avg_loss, loss, speed)
         rng_avg_actions = utils.rolling_avg(rng_avg_actions, ratio_actions, speed)
+        rng_avg_fullseq = utils.rolling_avg(rng_avg_fullseq, full_sequence, speed)
         if goals:
             rng_avg_goals1 = utils.rolling_avg(rng_avg_goals1, ratio_goals1, speed)  # whole action sequence correct ?
             rng_avg_goals2 = utils.rolling_avg(rng_avg_goals2, ratio_goals2, speed)
@@ -705,5 +723,5 @@ def train(model = None, goals=False, num_iterations=50000, learning_rate=0.001, 
         if (iteration < 1000 and iteration in [3 ** n for n in range(50)]) or iteration % 1000 == 0 \
                 or iteration + 1 == num_iterations:
             print("{0}: avg loss={1}, \tactions={2}, \tfull_sequence={3}".format(
-                    iteration, rng_avg_loss, rng_avg_actions, rng_avg_goals1, rng_avg_goals2))
+                    iteration, rng_avg_loss, rng_avg_actions, rng_avg_fullseq, rng_avg_goals1, rng_avg_goals2))
     return model

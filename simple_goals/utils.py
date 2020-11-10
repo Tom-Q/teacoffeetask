@@ -129,3 +129,64 @@ def load_objects(name, number):
 def flatten_onelevel(list):
     return [item for sublist in list for item in sublist]
 
+
+def test_weight_regularization():
+    matrix = np.round(np.random.uniform(-1, 1, [5, 7])) * 2
+    print(matrix)
+    print(weight_regularization_calculator(matrix, [0, 3], [0, 2], 1, "left_linear"))
+
+
+def datestr():
+    return '_' + datetime.today().strftime('%Y%m%d')
+
+def weight_regularization_calculator(weight_matrix, index_in, index_out, reg_const, reg_type="step", reg_increase="linear"):
+
+    if reg_type == "step":
+        # Extract the relevant area of the weight matrix:
+        #print(weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]])
+        return tf.reduce_sum(tf.abs(weight_matrix[index_in[0]: index_in[1],index_out[0]: index_out[1]])) * reg_const
+    elif reg_type == "recurrent":
+        # 1 Make matrix:
+        weights = weight_matrix[index_in[0]: index_in[1],index_out[0]: index_out[1]]
+        #print(weights)
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i,j] = i-j
+    elif reg_type == "input_left":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i,j] = j
+    elif reg_type == "input_right":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i, j] = num_cols-j
+    elif reg_type == "output_left":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i, j] = i
+    elif reg_type == "output_right":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i, j] = (num_rows-i)
+        return tf.reduce_sum(tf.abs(weights) * mat * reg_const)
+    else:
+        raise ValueError("reg_type not implemented")
+    if reg_increase == "linear":
+        mat = np.abs(mat)
+    else:
+        mat = mat ** 2
+    return tf.reduce_sum(tf.abs(weights) * mat * reg_const)
