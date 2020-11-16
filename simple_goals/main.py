@@ -57,13 +57,72 @@ with tf.device('/gpu:0'):
 #mat2 = pnas2018.make_rdm_multiple("pnas_regularization_regstr_0", 25, with_goals=True, title="pnas_regularization_test_noreg")
 
 
+# Simulation 7
+for i in range(10):
+    print(i + 1)
+    model = pnas2018.train(iterations=5000)
+    pnas2018.accuracy_test(model)
+    utils.save_object("pnas_distribution_test", model)
+pnas2018.make_rdm_multiple("pnas_distribution_test", 10)
+"""
+mat2 = pnas2018.make_rdm_multiple_hierarchy_nogoals("pnas_regstr_0_001_sqr_nogoals_2", 25, title="pnas_regstr_0_001_sqr_nogoals", file_save_name="mid2")
+mat2 = pnas2018.make_rdm_multiple_hierarchy_nogoals("pnas_regstr_0_001_sqr_nogoals_2", 25, title="pnas_regstr_0_001_sqr_nogoals", cutoff=3, file_save_name="32")
+mat2 = pnas2018.make_rdm_multiple_hierarchy_nogoals("pnas_regstr_0_001_sqr_nogoals_2", 25, title="pnas_regstr_0_001_sqr_nogoals", cutoff=5, file_save_name="52")
+mat2 = pnas2018.make_rdm_multiple_hierarchy_nogoals("pnas_regstr_0_001_sqr_nogoals_2", 25, title="pnas_regstr_0_001_sqr_nogoals", cutoff=9, file_save_name="92")
+mat2 = pnas2018.make_rdm_multiple_hierarchy_nogoals("pnas_regstr_0_001_sqr_nogoals_2", 25, title="pnas_regstr_0_001_sqr_nogoals", cutoff=12, file_save_name="122")
+"""
+"""
+# Simulation 6
 for i in range(25):
+    print(i + 1)
+    model = pnas2018.train_hierarchical(iterations=8000, reg_strength=0.001, reg_increase="lnr")
+    pnas2018.accuracy_test_reg_hierarchy(model)
+    utils.save_object("pnas_regstr_0_001_lnr_obs", model)
+mat2 = pnas2018.make_rdm_multiple_hierarchy("pnas_regstr_0_001_lnr_obs", 25, title="pnas_regstr_0_001_lnr_obs")
+
+# Simulation 1
+for i in range(0):
+    print(i + 1)
+    model = pnas2018.train_hierarchical(iterations=8000, reg_strength=0.003, reg_increase="linear")
+    pnas2018.accuracy_test_reg_hierarchy(model)
+    utils.save_object("pnas_regstr_0_01_lnr", model)
+mat2 = pnas2018.make_rdm_multiple_hierarchy("pnas_regstr_0_01_lnr", 101, title="pnas_regstr_0_003_lnr",
+                                            file_save_name="pnas_regstr_0_03_lnr")
+
+# Simulation 2
+for i in range(0):
     print(i + 1)
     model = pnas2018.train_hierarchical(iterations=8000, reg_strength=0.001, reg_increase="linear")
     pnas2018.accuracy_test_reg_hierarchy(model)
     utils.save_object("pnas_regstr_0_001_lnr", model)
+mat2 = pnas2018.make_rdm_multiple_hierarchy("pnas_regstr_0_001_lnr", 100, title="pnas_regstr_0_001_lnr")
 
-mat2 = pnas2018.make_rdm_multiple_hierarchy("pnas_regstr_0_001_sqr", 25, title="pnas_regstr_0_0001_sqr")
+#Simulation 3
+for i in range(0):
+    print(i + 1)
+    model = pnas2018.train_hierarchical(iterations=8000, reg_strength=0.0001, reg_increase="linear")
+    pnas2018.accuracy_test_reg_hierarchy(model)
+    utils.save_object("pnas_regstr_0_0001_lnr", model)
+mat2 = pnas2018.make_rdm_multiple_hierarchy("pnas_regstr_0_0001_lnr", 100, title="pnas_regstr_0_0001_lnr")
+
+# Simulation 4
+for i in range(0):
+    print(i + 1)
+    model = pnas2018.train_hierarchical(iterations=8000, reg_strength=0.001, reg_increase="square")
+    pnas2018.accuracy_test_reg_hierarchy(model)
+    utils.save_object("pnas_regstr_0_001_sqr", model)
+mat2 = pnas2018.make_rdm_multiple_hierarchy("pnas_regstr_0_001_sqr", 100, title="pnas_regstr_0_001_sqr")
+sys.exit("done")
+# Simulation 5
+for i in range(0):
+    print(i + 1)
+    model = pnas2018.train_hierarchical(iterations=8000, reg_strength=0.0001, reg_increase="square")
+    pnas2018.accuracy_test_reg_hierarchy(model)
+    utils.save_object("pnas_regstr_0_0001_sqr", model)
+mat2 = pnas2018.make_rdm_multiple_hierarchy("pnas_regstr_0_0001_sqr", 100, title="pnas_regstr_0_0001_sqr")
+
+"""
+
 
 
 #print(model.hidden_layer.w)
