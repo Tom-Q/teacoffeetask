@@ -7,6 +7,74 @@ import scripts
 import analysis
 import matplotlib.pyplot as plt
 
+#mat = np.asarray([0, 1, 2, 3, 4, 5, 6, 7, 8]).reshape([3,3])
+#vector = np.asarray([0, 1 ,2])
+#print(np.matmul(vector, mat))
+
+def weight_regularization_calculator(weight_matrix, index_in, index_out, reg_const, reg_type="step", reg_increase="linear"):
+    if reg_type == "step":
+        # Extract the relevant area of the weight matrix:
+        return tf.reduce_sum(tf.abs(weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]])) * reg_const
+    elif reg_type == "recurrent":
+        # 1 Make matrix:
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i,j] = i-j
+        #print(mat)
+    elif reg_type == "input_left":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        #print(weights)
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i,j] = j
+        #print(mat)
+    elif reg_type == "input_right":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        #print(weights)
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i, j] = num_cols-j-1
+        #print(mat)
+    elif reg_type == "output_left":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        #print(weights)
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i, j] = i
+        #print(mat)
+    elif reg_type == "output_right":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        #print(weights)
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i, j] = (num_rows-i-1)
+        #print(mat)
+    else:
+        raise ValueError("reg_type not implemented")
+    if reg_increase == "linear":
+        mat = np.abs(mat)
+    else:
+        mat = mat ** 2
+    return tf.reduce_sum(tf.abs(weights) * mat * reg_const)
+
+
+def test_weight_regularization(regtype):
+    matrix = np.round(np.random.uniform(-1, 1, [5, 7])) * 2
+    print(matrix)
+    print(weight_regularization_calculator(matrix, [0, 3], [0, 2], 1, regtype))
+
+
 def train_with_goals(noise=0, iterations=10000, learning_rate=0.1):
     model = nn.NeuralNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=2, size_goal2=0)
     num_episodes = iterations
@@ -91,31 +159,31 @@ def train_hierarchical_nogoals(noise=0, iterations=10000, learning_rate=0.1, reg
             cols = model.size_hidden
             # Regularization in the hidden layer weights
             # Recurrent hidden to hidden connections
-            extra_loss = utils.weight_regularization_calculator(model.hidden_layer.w,
-                                                                [0, model.size_hidden], [0, cols],
-                                                                reg_strength, reg_type="recurrent", reg_increase=reg_increase)
+            extra_loss = weight_regularization_calculator(model.hidden_layer.w,
+                                                          [0, model.size_hidden], [0, cols],
+                                                          reg_strength, reg_type="recurrent", reg_increase=reg_increase)
             # Prev action to hidden
-            #extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
+            #extra_loss += weight_regularization_calculator(model.hidden_layer.w,
             #                                                     [model.size_hidden+9, model.size_hidden+9+model.size_action], [0, cols],
             #                                                     reg_strength, reg_type="input_right", reg_increase=reg_increase)
             # Prev goal to hidden
-            #extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
+            #extra_loss += weight_regularization_calculator(model.hidden_layer.w,
             #                                                     [model.size_hidden+9+model.size_action, model.size_hidden+9+model.size_action+2], [0, cols],
             #                                                     reg_strength, reg_type="input_left", reg_increase=reg_increase)
 
             #Regularization in the output layers (goals and actions) weights
             # hidden to next action
-            extra_loss += utils.weight_regularization_calculator(model.action_layer.w,
-                                                                 [0, model.size_hidden], [0, model.size_action],
-                                                                 reg_strength, reg_type="output_right", reg_increase=reg_increase)
+            extra_loss += weight_regularization_calculator(model.action_layer.w,
+                                                           [0, model.size_hidden], [0, model.size_action],
+                                                           reg_strength, reg_type="output_right", reg_increase=reg_increase)
 
             # Hidden to next goal
-            #extra_loss += utils.weight_regularization_calculator(model.goal1_layer.w,
-            #                                                     [0, model.size_hidden], [0, model.size_action],
+            #extra_loss += weight_regularization_calculator(model.goal1_layer.w,
+            #                                                    [0, model.size_hidden], [0, model.size_action],
             #                                                     reg_strength, reg_type="output_left", reg_increase=reg_increase)
 
             # Regularization of the observation (only goes to the action side)
-            #extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
+            #extra_loss += weight_regularization_calculator(model.hidden_layer.w,
             #                                                     [model.size_hidden, model.size_hidden+model.size_observation],
             #                                                     [0, cols],
             #                                                     reg_strength, reg_type="input_right", reg_increase=reg_increase)
@@ -136,8 +204,9 @@ def train_hierarchical_nogoals(noise=0, iterations=10000, learning_rate=0.1, reg
                     episode, rng_avg_loss, rng_avg_actions, rng_avg_goals))
     return model
 
-def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strength=0.001, reg_increase="linear"):
-    model = nn.NeuralNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=2, size_goal2=0)
+def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strength=0.001, reg_increase="linear", num_goals=2):
+    #model = nn.NeuralNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=2, size_goal2=0)
+    model = nn.NeuralNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=num_goals, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.
@@ -148,7 +217,6 @@ def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strengt
 
     for episode in range(num_episodes):
         seqid = utils.idx_from_probabilities(pnas2018task.sequence_probabilities)
-
         goal = pnas2018task.goals[seqid]
         sequence = pnas2018task.seqs[seqid]
         inputs = utils.liststr_to_onehot(sequence[:-1], pnas2018task.all_inputs)
@@ -174,30 +242,33 @@ def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strengt
             cols = model.size_hidden
             # Regularization in the hidden layer weights
             # Recurrent hidden to hidden connections
-            extra_loss = utils.weight_regularization_calculator(model.hidden_layer.w,
-                                                                [0, model.size_hidden], [0, cols],
-                                                                reg_strength, reg_type="recurrent", reg_increase=reg_increase)
+            extra_loss = weight_regularization_calculator(model.hidden_layer.w,
+                                                          [0, model.size_hidden], [0, cols],
+                                                          reg_strength, reg_type="recurrent", reg_increase=reg_increase)
             # Prev action to hidden
-            extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
-                                                                 [model.size_hidden+9, model.size_hidden+9+model.size_action], [0, cols],
-                                                                 reg_strength, reg_type="input_right", reg_increase=reg_increase)
+            # extra_loss += weight_regularization_calculator(model.hidden_layer.w,
+            #                                               [model.size_hidden+9, model.size_hidden+9+model.size_action],
+            #                                               [0, cols],
+            #                                               reg_strength, reg_type="input_right", reg_increase=reg_increase)
             # Prev goal to hidden
-            extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
-                                                                 [model.size_hidden+9+model.size_action, model.size_hidden+9+model.size_action+2], [0, cols],
-                                                                 reg_strength, reg_type="input_left", reg_increase=reg_increase)
+            extra_loss += weight_regularization_calculator(model.hidden_layer.w,
+                                                          [model.size_hidden+9+model.size_action, model.size_hidden+9+model.size_action+num_goals],
+                                                          [0, cols],
+                                                          reg_strength, reg_type="input_left", reg_increase=reg_increase)
 
+            # SWITCHED OUTPUT LEFT AND OUTPUT RIGHT.
             #Regularization in the output layers (goals and actions) weights
             # hidden to next action
-            extra_loss += utils.weight_regularization_calculator(model.action_layer.w,
-                                                                 [0, model.size_hidden], [0, model.size_action],
-                                                                 reg_strength, reg_type="output_right", reg_increase=reg_increase)
+            extra_loss += weight_regularization_calculator(model.action_layer.w,
+                                                           [0, model.size_hidden], [0, model.size_action],
+                                                           reg_strength, reg_type="output_right", reg_increase=reg_increase)
             # Hidden to next goal
-            extra_loss += utils.weight_regularization_calculator(model.goal1_layer.w,
-                                                                 [0, model.size_hidden], [0, model.size_action],
-                                                                 reg_strength, reg_type="output_left", reg_increase=reg_increase)
+            extra_loss += weight_regularization_calculator(model.goal1_layer.w,
+                                                           [0, model.size_hidden], [0, model.size_action],
+                                                           reg_strength, reg_type="output_left", reg_increase=reg_increase)
 
             # Regularization of the observation (only goes to the action side)
-            #extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
+            #extra_loss += weight_regularization_calculator(model.hidden_layer.w,
             #                                                     [model.size_hidden, model.size_hidden+model.size_observation],
             #                                                     [0, cols],
             #                                                     reg_strength, reg_type="input_right", reg_increase=reg_increase)
@@ -216,13 +287,13 @@ def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strengt
                     episode, rng_avg_loss, rng_avg_actions, rng_avg_goals))
     return model
 
-def make_rdm_multiple_hierarchy(name, num_networks, title="-", save_files=True, file_save_name=None, skips=None):
+def make_rdm_multiple_hierarchy(name, num_networks, title="-", save_files=True, file_save_name=None, skips=[]):
     if file_save_name == None:
         file_save_name = name
     # Make one rdm for each network
     rdmatrices_left = []
     rdmatrices_right = []
-    for i in range(num_networks):
+    for i in range(num_networks + len(skips)):
         # Skip number
         if skips is not None and i in skips:
            continue
@@ -254,7 +325,7 @@ def make_rdm_multiple_hierarchy(name, num_networks, title="-", save_files=True, 
                 avg_matrix += matrix
         avg_matrix = avg_matrix / num_networks
         side_name = file_save_name+side[1]
-        np.savetxt(side_name+"_rdm_mat"+utils.datestr()+".csv", avg_matrix, delimiter=",")
+        np.savetxt(side_name+"_rdm_mat"+utils.datestr()+".txt", avg_matrix, delimiter="\t", fmt='%.2e')
         labels = []
         for i, sequence in enumerate(pnas2018task.seqs):
             for action in sequence[1:]:
@@ -473,15 +544,16 @@ def make_rdm_and_mds_reg_hierarchy(name):
         for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
             analysis.plot_mds_points(mdsy[6*i:6*i+6], range(6), labels=labels[6*i:6*i+6], style=style)
 
+
 # Special request from clay: model that averages rdms of different types
-def make_rdm_multiple_special(name1, name2, num_networks, file_save_name, title, skips1=None, skips2=None):
+def make_rdm_multiple_special(name1, name2, num_networks, file_save_name, title, skips1=[], skips2=[]):
     mats = []
     for name, skips in [(name1, skips1), (name2, skips2)]:
         print(name)
         # Make one rdm for each network
         rdmatrices_left = []
         rdmatrices_right = []
-        for i in range(num_networks):
+        for i in range(num_networks+len(skips)):
             # Skip number
             if skips is not None and i in skips:
                continue
@@ -525,7 +597,7 @@ def make_rdm_multiple_special(name1, name2, num_networks, file_save_name, title,
     for side in [[rdmatrices_left, "_goals"], [rdmatrices_right, "_actions"]]:
         matrix = side[0]
         side_name = file_save_name+side[1]
-        np.savetxt(side_name+"_rdm_mat"+utils.datestr()+".csv", matrix, delimiter=",")
+        np.savetxt(side_name+"_rdm_mat"+utils.datestr()+".txt", matrix, delimiter="\t", fmt='%.2e')
         labels = []
         for i, sequence in enumerate(pnas2018task.seqs):
             for action in sequence[1:]:

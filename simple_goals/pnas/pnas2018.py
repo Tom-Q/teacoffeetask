@@ -6,17 +6,22 @@ import scripts
 import analysis
 import matplotlib.pyplot as plt
 from pnas import pnashierarchy, pnas2018task
+import neuralnet
 
+MSE='mse'
+CROSS_ENTROPY='cross_entropy'
 
-def train(mse=False, noise= 0., iterations=5000, reg= 0.0, lopsided = False, special_seq=False):
-    model = nn.NeuralNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=0, size_goal2=0)
+def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorithm=neuralnet.SGD, size_hidden=15, learning_rate=0.1, loss_type='cross_entropy', initialization="normal"):
+    if model is None:
+        model = nn.NeuralNet(size_hidden=size_hidden, size_observation=9, size_action=8, size_goal1=0, size_goal2=0, algorithm=algorithm, initialization="normal")
     num_episodes = iterations
-    model.learning_rate = 0.5 if mse else 0.1
-    model.L2_regularization = reg
+    model.learning_rate = learning_rate
+    model.L1_regularization = l1reg
+    model.L2_regularization = l2reg
 
     rng_avg_loss = 0.
     rng_avg_actions = 0.
-    rng_avg_goals = 0.
+    rng_avg_sequence = 0.
 
     for episode in range(num_episodes):
         seqid = utils.idx_from_probabilities(pnas2018task.sequence_probabilities)
@@ -28,8 +33,8 @@ def train(mse=False, noise= 0., iterations=5000, reg= 0.0, lopsided = False, spe
         # run the network
         with tf.GradientTape() as tape:
             # Initialize context with random/uniform values.
-            #model.context = np.zeros((1, model.size_hidden), dtype=np.float32) #np.float32(np.random.uniform(0.01, 0.99, (1, model.size_hidden)))
-            model.context = np.float32(np.random.randint(0, 1, (1, model.size_hidden)))
+            model.context = np.zeros((1, model.size_hidden), dtype=np.float32) #np.float32(np.random.uniform(0.01, 0.99, (1, model.size_hidden)))
+            #model.context = np.float32(np.random.randint(0, 1, (1, model.size_hidden)))
             for i in range(len(targets)):
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
                 model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
@@ -40,24 +45,26 @@ def train(mse=False, noise= 0., iterations=5000, reg= 0.0, lopsided = False, spe
             tchoices = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
             ratios = scripts.evaluate([tchoices], [targets])
             # Train model, record loss.
-            if mse:
+            if loss_type==MSE:
                 loss, _ = model.train_MSE(targets, None, None, tape)
-            else:
+            elif loss_type==CROSS_ENTROPY:
                 loss, _ = model.train_obsolete(targets, None, None, tape)
+            else:
+                raise ValueError('only cross entropy and mse implemented')
 
         # Monitor progress using rolling averages.
         speed = 2. / (episode + 2) if episode < 1000 else 0.001  # enables more useful evaluations for early trials
         rng_avg_loss = utils.rolling_avg(rng_avg_loss, loss, speed)
         rng_avg_actions = utils.rolling_avg(rng_avg_actions, ratios[0], speed)
-        rng_avg_goals = utils.rolling_avg(rng_avg_goals, ratios[0] == 1,
+        rng_avg_sequence = utils.rolling_avg(rng_avg_sequence, ratios[0] == 1,
                                           speed)  # whole action sequence correct ?
         # Display on the console at regular intervals
         if (episode < 1000 and episode in [3 ** n for n in range(50)]) or episode % 1000 == 0 \
                 or episode + 1 == num_episodes:
             print(
                 "{0}: avg loss={1}, \tactions={2}, \tfull_sequence={3}".format(
-                    episode, rng_avg_loss, rng_avg_actions, rng_avg_goals))
-    return model
+                    episode, rng_avg_loss, rng_avg_actions, rng_avg_sequence))
+    return model, rng_avg_sequence
 
 
 def test_one_sequence(model, sequence_num, turn_goal_step=None, goal_to_turn=None):
@@ -131,7 +138,7 @@ def make_models(num_models):
         models.append(train())
         accuracy_test(models[-1])
 
-def accuracy_test(model):
+def accuracy_test(model, name=None):
     hidden_activation = []
     all_choices = []
     for sequence in pnas2018task.seqs:
@@ -163,8 +170,11 @@ def accuracy_test(model):
             if (all_choices[i][0][j] == targets[j]).all():
                 accuracy_totals[j] += 1
     accuracy_totals /= 4
-    print(accuracy_totals)
-    return hidden_activation
+    if name is not None:
+        print(name, accuracy_totals)
+    else:
+        print(accuracy_totals)
+    return hidden_activation, accuracy_totals
 
 def make_rdm_and_mds(name, with_goals=False):
     model = utils.load_object(name, 1)  # eg 'noise_test2'
@@ -190,15 +200,17 @@ def make_rdm_and_mds(name, with_goals=False):
     for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
         analysis.plot_mds_points(mdsy[6*i:6*i+6], range(6), labels=labels[6*i:6*i+6], style=style, show=(i==3))
 
-def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True):
+def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True, skips=[]):
     # Make one rdm for each network
     rdmatrices = []
-    for i in range(num_networks):
+    for i in range(num_networks+len(skips)):
+        if i in skips:
+            continue
         model = utils.load_object(name, i)
         if with_goals:
             hidden = pnashierarchy.accuracy_test_with_goals(model)
         else:
-            hidden = accuracy_test(model)
+            hidden = accuracy_test(model, name=str(i))
         # Turn into a list of simple vectors
         for i, tensor in enumerate(hidden):
             hidden[i] = tensor.numpy().reshape(-1)
@@ -213,7 +225,7 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
         else:
             avg_matrix += matrix
     avg_matrix = avg_matrix / num_networks
-    np.savetxt(name+"_rdm_mat.csv", avg_matrix, delimiter=",")
+    np.savetxt(name+"_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
     labels = []
     for i, sequence in enumerate(pnas2018task.seqs):
         for action in sequence[1:]:
@@ -230,4 +242,4 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
     if save_files:
         plt.savefig(name + '_mds')
     plt.clf()
-
+    return avg_matrix

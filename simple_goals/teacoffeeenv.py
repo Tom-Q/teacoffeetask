@@ -1,12 +1,8 @@
 import numpy as np
-import copy
-import sys
 import dataclasses as dc
 from dataclasses import dataclass
-from termcolor import colored
 import typing
-from abc import ABC
-import state
+from goalenv import state
 
 
 @dataclass(repr=False)

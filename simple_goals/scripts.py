@@ -1,5 +1,7 @@
-# A file to bring together all the not-so-streamlined code that goes into making figures and experiments.
-import state
+# A file to bring together some of the not-so-streamlined code that goes into making figures and experiments.
+# Stuff that's not versatile enough to count as an util
+
+from goalenv import state
 import teacoffeeenv as tce
 import tensorflow as tf
 import numpy as np

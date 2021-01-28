@@ -84,12 +84,17 @@ SGD = "sgd"
 RMSPROP = "rmsprop"
 ADAM = "adam"
 
+# Initialization types
+NORMAL = "normal"
+UNIFORM = "uniform"
+
 class NeuralNet(object):
     def __init__(self, size_hidden=15, algorithm=SGD, learning_rate=0.1,
                  size_observation=len(tce.TeaCoffeeData.observations_list),
                  size_goal1 = len(tce.TeaCoffeeData.goals1_list),
                  size_goal2 = len(tce.TeaCoffeeData.goals2_list),
-                 size_action = len(tce.TeaCoffeeData.actions_list)):
+                 size_action = len(tce.TeaCoffeeData.actions_list),
+                 initialization=NORMAL):
         self.algorithm = algorithm
         self.size_observation = size_observation
         self.size_hidden = size_hidden
@@ -100,13 +105,25 @@ class NeuralNet(object):
         self.goal1 = self.goal2 = self.action = self.context = self.action_softmax =\
             self.goal1_softmax = self.goal2_softmax = None
 
-        self.hidden_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden + self.size_observation +
-                                                                 self.size_action + self.size_goal1 + self.size_goal2,
-                                                                 self.size_hidden]))
+        if initialization == NORMAL:
+            self.hidden_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden + self.size_observation +
+                                                                     self.size_action + self.size_goal1 + self.size_goal2,
+                                                                     self.size_hidden]))
 
-        self.goal1_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_goal1]))
-        self.goal2_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_goal2]))
-        self.action_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_action]))
+            self.goal1_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_goal1]))
+            self.goal2_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_goal2]))
+            self.action_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_action]))
+
+        elif initialization == UNIFORM:
+            self.hidden_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden + self.size_observation +
+                                                                     self.size_action + self.size_goal1 + self.size_goal2,
+                                                                     self.size_hidden]))
+
+            self.goal1_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, self.size_goal1]))
+            self.goal2_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, self.size_goal2]))
+            self.action_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, self.size_action]))
+        else:
+            raise ValueError("Initialization should be normal or uniform")
 
         self.all_weights = [self.hidden_layer.w, self.hidden_layer.b,
                             self.action_layer.w, self.action_layer.b,

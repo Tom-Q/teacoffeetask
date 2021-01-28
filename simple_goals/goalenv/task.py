@@ -1,16 +1,9 @@
 import numpy as np
-import copy
-import sys
 import dataclasses as dc
 from dataclasses import dataclass
-from termcolor import colored
 import typing
-from abc import ABC
-import state
+from goalenv import state
 import utils
-import neuralnet as nn
-import tensorflow as tf
-import scripts
 
 # Location constants for objects
 FRIDGE = 1
@@ -656,72 +649,3 @@ class GoalEnv(state.Environment):
             print("\nSequence number " + str(i+1))
             for target in sequence.targets:
                 self.do_action(target.action_str, verbose=True)
-
-
-def train(model = None, goals=False, num_iterations=50000, learning_rate=0.001, L2_reg = 0.000001, noise = 0., sequences=None):
-    if sequences is None:
-        sequences = [0]
-    env = GoalEnv()
-    if model is None:
-        if not goals:
-            model = nn.NeuralNet(size_hidden=50, size_observation=29, size_action=17,  size_goal1=0, size_goal2=0,
-                                 algorithm=nn.RMSPROP, learning_rate=learning_rate)
-        #TODO: add goal model initialization.
-    model.L2_regularization = L2_reg
-
-    rng_avg_loss = 0.
-    rng_avg_actions = 0.
-    rng_avg_fullseq = 0.
-    rng_avg_goals1 = 0.
-    rng_avg_goals2 = 0.
-
-    for iteration in range(num_iterations):
-        seqid = np.random.choice(sequences)
-        sequence = env.sequences[seqid]
-        sequence.initialize()
-        if np.random.random() > 0.5:
-            env.state.current.set_field("o_sequence"+str(seqid+1), 1)
-        model.action = np.zeros((1, model.size_action), dtype=np.float32)
-
-        # run the network
-        with tf.GradientTape() as tape:
-            # Initialize context with random/uniform values.
-            model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
-            for i, target in enumerate(sequence.targets):
-                model.action = np.zeros((1, model.size_action), dtype=np.float32)
-                # Add noise to context layer
-                model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
-                observation = env.observe()
-                model.feedforward(observation)
-
-            # Get some statistics about the percentage of correct behavior
-            actions = np.array(model.h_action_wta).reshape((-1, GoalEnvData.num_actions))
-            target_actions = sequence.get_actions_one_hot()
-            ratio_actions = scripts.ratio_correct(actions, target_actions)
-            if goals:
-                goals1 = np.array(model.h_goal1_wta).reshape((-1, GoalEnvData.num_goals1))
-                target_goals1 = sequence.get_actions_one_hot()
-                ratio_goals1 = scripts.ratio_correct(goals1, target_goals1)
-
-                goals2 = np.array(model.h_goal2_wta).reshape((-1, GoalEnvData.num_goals1))
-                target_goals2 = sequence.get_actions_one_hot()
-                ratio_goals2 = scripts.ratio_correct(goals2, target_goals2)
-
-            # Train model, record loss.
-            loss = model.train(sequence.targets, tape)
-
-        # Monitor progress using rolling averages.
-        full_sequence = int(ratio_actions == 1)
-        speed = 2. / (iteration + 2) if iteration < 1000 else 0.001  # enables more useful evaluations for early trials
-        rng_avg_loss = utils.rolling_avg(rng_avg_loss, loss, speed)
-        rng_avg_actions = utils.rolling_avg(rng_avg_actions, ratio_actions, speed)
-        rng_avg_fullseq = utils.rolling_avg(rng_avg_fullseq, full_sequence, speed)
-        if goals:
-            rng_avg_goals1 = utils.rolling_avg(rng_avg_goals1, ratio_goals1, speed)  # whole action sequence correct ?
-            rng_avg_goals2 = utils.rolling_avg(rng_avg_goals2, ratio_goals2, speed)
-        # Display on the console at regular intervals
-        if (iteration < 1000 and iteration in [3 ** n for n in range(50)]) or iteration % 1000 == 0 \
-                or iteration + 1 == num_iterations:
-            print("{0}: avg loss={1}, \tactions={2}, \tfull_sequence={3}".format(
-                    iteration, rng_avg_loss, rng_avg_actions, rng_avg_fullseq, rng_avg_goals1, rng_avg_goals2))
-    return model

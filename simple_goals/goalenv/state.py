@@ -57,8 +57,9 @@ class AbstractData(ABC):
             if field.name.startswith(condition):
                 fields.append(field)
 
-        if len(fields) == nparray.size:
-            raise Exception("The array size must match exactly the number of fields to fill-in")
+        if len(fields) != nparray.size:
+            raise Exception("The array size must match exactly the number of fields (" + str(len(fields)) +
+                            ") to fill-in, instead it is: " + str(nparray.size))
 
         for i, field in enumerate(fields):
             self.set_field(field.name, nparray[i])
