@@ -103,6 +103,7 @@ def dense_softmax(x, w, b):
     return tf.nn.softmax(dense_linear(x, w, b))
 
 
+# Pretty useless
 def dense_sigmoid(x, w, b):
     """
     :param x: input

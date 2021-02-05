@@ -1,22 +1,40 @@
 import utils
 import numpy as np
 import tensorflow as tf
-from goalenv import task
+from goalenv import environment, task
 import neuralnet as nn
 import scripts
 from termcolor import colored
 
+def _sequence_equals(sequence1, sequence2):
+    if len(sequence1) == len(sequence2):
+        return all(np.array_equal(sequence1[i], sequence2[i]) for i in range(len(sequence1)))
+    return False
 
-def accuracy_test_botvinick(model, sequences, noise=0, goals=False, initialization="uniform"):
+# This runs the accuracy test by allowing all sequences to complete, with the environment reacting organically.
+# The report is a % of sequences that match one of the original sequences +
+# print-out of all targets + all observed sequences with a count
+def accuracy_test_botvinick(model, sequence_ids, noise=0, num_tests=10, goals=False, initialization="uniform", verbose=True):
     # This runs a hundred version of the model with different random initializations
-    env = task.GoalEnv()
-    actions_output_sequences = []
+    env = environment.GoalEnv()
+    output_actions = []
 
-    for seqid in sequences:
-        for i in range(50):
-            for field_set in [False, True]:  # Try both with the field set and with the field not set.
-                sequence = env.sequences[seqid]
-                sequence.initialize()
+    # Find the max sequence length
+    max_length = 0
+    target_actions_sequences = []
+    sequences = []
+    for seqid in sequence_ids:
+        sequence = task.sequences_list[seqid]
+        sequences.append(sequence)
+        if len(sequence.targets) > max_length:
+            max_length = len(sequence.targets)
+        target_actions_sequences.append(sequence.get_actions_one_hot())
+
+    for seqid, sequence in enumerate(sequences):
+        for field_set in [False, True]:  # Try both with the field set and with the field not set.
+            for i in range(num_tests):
+                # Initialize the sequence.
+                env.reinitialize(sequence.initial_state)
                 if field_set:
                     env.state.current.set_field("o_sequence"+str(seqid+1), 1)
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
@@ -26,30 +44,71 @@ def accuracy_test_botvinick(model, sequences, noise=0, goals=False, initializati
                     # Initialize context with random/uniform values.
                     if initialization == 'uniform':
                         model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
-                    for i, target in enumerate(sequence.targets):
-                        model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                        model.action = np.zeros_like(sequence.targets[0].action_one_hot)
+                        if goals:
+                            model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
+                            model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
+                    for i in range(max_length):
+                        #model.action = np.zeros((1, model.size_action), dtype=np.float32)
                         # Add noise to context layer
                         model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
                         observation = env.observe()
                         model.feedforward(observation)
-                        env.do_action(model.h_action_wta)
+                        try:
+                            env.do_action(model.h_action_wta[-1])
+                        except environment.ActionException as error:  # The action doesn't make sense and cannot be executed in the environment.
+                            print(error)
+                            break
+                        action_str = utils.onehot_to_str(model.h_action_wta[-1], environment.GoalEnvData.actions_list)
+                        if action_str == environment.TERMINAL_ACTION:
+                            break  # we said "done", we're done.
 
                     # Get some statistics about the sequences actually observed. Is it a recognized sequence? If not,
                     # What kind of mistake appeared?
-                    actions = np.array(model.h_action_wta).reshape((-1, task.GoalEnvData.num_actions))
-                    target_actions = sequence.get_actions_one_hot()
-                    actions_output_sequences.append([actions, target_actions])
+                    actions = np.array(model.h_action_wta).reshape((-1, environment.GoalEnvData.num_actions))
+                    output_actions.append(actions)
                     model.clear_history()
+
+    # Make a list of all observed sequences
+    unique_output_sequences = []
+    counters = []
+    for output_sequence in output_actions:
+        unique = True
+        for i, sequence in enumerate(unique_output_sequences):
+            if _sequence_equals(sequence, output_sequence):
+                unique = False
+                counters[i]+=1
+        if unique:
+            unique_output_sequences.append(output_sequence)
+            counters.append(1)
+
+    # Sort sequences and counters, starting with most frequent:
+    zipped = zip(counters, unique_output_sequences)
+
+    unique_output_sequences = [x for _, x in sorted(zipped, reverse=True, key=lambda pair: pair[0])]
+    counters = sorted(counters, reverse=True)
+
+    # Now display each unique sequence, but converted back to text:
+    for i in range(len(unique_output_sequences)):
+        line = str(counters[i]) + ": "
+        # Check if it's one of the target sequences
+        for j, target_sequence in enumerate(target_actions_sequences):
+            if _sequence_equals(unique_output_sequences[i], target_sequence):
+                line += "(target sequence "+str(j)+") "
+
+        for action in unique_output_sequences[i]:
+            line += utils.onehot_to_str(action, environment.GoalEnvData.actions_list) + " - "
+        print(line+"\n")
 
 
 def accuracy_test(model, sequences, noise=0, goals=False):
     # Collection actions
     actions_output_sequences = []
-    env = task.GoalEnv()
+    env = environment.GoalEnv()
     for seqid in sequences:
         for field_set in [False, True]: # Try both with the field set and with the field not set.
-            sequence = env.sequences[seqid]
-            sequence.initialize()
+            sequence = task.sequences_list[seqid]
+            env.reinitialize(sequence.initial_state)
             if field_set:
                 env.state.current.set_field("o_sequence"+str(seqid+1), 1)
             model.action = np.zeros((1, model.size_action), dtype=np.float32)
@@ -69,7 +128,7 @@ def accuracy_test(model, sequences, noise=0, goals=False):
                     env.do_action(target.action_one_hot)
 
                 # Get some statistics about the percentage of correct behavior
-                actions = np.array(model.h_action_wta).reshape((-1, task.GoalEnvData.num_actions))
+                actions = np.array(model.h_action_wta).reshape((-1, environment.GoalEnvData.num_actions))
                 target_actions = sequence.get_actions_one_hot()
                 actions_output_sequences.append([actions, target_actions])
                 model.clear_history()
@@ -87,8 +146,8 @@ def accuracy_test(model, sequences, noise=0, goals=False):
         action_list = []
         target_list = []
         for i in range(len(actions)):
-            action_list.append(utils.onehot_to_str(actions[i, :], task.GoalEnvData.actions_list))
-            target_list.append(utils.onehot_to_str(targets[i, :], task.GoalEnvData.actions_list))
+            action_list.append(utils.onehot_to_str(actions[i, :], environment.GoalEnvData.actions_list))
+            target_list.append(utils.onehot_to_str(targets[i, :], environment.GoalEnvData.actions_list))
 
         # print the action and target and count the wrong ones
         total_wrong = 0
@@ -104,15 +163,20 @@ def accuracy_test_allow_all():
     pass
 
 def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01,
-          L2_reg=0.0000001, noise=0., sequences=None):
+          L2_reg=0.00001, noise=0., sequences=None):
     if sequences is None:
         sequences = [0]
-    env = task.GoalEnv()
+    env = environment.GoalEnv()
     if model is None:
-        if not goals:
-            model = nn.NeuralNet(size_hidden=50, size_observation=29, size_action=17,  size_goal1=0, size_goal2=0,
+        if goals:
+            model = nn.NeuralNet(size_hidden=50, size_observation=29, size_action=18,
+                                 size_goal1=len(environment.GoalEnvData.goals1_list),
+                                 size_goal2=len(environment.GoalEnvData.goals2_list),
                                  algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
-        #TODO: add goal model initialization.
+        else:
+            model = nn.NeuralNet(size_hidden=50, size_observation=29, size_action=18,  size_goal1=len(sequences), size_goal2=0,
+                                 algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
+
     model.L2_regularization = L2_reg
 
     rng_avg_loss = 0.
@@ -123,8 +187,8 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01,
 
     for iteration in range(num_iterations):
         seqid = np.random.choice(sequences)
-        sequence = env.sequences[seqid]
-        sequence.initialize()
+        sequence = task.sequences_list[seqid]
+        env.reinitialize(sequence.initial_state)
         if np.random.random() > 0.5:
             env.state.current.set_field("o_sequence"+str(seqid+1), 1)
         model.action = np.zeros((1, model.size_action), dtype=np.float32)
@@ -133,10 +197,13 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01,
         with tf.GradientTape() as tape:
             # Initialize context with random/uniform values.
             model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
+            # Set up the prior actions and goals to what they OUGHT to be
+            model.action = np.zeros_like(sequence.targets[0].action_one_hot)
+            model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
+            model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
             # Alternative: zeros
             #model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
             for i, target in enumerate(sequence.targets):
-                model.action = np.zeros((1, model.size_action), dtype=np.float32)
                 # Add noise to context layer
                 model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
                 observation = env.observe()
@@ -144,16 +211,16 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01,
                 env.do_action(target.action_one_hot)
 
             # Get some statistics about the percentage of correct behavior
-            actions = np.array(model.h_action_wta).reshape((-1, task.GoalEnvData.num_actions))
+            actions = np.array(model.h_action_wta).reshape((-1, environment.GoalEnvData.num_actions))
             target_actions = sequence.get_actions_one_hot()
             ratio_actions = scripts.ratio_correct(actions, target_actions)
             if goals:
-                goals1 = np.array(model.h_goal1_wta).reshape((-1, task.GoalEnvData.num_goals1))
-                target_goals1 = sequence.get_actions_one_hot()
+                goals1 = np.array(model.h_goal1_wta).reshape((-1, environment.GoalEnvData.num_goals1))
+                target_goals1 = sequence.get_goals1_one_hot()
                 ratio_goals1 = scripts.ratio_correct(goals1, target_goals1)
 
-                goals2 = np.array(model.h_goal2_wta).reshape((-1, task.GoalEnvData.num_goals1))
-                target_goals2 = sequence.get_actions_one_hot()
+                goals2 = np.array(model.h_goal2_wta).reshape((-1, environment.GoalEnvData.num_goals2))
+                target_goals2 = sequence.get_goals2_one_hot()
                 ratio_goals2 = scripts.ratio_correct(goals2, target_goals2)
 
             # Train model, record loss.

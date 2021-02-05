@@ -192,6 +192,7 @@ class TeaCoffeeEnv(state.Environment):
 action_list = {}
 goal_list = {}
 
+
 # For each goal, set up a sequence of actions:
 # Low-level goals
 action_list["g_2_add_grounds"] = ["a_take_coffee_pack", "a_open", "a_pour", "a_put_down", "a_take_spoon", "a_stir"]

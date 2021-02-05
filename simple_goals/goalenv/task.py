@@ -1,183 +1,6 @@
+from goalenv import environment as env, state
 import numpy as np
-import dataclasses as dc
-from dataclasses import dataclass
-import typing
-from goalenv import state
 import utils
-
-# Location constants for objects
-FRIDGE = 1
-CUPBOARD = 2
-TABLE = 3
-HELD = 4
-
-
-class ActionException(Exception):
-    pass
-
-
-@dataclass(repr=False)
-class GoalEnvData(state.AbstractData):
-    """
-    Dataclasses offer a bunch of useful features for doing this,
-    especially:
-        * Easy conversion to dictionary
-        * Self-generated constructor
-    I'm using the variable names to define what they are. It would probably be more OO to use objects instead of fields
-    and allow each field to have a name and a type... But this would be super bothersome to use ("Field.value")
-    """
-
-    # Observable state
-    # Sequence indicators / goals
-    o_sequence1: int = 0
-    o_sequence2: int = 0
-    o_sequence3: int = 0
-    o_sequence4: int = 0
-    o_sequence5: int = 0
-    o_sequence6: int = 0
-
-    # Containers
-    o_fix_container_door_open: int = 0
-    o_fix_cupboard: int = 0
-    o_fix_fridge: int = 0
-    o_fix_table: int = 0
-    # cupboard contents
-    o_fix_coffee_jar: int = 0
-    o_fix_teabags: int = 0
-    o_fix_sugar_box: int = 0
-    # fridge contents
-    o_fix_milk_carton: int = 0
-    o_fix_cream_carton: int = 0
-    # table contents
-    o_fix_mug: int = 0
-    o_fix_mug_full: int = 0
-    o_fix_mug_milky: int = 0
-    o_fix_mug_dark: int = 0
-    o_fix_spoon: int = 0
-
-    # Is the fixated object open (carton/jar/box)?
-    o_fix_obj_open: int = 0
-
-    # Held objects
-    o_held_coffee_jar: int = 0
-    o_held_sugar_cube: int = 0
-    o_held_milk_carton: int = 0
-    o_held_cream_carton: int = 0
-    o_held_teabag: int = 0
-    o_held_mug: int = 0
-    o_held_spoon: int = 0
-    o_held_nothing: int = 1
-
-    # Non-observable state
-    # Previously done things
-    h_coffee_poured: int = 0
-    h_coffee_stirred: int = 0
-    h_sugar_poured: int = 0
-    h_sugar_stirred: int = 0
-    h_cream_poured: int = 0
-    h_cream_stirred: int = 0
-    h_milk_poured: int = 0
-    h_milk_stirred: int = 0
-    h_tea_dipped: int = 0
-
-    # Other non-observable things
-    # Ingredient availability
-    h_mug_full: int = 1
-    h_coffee_present: int = 1
-    h_tea_present: int = 1
-    h_milk_present: int = 1
-    h_cream_present: int = 1
-    h_sugar_present: int = 1
-    # Location of objects
-    h_location_coffee_jar: int = CUPBOARD
-    h_location_milk_carton: int = FRIDGE
-    h_location_cream_carton: int = FRIDGE
-    h_location_spoon: int = TABLE
-    h_location_mug: int = TABLE
-    # Objects open?
-    h_coffee_jar_open: int = 0
-    h_milk_carton_open: int = 1
-    h_cream_carton_open: int = 1
-    h_sugar_box_open: int = 1
-    h_teabags_box_open: int = 1
-    h_fridge_open = 0
-    h_cupboard_open = 0
-
-    # Action
-    a_fixate_cupboard: int = 0
-    a_fixate_fridge: int = 0
-    a_fixate_table: int = 0
-    a_fixate_coffee_jar: int = 0
-    a_fixate_sugar_box: int = 0
-    a_fixate_mug: int = 0
-    a_fixate_spoon: int = 0
-    a_fixate_milk: int = 0
-    a_fixate_cream: int = 0
-    a_open: int = 0
-    a_close: int = 0
-    a_take: int = 0
-    a_put_down: int = 0
-    a_add_to_mug: int = 0
-    a_stir: int = 0
-    a_sip: int = 0
-    a_say_done: int = 0
-
-    # Special fields = class fields
-    sorted_fields: typing.ClassVar[list]
-    actions_list: typing.ClassVar[list]
-    goals_list: typing.ClassVar[list]
-    goals1_list: typing.ClassVar[list]
-    goals2_list: typing.ClassVar[list]
-    observations_list: typing.ClassVar[list]
-    hiddens_list: typing.ClassVar[list]
-    category_tuples: typing.ClassVar[list] = [('Goal', 'g_', 'green'),  ('Observable', 'o_', 'blue'),
-                                              ('Hidden', 'h_', 'yellow'),  ('Action', 'a_', 'red')]
-    # More practical things to have
-    num_percepts: int = 0
-    num_actions: int = 0
-    num_goals1: int = 0
-    num_goals2: int = 0
-
-    def is_fixate_action(self):
-        return np.sum(self._get_values("a_fixate")) > 0
-
-    def reset_fixated(self):
-        self._set_fields_to_value("o_fix", 0)
-
-    def reset_held(self):
-        self._set_fields_to_value("o_held", 0)
-        self.o_held_nothing = 1
-
-    def get_observable(self):
-        # return a np array with only the observable fields, sorted alphabetically.
-        return self._get_values("o_")
-
-    def get_goals(self):
-        return self._get_values("g_")
-
-    def get_actions(self):
-        return self._get_values("a_")
-
-    def get_lvl1_goals(self):
-        return self._get_values("g_1_")
-
-    def get_lvl2_goals(self):
-        return self._get_values("g_2_")
-
-
-# Initialize the class variables... This has to be done outside the class definition
-GoalEnvData.sorted_fields = sorted(dc.fields(GoalEnvData), key=lambda current_field: current_field.name)
-GoalEnvData.actions_list = state.get_field_names('a_', GoalEnvData)
-GoalEnvData.goals_list = state.get_field_names('g_', GoalEnvData)
-GoalEnvData.goals1_list = state.get_field_names('g_1_', GoalEnvData)
-GoalEnvData.goals2_list = state.get_field_names('g_2_', GoalEnvData)
-GoalEnvData.observations_list = state.get_field_names('o_', GoalEnvData)
-GoalEnvData.hiddens_list = state.get_field_names('h_', GoalEnvData)
-GoalEnvData.all_list = [field.name for field in GoalEnvData.sorted_fields]
-GoalEnvData.num_percepts = len(GoalEnvData.observations_list)
-GoalEnvData.num_actions = len(GoalEnvData.actions_list)
-GoalEnvData.num_goals1 = len(GoalEnvData.goals1_list)
-GoalEnvData.num_goals2 = len(GoalEnvData.goals2_list)
 
 
 class Target(object):
@@ -196,7 +19,7 @@ class Target(object):
         if new_action_str is None:
             self._action_one_hot = None
         else:
-            self._action_one_hot = utils.str_to_onehot(new_action_str, GoalEnvData.actions_list)
+            self._action_one_hot = utils.str_to_onehot(new_action_str, env.GoalEnvData.actions_list)
 
     @property
     def goal1_str(self):
@@ -208,7 +31,7 @@ class Target(object):
         if new_goal1_str is None:
             self._goal1_one_hot = None
         else:
-            self._goal1_one_hot = utils.str_to_onehot(new_goal1_str, GoalEnvData.goals1_list)
+            self._goal1_one_hot = utils.str_to_onehot(new_goal1_str, env.GoalEnvData.goals1_list)
 
     @property
     def goal2_str(self):
@@ -220,7 +43,7 @@ class Target(object):
         if new_goal2_str is None:
             self._goal2_one_hot = None
         else:
-            self._goal2_one_hot = utils.str_to_onehot(new_goal2_str, GoalEnvData.goals2_list)
+            self._goal2_one_hot = utils.str_to_onehot(new_goal2_str, env.GoalEnvData.goals2_list)
 
     @property
     def action_one_hot(self):
@@ -236,416 +59,559 @@ class Target(object):
 
 
 class BehaviorSequence(object):
-    def __init__(self, initialization_routine, targets=None):
+    def __init__(self, initial_state, targets=None):
         self.targets = targets
-        self.initialize = initialization_routine
+        self.initial_state = initial_state
+        self._actions_list = [t.action_one_hot for t in self.targets]
+        self._goals1_list = [t.goal1_one_hot for t in self.targets]
+        self._goals2_list = [t.goal2_one_hot for t in self.targets]
 
-    # TODO: Factor all this code
+    def _get_one_hot(self, elements_list, num_elements):
+        return np.array(elements_list, dtype=float).reshape((-1, num_elements))
+
     def get_actions_one_hot(self):
-        actions_list = [target.action_one_hot for target in self.targets]
-        return np.array(actions_list, dtype=float).reshape((-1, GoalEnvData.num_actions))
+        return self._get_one_hot(self._actions_list, env.GoalEnvData.num_actions)
 
     def get_goals1_one_hot(self):
-        goals1_list = [target.goal1_one_hot for target in self.targets]
-        return np.array(goals1_list, dtype=float).reshape((-1, GoalEnvData.num_goals1))
+        return self._get_one_hot(self._goals1_list, env.GoalEnvData.num_goals1)
 
     def get_goals2_one_hot(self):
-        goals2_list = [target.goal2_one_hot for target in self.targets]
-        return np.array(goals2_list, dtype=float).reshape((-1, GoalEnvData.num_goals2))
+        return self._get_one_hot(self._goals2_list, env.GoalEnvData.num_goals2)
 
-    def get_actions_inputs_one_hot(self, zeroed=False):
-        if zeroed:
-            return np.zeros_like(self.get_actions_one_hot())
-        else:
-            actions_list = [target.goal1_one_hot for target in self.targets]
-            # Add a zero action at the beginning and delete the last action (which only serves as a target)
-            actions_list = np.zeros_like(actions_list[0]) + actions_list[:-1]
-            return actions_list
+    def _get_inputs_one_hot(self, elements_list):
+        # Add a zero element at the beginning and delete the last element (which only serves as a target)
+        return np.zeros_like(elements_list[0]) + elements_list[:-1]
 
-    def get_goal1s_inputs_one_hot(self, zeroed=False):
-        if zeroed:
-            return np.zeros_like(self.get_goals1_one_hot())
-        else:
-            goals1_list = [target.goal1_one_hot for target in self.targets]
-            # Add a zero action at the beginning and delete the last action (which only serves as a target)
-            goals1_list = np.zeros_like(goals1_list[0]) + goals1_list[:-1]
-            return goals1_list
+    def get_actions_inputs_one_hot(self):
+        return self._get_inputs_one_hot(self._actions_list)
+
+    def get_goal1s_inputs_one_hot(self):
+        return self._get_inputs_one_hot(self._goals1_list)
 
     def get_goal2s_inputs_one_hot(self, zeroed=False):
-        if zeroed:
-            return np.zeros_like(self.get_goals2_one_hot())
-        else:
-            goals2_list = [target.goal2_one_hot for target in self.targets]
-            # Add a zero action at the beginning and delete the last action (which only serves as a target)
-            goals2_list = np.zeros_like(goals2_list[0]) + goals2_list[:-1]
-            return goals2_list
+        return self._get_inputs_one_hot(self._goals2_list)
 
 
-class GoalEnv(state.Environment):
-    def __init__(self):
-        super().__init__()
-        self.state = state.State(GoalEnvData())
-        self.sequences = self.initialize_sequences()
+def _make_targets(list_topgoals, list_midgoals, list_actions):
+    if len(list_topgoals) != len(list_midgoals) or len(list_topgoals) != len(list_actions):
+        raise ValueError("There must be as many top goals, mid goals, and actions")
+    return [Target(goal1=topgoal, goal2=midgoal, action=action)
+            for topgoal, midgoal, action in zip(list_topgoals, list_midgoals, list_actions)]
 
-    def do_action(self, action, verbose=False):
-        if isinstance(action, str):  # Action is a string resembling a field name, like "a_take_coffee_pack"
-            self.state.current.set_field(action, 1.)
-        else:  # Action is a numpy one-hot array
-            self.state.current.set_actions(action)  # The mapping is alphabetical
-        if verbose:
-            print(self.state.current)
-        self.transition()
 
-    def _can_fix(self, item_location, item_present):
-        if not item_present:
-            return False
-        if item_location == FRIDGE: return self.state.current.h_fridge_open
-        if item_location == CUPBOARD: return self.state.current.h_cupboard_open
-        if item_location == TABLE or item_location == HELD: return True
+default_state = state.State(env.GoalEnvData())
 
-    def transition(self):
-        # Check for any incoherent combinations
-        self.sanity_check()
+#                                            ####################                                                      #
+# -------------------------------------------- COFFEE SEQUENCES -------------------------------------------------------#
+#                                            ####################                                                      #
+################
+# BLACK COFFEE #
+################
+actions_coffee = [  # Grounds+close cupboard
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    "a_close",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffee = ["g_1_make_coffee"] * len(actions_coffee)
+midgoals_coffee = ["g_2_add_grounds"] * 12 + ["g_2_stir"] * 6 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffee, midgoals_coffee, actions_coffee)
+sequence_coffee = BehaviorSequence(default_state, targets)
 
-        # Make the code a bit more compact
-        c = self.state.current
-        n = self.state.next
+actions_coffeesugar = [  # Grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # add sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # close cupboard
+    "a_fixate_cupboard", "a_close",
+    # drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffeesugar = ["g_1_make_coffee"] * len(actions_coffeesugar)
+midgoals_coffeesugar = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_sugar"] * 4 + \
+                       ["g_2_stir"] * 6 + ["g_2_clean_up"] * 2 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffeesugar, midgoals_coffeesugar, actions_coffeesugar)
+sequence_coffeesugar = BehaviorSequence(default_state, targets)
 
-        # 1. Fixation
-        if c.is_fixate_action():
-            # If a new fixation action takes place, reset all fixated inputs to 0
-            n.reset_fixated()
-        # 1. Go through fixation actions
-        if c.a_fixate_cupboard:
-            n.o_fix_cupboard = 1.
-            n.o_fix_container_door_open = c.h_cupboard_open
-            if c.h_cupboard_open:
-                n.o_fix_coffee_jar = c.h_coffee_present * int(c.h_location_coffee_jar == CUPBOARD)
-                n.o_fix_milk_carton = c.h_milk_present * int(c.h_location_milk_carton == CUPBOARD)
-                n.o_fix_cream_carton = c.h_cream_present * int(c.h_location_cream_carton == CUPBOARD)
-                n.o_fix_spoon = int(c.h_location_spoon == CUPBOARD)
-                n.o_fix_mug = int(c.h_location_spoon == CUPBOARD)
-                n.o_fix_teabags = c.h_tea_present
-                n.o_fix_sugar_box = c.h_sugar_present
-        elif c.a_fixate_fridge:
-            n.o_fix_fridge = 1.
-            n.o_fix_container_door_open = c.h_fridge_open
-            if c.h_fridge_open:
-                n.o_fix_coffee_jar = c.h_coffee_present * int(c.h_location_coffee_jar == FRIDGE)
-                n.o_fix_milk_carton = c.h_milk_present * int(c.h_location_milk_carton == FRIDGE)
-                n.o_fix_cream_carton = c.h_cream_present * int(c.h_location_cream_carton == FRIDGE)
-                n.o_fix_spoon = (int(c.h_location_spoon == FRIDGE))
-                n.o_fix_mug = (int(c.h_location_spoon == FRIDGE))
-        elif c.a_fixate_table:
-            n.o_fix_table = 1.
-            n.o_fix_spoon = int(c.h_location_spoon == TABLE)
-            n.o_fix_mug = int(c.h_location_spoon == TABLE)
-            n.o_fix_coffee_jar = c.h_coffee_present * int(c.h_location_coffee_jar == TABLE)
-            n.o_fix_milk_carton = c.h_milk_present * int(c.h_location_milk_carton == TABLE)
-            n.o_fix_cream_carton = c.h_cream_present * int(c.h_location_cream_carton == TABLE)
-        elif c.a_fixate_coffee_jar:
-            if self._can_fix(n.h_location_coffee_jar, n.h_coffee_present):
-                n.o_fix_coffee_jar = 1.
-                n.o_fix_obj_open = c.h_coffee_jar_open
-            else:
-                raise ActionException("Impossible action: coffee jar can't be fixated")
-        elif c.a_fixate_sugar_box:
-            if self._can_fix(CUPBOARD, n.h_sugar_present):
-                n.o_fix_sugar_box = 1.
-                n.o_fix_obj_open = c.h_sugar_box_open
-            else:
-                raise ActionException("Impossible action: sugar box can't be fixated")
-        elif c.a_fixate_mug:
-            if self._can_fix(n.h_location_mug, True):
-                n.o_fix_mug = 1.
-                n.o_fix_mug_full = c.h_mug_full
-                n.o_fix_mug_milky = max(c.h_cream_poured, c.h_milk_poured)
-                n.o_fix_mug_dark = max(c.h_tea_dipped, c.h_coffee_poured)
-            else:
-                raise ActionException("Impossible action: mug can't be fixated")
-        elif c.a_fixate_spoon:
-            if self._can_fix(n.h_location_spoon, True):
-                n.o_fix_spoon = 1.
-            else:
-                raise ActionException("Impossible action: spoon can't be fixated")
-        elif c.a_fixate_milk:
-            if self._can_fix(n.h_location_milk_carton, n.h_milk_present):
-                n.o_fix_milk_carton = 1.
-                n.o_fix_obj_open = c.h_milk_carton_open
-            else:
-                raise ActionException("Impossible action: milk can't be fixated")
-        elif c.a_fixate_cream:
-            if self._can_fix(n.h_location_cream_carton, n.h_cream_present):
-                n.o_fix_cream_carton = 1.
-                n.o_fix_obj_open = c.h_cream_carton_open
-            else:
-                raise ActionException("Impossible action: cream can't be fixated")
-        # 2. Other actions
-        elif c.a_take:
-            # Holds the single fixated object if possible, otherwise nothing happens
-            if c.o_held_nothing and c.o_fix_cupboard == 0 and c.o_fix_fridge == 0 and c.o_fix_table == 0:
-                if c.o_fix_coffee_jar:
-                    n.o_held_nothing = 0
-                    n.o_held_coffee_jar = 1
-                    n.h_location_coffee = HELD
-                elif c.o_fix_teabags:
-                    n.o_held_nothing = 0.
-                    n.o_held_teabag = 1
-                elif c.o_fix_sugar_box:
-                    n.o_held_sugar_cube = 1
-                    n.o_held_nothing = 0.
-                elif c.o_fix_milk_carton:
-                    n.o_held_nothing = 0.
-                    n.o_held_milk_carton = 1
-                    n.h_location_milk_carton = HELD
-                elif c.o_fix_cream_carton:
-                    n.o_held_nothing = 0.
-                    n.o_held_cream_carton = 1
-                    n.h_location_cream_carton = HELD
-                elif c.o_fix_spoon:
-                    n.o_held_nothing = 0.
-                    n.o_held_spoon = 1.
-                    n.h_location_spoon = HELD
-                elif c.o_fix_mug:
-                    n.o_held_nothing = 0.
-                    n.o_held_mug = 1
-                    n.h_location_mug = HELD
-                else:
-                    raise ActionException("Impossible action: object fixated can't be held")
-            else:
-                raise ActionException("Impossible action: either holding something already, or object can't be held")
-        elif c.a_open:
-            # if we're looking at something closed, opens it. Otherwise, nothing happens
-            if (c.o_fix_fridge or c.o_fix_cupboard) and not c.o_fix_container_door_open:
-                if c.o_fix_fridge:
-                    n.h_fridge_open = 1
-                    n.o_fix_container_door_open = 1
-                    n.o_fix_milk_carton = c.h_milk_present * (int(c.h_location_milk_carton==FRIDGE))
-                    n.o_fix_cream_carton = c.h_cream_present * (int(c.h_location_cream_carton==FRIDGE))
-                elif c.o_fix_cupboard:
-                    n.h_cupboard_open = 1
-                    n.o_fix_container_door_open = 1
-                    n.o_fix_coffee_jar = c.h_coffee_present * (int(c.h_location_coffee_jar == CUPBOARD))
-                    n.o_fix_sugar_box = c.h_sugar_present
-                    n.o_fix_teabags = c.h_tea_present
-                else:
-                    raise ActionException("Something went wrong in the open action")
-            elif not c.o_fix_obj_open:
-                # Open the object
-                n.o_fix_obj_open = 1
-                # Keep track that it is now open
-                if c.o_fix_sugar_box: n.h_sugar_box_open = 1
-                elif c.o_fix_coffee_jar: n.h_coffee_jar_open = 1
-                elif c.o_fix_teabags: n.h_teabags_box_open = 1
-                elif c.o_fix_milk: n.h_milk_carton_open = 1
-                elif c.o_fix_cream: n.h_cream_carton_open = 1
-                else: raise ActionException("Impossible action: object can't be opened")
-            else:
-                raise ActionException("Impossible action: object fixated can't be opened")
-        elif c.a_close:
-            if c.o_fix_container_door_open:
-                if c.o_fix_fridge:
-                    n.h_fridge_open = 0
-                    n.o_fix_container_door_open = 0
-                    n.o_fix_milk_carton = 0
-                    n.o_fix_cream_carton = 0
-                else: #if c.o_fix_cupboard:
-                    n.h_cupboard_open = 0
-                    n.o_fix_container_door_open = 0
-                    n.o_fix_coffee_jar = 0
-                    n.o_fix_sugar_box = 0
-                    n.o_fix_teabags = 0
-            elif c.o_fix_obj_open:
-                # Close the object
-                n.o_fix_obj_open = 0
-                # Keep track that it is now closed
-                if c.o_fix_sugar_box: n.h_sugar_box_open = 0
-                elif c.o_fix_coffee_jar: n.h_coffee_jar_open = 0
-                elif c.o_fix_teabags: n.h_teabags_box_open = 0
-                elif c.o_fix_milk: n.h_milk_carton_open = 0
-                elif c.o_fix_cream: n.h_cream_carton_open = 0
-                else: raise ActionException("Impossible action: object fixated can't be closed")
-            else:
-                raise ActionException("Impossible action: object fixated can't be closed")
-        elif c.a_put_down:
-            if not c.o_held_nothing:
-                # Put the item in the fridge
-                new_loc = None
-                if c.o_fix_fridge and c.o_fix_container_door_open:
-                    new_loc = FRIDGE
-                elif c.o_fix_cupboard and c.o_fix_container_door_open:
-                    new_loc = CUPBOARD
-                elif c.o_fix_table:
-                    new_loc = TABLE
-                else:
-                    raise ActionException("Impossible action: nowhere to put object down")
+actions_coffee2sugar = [  # Grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # add sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # add another sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # close cupboard
+    "a_fixate_cupboard", "a_close",
+    # drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffee2sugar = ["g_1_make_coffee"] * len(actions_coffee2sugar)
+midgoals_coffee2sugar = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_sugar"] * 8 + \
+                        ["g_2_stir"] * 6 + ["g_2_clean_up"] * 2 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffee2sugar, midgoals_coffee2sugar, actions_coffee2sugar)
+sequence_coffee2sugar = BehaviorSequence(default_state, targets)
 
-                n.reset_held()
-                if c.o_held_coffee_jar: n.h_location_coffee_jar = new_loc
-                elif c.o_held_cream_carton: n.h_location_cream_carton = new_loc
-                elif c.o_held_milk_carton: n.h_location_milk_carton = new_loc
-                elif c.o_held_spoon: n.h_location_spoon = new_loc
-                elif c.o_held_mug: n.h_location_mug = new_loc
-                elif c.o_held_teabag: pass # teabag disappears
-                elif c.o_held_sugar_cube: pass # sugar cube disappears
-                else: raise ActionException("Impossible action: object can't be put down")
-            else:
-                raise ActionException("Impossible Action: already holding something")
-        elif c.a_add_to_mug:
-            if c.o_fix_mug:
-                if c.o_held_cream_carton:
-                    n.h_cream_poured = 1.
-                    n.o_fix_mug_milky = 1.
-                elif c.o_held_milk_carton:
-                    n.h_milk_poured = 1.
-                    n.o_fix_mug_milky = 1.
-                elif c.o_held_sugar_cube:
-                    n.h_sugar_poured = 1.
-                    n.reset_held() # We're no longer holding a sugar cube
-                elif c.o_held_coffee_jar:
-                    n.h_coffee_poured = 1.
-                    n.o_fix_mug_dark = 1.
-                elif c.o_held_teabag:
-                    n.h_tea_dipped = 1.
-                    n.o_fix_mug_dark = 1.
-                else: ActionException("Impossible Action: object cannot be poured in the mug")
-            else:
-                raise ActionException("Impossible Action: pouring in something other than the mug")
-        elif c.a_stir:
-            if c.o_held_spoon and c.o_fix_mug:
-                if c.h_cream_poured: n.h_cream_stirred = 1
-                if c.h_milk_poured: n.h_milk_stirred = 1
-                if c.h_tea_dipped: n.h_tea_stirred = 1
-                if c.h_coffee_poured: n.h_coffee_stirred = 1
-                if c.h_sugar_poured: n.h_sugar_poured = 1
-            else:
-                raise ActionException("Impossible Action: can't stir without holding a spoon and looking at the mug")
-        elif c.a_sip:
-            if c.o_held_mug:
-                n.h_mug_full = 0.
-                # Reset mug
-                if c.o_fix_mug:
-                    n.o_fix_mug_full = 0.
-                    n.o_fix_mug_milky = 0.
-                    n.o_fix_mug_dark = 0.
-                n.h_cream_poured = 0
-                n.h_milk_poured = 0
-                n.h_coffee_poured = 0
-                n.h_sugar_poured = 0
-                n.h_tea_dipped = 0
-                n.h_cream_stirred = 0
-                n.h_milk_stirred = 0
-                n.h_coffee_stirred = 0
-                n.h_sugar_stirred = 0
-                n.h_tea_stirred = 0
-            else:
-                raise ActionException("Impossible action: drinking without holding the mug")
-        elif c.a_say_done:
-            pass  # Not sure if this serves a purpose
+#####################
+# COFFEE WITH CREAM #
+#####################
+actions_coffeecream = [  # grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # close cupboard
+    "a_close",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # cream
+    "a_fixate_fridge", "a_open", "a_fixate_cream", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffeecream = ["g_1_make_coffee"] * len(actions_coffeecream)
+midgoals_coffeecream = ["g_2_add_grounds"] * 12 + ["g_2_stir"] * 6 + ["g_2_add_cream"] * 9 + \
+                        ["g_2_stir"] * 6 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffeecream, midgoals_coffeecream, actions_coffeecream)
+sequence_coffeecream = BehaviorSequence(default_state, targets)
 
-        # Activate the transition!!
-        self.state.next_time_step()
+# Sugar then cream
+actions_coffeesugarcream = [  # grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # close cupboard
+    "a_fixate_cupboard", "a_close",
+    # cream
+    "a_fixate_fridge", "a_open", "a_fixate_cream", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffeesugarcream = ["g_1_make_coffee"] * len(actions_coffeesugarcream)
+midgoals_coffeesugarcream = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_sugar"] * 4 + ["g_2_stir"] * 6 + \
+                            ["g_2_clean_up"] * 2 + ["g_2_add_cream"] * 9 + ["g_2_stir"] * 6 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffeesugarcream, midgoals_coffeesugarcream, actions_coffeesugarcream)
+sequence_coffeesugarcream = BehaviorSequence(default_state, targets)
 
-    def observe(self):
-        return self.state.current.get_observable()
+actions_coffee2sugarcream = [  # grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # second sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # close cupboard
+    "a_fixate_cupboard", "a_close",
+    # cream
+    "a_fixate_fridge", "a_open", "a_fixate_cream", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffee2sugarcream = ["g_1_make_coffee"] * len(actions_coffee2sugarcream)
+midgoals_coffee2sugarcream = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_sugar"] * 8 + ["g_2_stir"] * 6 + \
+                            ["g_2_clean_up"] * 2 + ["g_2_add_cream"] * 9 + ["g_2_stir"] * 6 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffee2sugarcream, midgoals_coffee2sugarcream, actions_coffee2sugarcream)
+sequence_coffee2sugarcream = BehaviorSequence(default_state, targets)
 
-    def sanity_check(self):
-        c = self.state.current
-        # Exactly one action is executed at a time
-        if np.sum(c.get_actions()) != 1.:
-            raise Exception("Exactly one action must be executed at each step")
-        if (c.o_held_coffee_jar + c.o_held_sugar_cube + c.o_held_milk_carton + c.o_held_cream_carton +
-            c.o_held_teabag + c.o_held_spoon + c.o_held_mug + c.o_held_nothing) != 1:
-            raise Exception("Can't hold two things at once (or something and nothing)")
+# Cream then sugar
+actions_coffeecreamsugar = [  # Grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Cream
+    "a_fixate_fridge", "a_open", "a_fixate_cream", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Close cupboard
+    "a_fixate_cupboard", "a_close",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffeecreamsugar = ["g_1_make_coffee"] * len(actions_coffeecreamsugar)
+midgoals_coffeecreamsugar = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_cream"] * 9 + ["g_2_stir"] * 6 +\
+                            ["g_2_add_sugar"] * 4 + ["g_2_stir"] * 6 + ["g_2_clean_up"] * 2 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffeecreamsugar, midgoals_coffeecreamsugar, actions_coffeecreamsugar)
+sequence_coffeecreamsugar = BehaviorSequence(default_state, targets)
 
-    def reinitialize(self):
-        self.state = state.State(GoalEnvData())
+actions_coffeecream2sugar = [  # Grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Cream
+    "a_fixate_fridge", "a_open", "a_fixate_cream", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # Another sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Close cupboard
+    "a_fixate_cupboard", "a_close",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffeecream2sugar = ["g_1_make_coffee"] * len(actions_coffeecream2sugar)
+midgoals_coffeecream2sugar = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_cream"] * 9 + ["g_2_stir"] * 6 +\
+                            ["g_2_add_sugar"] * 8 + ["g_2_stir"] * 6 + ["g_2_clean_up"] * 2 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffeecream2sugar, midgoals_coffeecream2sugar, actions_coffeecream2sugar)
+sequence_coffeecream2sugar = BehaviorSequence(default_state, targets)
 
-    def initialize_sequences(self):
-        # Action sequence 1: black coffee.
-        actions_sequence1 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
-                             "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
-                             "a_close",
-                             "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
-                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
-        sequence1 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence1])
+####################
+# COFFEE WITH MILK #
+####################
+#Initial state has no cream! Hence the fallback on milk.
+nocream_state = state.State(env.GoalEnvData())
+nocream_state.h_cream_present = 0
+actions_coffeemilk = [  # Grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # Close cupboard
+    "a_close",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # milk
+    "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffeemilk = ["g_1_make_coffee"] * len(actions_coffeemilk)
+midgoals_coffeemilk = ["g_2_add_grounds"] * 12 + ["g_2_stir"] * 6 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 +\
+                      ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffeemilk, midgoals_coffeemilk, actions_coffeemilk)
+sequence_coffeemilk = BehaviorSequence(default_state, targets)
 
-        # Action sequence 2: coffee with sugar
-        actions_sequence2 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
-                             "a_add_to_mug",  "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
-                             "a_fixate_spoon",  "a_take", "a_fixate_mug", "a_stir"]
-        """
-                              ,
-                             "a_fixate_table", "a_put_down", "a_fixate_sugar_box", "a_take", "a_fixate_mug",
-                             "a_add_to_mug", "a_fixate_spoon", "a_take",
-                             "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
-                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]"""
-        sequence2 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence2])
+# Sugar then milk
+actions_coffeesugarmilk = [  # Grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Close cupboard
+    "a_fixate_cupboard", "a_close",
+    # Milk
+    "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffeesugarmilk = ["g_1_make_coffee"] * len(actions_coffeesugarmilk)
+midgoals_coffeesugarmilk = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6  + ["g_2_add_sugar"] * 4 + ["g_2_stir"] * 6\
+                           +["g_2_clean_up"] * 2 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffeesugarmilk, midgoals_coffeesugarmilk, actions_coffeesugarmilk)
+sequence_coffeesugarmilk = BehaviorSequence(default_state, targets)
 
-        # Action sequence 3: coffee with sugar and milk (in this order)
-        actions_sequence3 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
-                             "a_add_to_mug",
-                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
-                             "a_take", "a_fixate_mug", "a_stir",
-                             "a_fixate_table", "a_put_down",
-                             "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_spoon", "a_take",
-                             "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
-                             "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
-                             "a_fixate_fridge", "a_put_down", "a_close", "a_fixate_spoon", "a_take", "a_fixate_mug",
-                             "a_stir",
-                             "a_fixate_table", "a_put_down",
-                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
-        sequence3 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence3])
+actions_coffee2sugarmilk = [  # Grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # Second sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Close cupboard
+    "a_fixate_cupboard", "a_close",
+    # Milk
+    "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffee2sugarmilk = ["g_1_make_coffee"] * len(actions_coffee2sugarmilk)
+midgoals_coffee2sugarmilk = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6  + ["g_2_add_sugar"] * 8 + ["g_2_stir"] * 6\
+                           +["g_2_clean_up"] * 2 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffee2sugarmilk, midgoals_coffee2sugarmilk, actions_coffee2sugarmilk)
+sequence_coffee2sugarmilk = BehaviorSequence(default_state, targets)
 
-        # Action sequence 4: coffee with milk and sugar (in this order)
-        actions_sequence4 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
-                             "a_add_to_mug",
-                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
-                             "a_take", "a_fixate_mug", "a_stir",
-                             "a_fixate_table", "a_put_down",
-                             "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
-                             "a_fixate_fridge", "a_put_down", "a_close", "a_fixate_spoon", "a_take", "a_fixate_mug",
-                             "a_stir",
-                             "a_fixate_table", "a_put_down",
-                             "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_spoon", "a_take",
-                             "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
-                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
-        sequence4 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence4])
+# milk then sugar
+actions_coffeemilksugar = [  # Grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # milk
+    "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Close cupboard
+    "a_fixate_cupboard", "a_close",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffeemilksugar = ["g_1_make_coffee"] * len(actions_coffeemilksugar)
+midgoals_coffeemilksugar = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + \
+                           ["g_2_add_sugar"] * 4 + ["g_2_stir"] * 6 +["g_2_clean_up"] * 2 +  ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffeemilksugar, midgoals_coffeemilksugar, actions_coffeemilksugar)
+sequence_coffeemilksugar = BehaviorSequence(default_state, targets)
 
-        # Action sequence 5: coffee with cream and sugar (in this order)
-        actions_sequence5 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
-                             "a_add_to_mug",
-                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
-                             "a_take", "a_fixate_mug", "a_stir",
-                             "a_fixate_table", "a_put_down",
-                             "a_fixate_fridge", "a_open", "a_fixate_cream", "a_take", "a_fixate_mug", "a_add_to_mug",
-                             "a_fixate_fridge", "a_put_down", "a_close", "a_fixate_spoon", "a_take", "a_fixate_mug",
-                             "a_stir",
-                             "a_fixate_table", "a_put_down",
-                             "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_spoon", "a_take",
-                             "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
-                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
-        sequence5 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence5])
 
-        # Action sequence 6: coffee with sugar and cream (in this order)
-        actions_sequence6 = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
-                             "a_add_to_mug",
-                             "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down", "a_fixate_spoon",
-                             "a_take", "a_fixate_mug", "a_stir",
-                             "a_fixate_table", "a_put_down",
-                             "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_spoon", "a_take",
-                             "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down", "a_fixate_cupboard", "a_close",
-                             "a_fixate_fridge", "a_open", "a_fixate_cream", "a_take", "a_fixate_mug", "a_add_to_mug",
-                             "a_fixate_fridge", "a_put_down", "a_close", "a_fixate_spoon", "a_take", "a_fixate_mug",
-                             "a_stir",
-                             "a_fixate_table", "a_put_down",
-                             "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
-        sequence6 = BehaviorSequence(self.reinitialize, [Target(action=action) for action in actions_sequence6])
-        return [sequence1, sequence2, sequence3, sequence4, sequence5, sequence6]
+actions_coffeemilk2sugar = [  # Grounds
+    "a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+    "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # milk
+    "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Close cupboard
+    "a_fixate_cupboard", "a_close",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_coffeemilk2sugar = ["g_1_make_coffee"] * len(actions_coffeemilk2sugar)
+midgoals_coffeemilk2sugar = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + \
+                           ["g_2_add_sugar"] * 8 + ["g_2_stir"] * 6 +["g_2_clean_up"] * 2 +  ["g_2_drink"] * 6
+targets = _make_targets(topgoals_coffeemilk2sugar, midgoals_coffeemilk2sugar, actions_coffeemilk2sugar)
+sequence_coffeemilk2sugar = BehaviorSequence(default_state, targets)
 
-    def test_environment(self):
-        for i, sequence in enumerate(self.sequences):
-            self.reinitialize()
-            print("\nSequence number " + str(i+1))
-            for target in sequence.targets:
-                self.do_action(target.action_str, verbose=True)
+#                                            #################                                                         #
+# -------------------------------------------- TEA SEQUENCES ----------------------------------------------------------#
+#                                            #################                                                         #
+############
+# JUST TEA #
+############
+actions_tea = [  # dip teabag+close cupboard
+    "a_fixate_cupboard", "a_open", "a_fixate_teabags", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_cupboard", "a_close",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_tea = ["g_1_make_tea"] * len(actions_tea)
+midgoals_tea = ["g_2_infuse_tea"] * 8 + ["g_2_stir"] * 6 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_tea, midgoals_tea, actions_tea)
+sequence_tea = BehaviorSequence(default_state, targets)
+
+actions_teasugar = [  # dip teabag
+    "a_fixate_cupboard", "a_open", "a_fixate_teabags", "a_take", "a_fixate_mug",
+    "a_add_to_mug",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # add sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # close cupboard
+    "a_fixate_cupboard", "a_close",
+    # drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_teasugar = ["g_1_make_tea"] * len(actions_teasugar)
+midgoals_teasugar = ["g_2_infuse_tea"] * 6 + ["g_2_stir"] * 6 + ["g_2_add_sugar"] * 4 + \
+                       ["g_2_stir"] * 6 + ["g_2_clean_up"] * 2 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_teasugar, midgoals_teasugar, actions_teasugar)
+sequence_teasugar = BehaviorSequence(default_state, targets)
+
+actions_tea2sugar = [   # dip teabag
+    "a_fixate_cupboard", "a_open", "a_fixate_teabags", "a_take", "a_fixate_mug",
+    "a_add_to_mug",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # add sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # add another sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # close cupboard
+    "a_fixate_cupboard", "a_close",
+    # drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_tea2sugar = ["g_1_make_tea"] * len(actions_tea2sugar)
+midgoals_tea2sugar = ["g_2_infuse_tea"] * 6 + ["g_2_stir"] * 6 + ["g_2_add_sugar"] * 8 + \
+                        ["g_2_stir"] * 6 + ["g_2_clean_up"] * 2 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_tea2sugar, midgoals_tea2sugar, actions_tea2sugar)
+sequence_tea2sugar = BehaviorSequence(default_state, targets)
+
+#################
+# TEA WITH MILK #
+#################
+
+actions_teamilk = [   # dip teabag
+    "a_fixate_cupboard", "a_open", "a_fixate_teabags", "a_take", "a_fixate_mug",
+    "a_add_to_mug",
+    # Close cupboard
+    "a_fixate_cupboard", "a_close",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # milk
+    "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_teamilk = ["g_1_make_tea"] * len(actions_teamilk)
+midgoals_teamilk = ["g_2_infuse_tea"] * 8 + ["g_2_stir"] * 6 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 +\
+                      ["g_2_drink"] * 6
+targets = _make_targets(topgoals_teamilk, midgoals_teamilk, actions_teamilk)
+sequence_teamilk = BehaviorSequence(default_state, targets)
+
+# Sugar then milk
+actions_teasugarmilk = [   # dip teabag
+    "a_fixate_cupboard", "a_open", "a_fixate_teabags", "a_take", "a_fixate_mug",
+    "a_add_to_mug",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Close cupboard
+    "a_fixate_cupboard", "a_close",
+    # Milk
+    "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_teasugarmilk = ["g_1_make_tea"] * len(actions_teasugarmilk)
+midgoals_teasugarmilk = ["g_2_infuse_tea"] * 6 + ["g_2_stir"] * 6  + ["g_2_add_sugar"] * 4 + ["g_2_stir"] * 6\
+                           +["g_2_clean_up"] * 2 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_teasugarmilk, midgoals_teasugarmilk, actions_teasugarmilk)
+sequence_teasugarmilk = BehaviorSequence(default_state, targets)
+
+actions_tea2sugarmilk = [   # dip teabag
+    "a_fixate_cupboard", "a_open", "a_fixate_teabags", "a_take", "a_fixate_mug",
+    "a_add_to_mug",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # Second sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Close cupboard
+    "a_fixate_cupboard", "a_close",
+    # Milk
+    "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_tea2sugarmilk = ["g_1_make_tea"] * len(actions_tea2sugarmilk)
+midgoals_tea2sugarmilk = ["g_2_infuse_tea"] * 6 + ["g_2_stir"] * 6  + ["g_2_add_sugar"] * 8 + ["g_2_stir"] * 6\
+                           +["g_2_clean_up"] * 2 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + ["g_2_drink"] * 6
+targets = _make_targets(topgoals_tea2sugarmilk, midgoals_tea2sugarmilk, actions_tea2sugarmilk)
+sequence_tea2sugarmilk = BehaviorSequence(default_state, targets)
+
+# milk then sugar
+actions_teamilksugar = [   # dip teabag
+    "a_fixate_cupboard", "a_open", "a_fixate_teabags", "a_take", "a_fixate_mug",
+    "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # milk
+    "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Close cupboard
+    "a_fixate_cupboard", "a_close",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_teamilksugar = ["g_1_make_tea"] * len(actions_teamilksugar)
+midgoals_teamilksugar = ["g_2_infuse_tea"] * 6 + ["g_2_stir"] * 6 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + \
+                           ["g_2_add_sugar"] * 4 + ["g_2_stir"] * 6 +["g_2_clean_up"] * 2 +  ["g_2_drink"] * 6
+targets = _make_targets(topgoals_teamilksugar, midgoals_teamilksugar, actions_teamilksugar)
+sequence_teamilksugar = BehaviorSequence(default_state, targets)
+
+
+actions_teamilk2sugar = [   # dip teabag
+    "a_fixate_cupboard", "a_open", "a_fixate_teabags", "a_take", "a_fixate_mug",
+    "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # milk
+    "a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close",
+    # Stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # sugar
+    "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug",
+    # stir
+    "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down",
+    # Close cupboard
+    "a_fixate_cupboard", "a_close",
+    # Drink
+    "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
+topgoals_teamilk2sugar = ["g_1_make_tea"] * len(actions_teamilk2sugar)
+midgoals_teamilk2sugar = ["g_2_infuse_tea"] * 6 + ["g_2_stir"] * 6 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + \
+                           ["g_2_add_sugar"] * 8 + ["g_2_stir"] * 6 +["g_2_clean_up"] * 2 +  ["g_2_drink"] * 6
+targets = _make_targets(topgoals_teamilk2sugar, midgoals_teamilk2sugar, actions_teamilk2sugar)
+sequence_teamilk2sugar = BehaviorSequence(default_state, targets)
+
+sequences_list =\
+        [sequence_coffee, sequence_coffeesugar, sequence_coffee2sugar,
+        sequence_coffeecream,
+        sequence_coffeesugarcream, sequence_coffee2sugarcream,
+        sequence_coffeecreamsugar, sequence_coffeecream2sugar,
+        sequence_coffeemilk,
+        sequence_coffeesugarmilk, sequence_coffee2sugarmilk,
+        sequence_coffeemilksugar, sequence_coffeemilk2sugar,
+
+        sequence_tea, sequence_teasugar, sequence_tea2sugar,
+        sequence_teamilk,
+        sequence_teamilksugar, sequence_teamilk2sugar,
+        sequence_teasugarmilk, sequence_tea2sugarmilk
+        ]
+
+

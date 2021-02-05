@@ -1,8 +1,6 @@
 import tensorflow as tf
 import numpy as np
 import teacoffeeenv as tce
-import utils
-import timeit
 from abc import ABC, abstractmethod
 
 class Layer(object):
@@ -94,7 +92,9 @@ class NeuralNet(object):
                  size_goal1 = len(tce.TeaCoffeeData.goals1_list),
                  size_goal2 = len(tce.TeaCoffeeData.goals2_list),
                  size_action = len(tce.TeaCoffeeData.actions_list),
-                 initialization=NORMAL):
+                 initialization=NORMAL,
+                 nonlinearity=tf.nn.sigmoid):
+        self.nonlinearity = nonlinearity
         self.algorithm = algorithm
         self.size_observation = size_observation
         self.size_hidden = size_hidden
@@ -156,7 +156,7 @@ class NeuralNet(object):
                 # Not sure if thatś necessary? In theory the winner take all has no gradient anyway.
                 inputs = tf.stop_gradient(inputs)
                 network_input = tf.concat([network_input, inputs], 1)
-        hidden_activation = self.dense_sigmoid(network_input, self.hidden_layer)
+        hidden_activation = self.nonlinearity(self.dense_linear(network_input, self.hidden_layer))
 
         # Three separate softmaxes for the action and the goal
         self.action_softmax = self.dense_linear(hidden_activation, self.action_layer)
@@ -216,6 +216,14 @@ class NeuralNet(object):
         :return: densely connected layer with sigmoid output
         """
         return tf.nn.sigmoid(NeuralNet.dense_linear(x, layer))
+
+    @staticmethod
+    def dense_relu(x, layer):
+        return tf.nn.relu(NeuralNet.dense_linear(x, layer))
+
+    @staticmethod
+    def dense_tanh(x, layer):
+        return tf.nn.tanh(NeuralNet.dense_linear(x, layer))
 
     @staticmethod
     def winner_take_all(a):

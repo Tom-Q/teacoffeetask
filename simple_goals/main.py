@@ -1,16 +1,12 @@
 # Entry point of the program. Mostly loads scripts from scripts, which themselves rely on more serious code.
-from goalenv import task
-from goalenv import goalenv2020
+from goalenv import goalenv2020, environment, task
 from pnas import pnas2018
 from pnas import pnashierarchy
 import neuralnet
 import utils
 import sys
 
-#for regtype in ["input_left", "input_right", "output_left", "output_right"]:
-#    print("\n"+regtype)
-#    pnashierarchy.test_weight_regularization(regtype)
-#sys.exit()
+
 """
 #start = timeit.default_timer()
 
@@ -38,21 +34,21 @@ with tf.device('/gpu:0'):
 
     sys.exit("DONE THANK U")
 """
-import hyperparamstest
 
-hyperparamstest.full_hyperparameter_test()
-sys.exit()
-env = task.GoalEnv()
-env.test_environment()
+env = environment.GoalEnv()
+env.test_environment(task.sequences_list)
+#model = goalenv2020.train(goals=False, num_iterations=100000, learning_rate=0.0001, L2_reg=0.00001, noise=0., sequences=[0, 1, 2, 3, 4, 5])
 
-#model = goalenv2020.train(goals=False, num_iterations=15000, learning_rate=0.0001, L2_reg=0.00001, noise=0., sequences=[0, 1])
+#model = utils.load_object("bigmodel1")
+#goalenv2020.accuracy_test_botvinick(model, num_tests=100, sequences=[0, 1, 2, 3, 4, 5])
+#sys.exit()
+for i in range(2):
+    #model = utils.load_object("bigmodel"+str(i))
+    model = goalenv2020.train(goals=True, num_iterations=200000, learning_rate=0.0001, L2_reg=0.00001, noise=0., sequences=range(21))
+    utils.save_object("bigmodel"+str(i), model)
+    #model = utils.load_object("bigmodel")
+    goalenv2020.accuracy_test_botvinick(model, goals=True, sequence_ids=range(21))
 
-#model = utils.load_object("goal_env_model_test")
-#model = goalenv2020.train(goals=False, num_iterations=15000, learning_rate=0.0001, L2_reg=0.00001, noise=0., sequences=[0, 1 ,2, 3, 4, 5])
-#utils.save_object("bigmodel", model)
-model = utils.load_object("bigmodel")
-#utils.save_object("goal_env_model_test", model)
-goalenv2020.accuracy_test(model, sequences=[0, 1, 2, 3, 4, 5])
 """
 model = goalenv2020.train(model=model, goals=False, num_iterations=1, learning_rate=0.0001, L2_reg=0.00001, noise=0., sequences=[0, 1])
 goalenv2020.accuracy_test(model, sequences=[0, 1])

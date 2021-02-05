@@ -1,9 +1,6 @@
 import tensorflow as tf
 import numpy as np
 import teacoffeeenv as tce
-import utils
-import timeit
-from abc import ABC, abstractmethod
 import neuralnet as nn
 
 class PredictiveNet(object):

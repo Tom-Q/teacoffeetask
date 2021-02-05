@@ -9,8 +9,8 @@ seq4 = ["start", "tea", "sugar", "stir", "water", "stir", "serve_tea"]
 seqs = [seq1, seq2, seq3, seq4]
 
 # Special goals
-#goals = [[[1., 0., 0., 0.]]*6, [[0., 1., 0., 0.]]*6, [[0., 0., 1., 0.]]*6, [[0., 0, 0, 1]]*6]
-#goals = [np.asarray(goal, dtype=np.float32).reshape((-1, 1, 4)) for goal in goals]
-goals = [[[0., 1.]]*6, [[0., 1.]]*6, [[1., 0]]*6, [[1, 0]]*6]
-goals = [np.asarray(goal, dtype=np.float32).reshape((-1, 1, 2)) for goal in goals]
+goals = [[[1., 0., 0., 0.]]*6, [[0., 1., 0., 0.]]*6, [[0., 0., 1., 0.]]*6, [[0., 0, 0, 1]]*6]
+goals = [np.asarray(goal, dtype=np.float32).reshape((-1, 1, 4)) for goal in goals]
+#goals = [[[0., 1.]]*6, [[0., 1.]]*6, [[1., 0]]*6, [[1, 0]]*6]
+#goals = [np.asarray(goal, dtype=np.float32).reshape((-1, 1, 2)) for goal in goals]
 sequence_probabilities=[0.25, 0.25, 0.25, 0.25]
