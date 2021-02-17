@@ -178,6 +178,7 @@ class NeuralNet(object):
         for data in self.history:
             data.clear()
 
+
     def save_history(self):
         self.h_action_softmax.append(self.action_softmax)
         self.h_goal1_softmax.append(self.goal1_softmax)

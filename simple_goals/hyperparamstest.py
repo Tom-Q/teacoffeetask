@@ -2,6 +2,7 @@ import neuralnet
 import utils
 from pnas import pnas2018
 import numpy as np
+import analysis
 
 # Train 100 networks of each
 def full_hyperparameter_test():
@@ -56,6 +57,42 @@ def full_hyperparameter_test():
                                 utils.save_object(algorithm+initialization+str(hidden_units)+str(l1reg)+str(l2reg) + loss_type, model)
     print(failed_networks)
     report.close()
+
+
+def hyperparameter_analysis():
+    # For each model: generate spearman matrix. Store with a label.
+    count = 0
+    matrices = []
+    for algorithm in [neuralnet.SGD]:#, neuralnet.RMSPROP, neuralnet.ADAM]:
+        for initialization in [neuralnet.NORMAL]:#, neuralnet.UNIFORM]:
+            for hidden_units in [8]:#, 15, 50]:
+                for l1reg in [0.]:#, 0.001]:
+                    for l2reg in [0.]:#, 0.001]:
+                        for loss_type in [pnas2018.CROSS_ENTROPY, pnas2018.MSE]:
+                            learning_rate = 0.1
+                            if algorithm == neuralnet.RMSPROP or algorithm == neuralnet.ADAM:
+                                learning_rate *= 0.1
+                            if hidden_units == 8:
+                                learning_rate *= 2
+                            elif hidden_units == 50:
+                                learning_rate *= 0.5
+                            elif loss_type == pnas2018.MSE and (
+                                    algorithm != neuralnet.RMSPROP and algorithm != neuralnet.ADAM):
+                                learning_rate *= 10
+                            name = algorithm + initialization + str(hidden_units) + str(l1reg) + str(
+                                l2reg) + loss_type# + "{:.3f}".format(learning_rate)
+                            matrix = pnas2018.make_rdm_multiple(name, 50)
+                            matrices.append([name, matrix])
+    # Compare all spearman matrix. Generate a massive matrix.
+    spearman_mat = np.zeros((len(matrices), len(matrices)))
+    for i, mat1 in enumerate(matrices):
+        for j, mat2 in enumerate(matrices):
+            spearman_mat[i, j] = analysis.compare_matrices(mat1[1], mat2[1])
+
+    # Make a giant rdm with labels
+    labels = [mat[0] for mat in matrices]
+    analysis.plot_rdm(spearman_mat, labels, "Hyperparameter test general spearman matrix")
+
 """
 # Simulations: extra variations
 # 1. Standard: SGD

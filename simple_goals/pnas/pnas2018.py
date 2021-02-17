@@ -138,7 +138,7 @@ def make_models(num_models):
         models.append(train())
         accuracy_test(models[-1])
 
-def accuracy_test(model, name=None):
+def accuracy_test(model, name=None, noise=0.):
     hidden_activation = []
     all_choices = []
     for sequence in pnas2018task.seqs:
@@ -154,6 +154,7 @@ def accuracy_test(model, name=None):
             # Reset the previous action
             for i in range(len(targets)):
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
                 observation = inputs[i].reshape(1, -1)
                 model.feedforward(observation)
                 hidden_activation.append(model.context)
@@ -200,21 +201,22 @@ def make_rdm_and_mds(name, with_goals=False):
     for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
         analysis.plot_mds_points(mdsy[6*i:6*i+6], range(6), labels=labels[6*i:6*i+6], style=style, show=(i==3))
 
-def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True, skips=[]):
+
+def make_rdm_noisy(name, num_networks, noise, num_runs_per_network=10, title="-", save_files=True, skips=[],
+                      rdm_type=analysis.SPEARMAN):
     # Make one rdm for each network
     rdmatrices = []
-    for i in range(num_networks+len(skips)):
+    for i in range(num_networks + len(skips)):
         if i in skips:
             continue
         model = utils.load_object(name, i)
-        if with_goals:
-            hidden = pnashierarchy.accuracy_test_with_goals(model)
-        else:
-            hidden = accuracy_test(model, name=str(i))
-        # Turn into a list of simple vectors
-        for i, tensor in enumerate(hidden):
-            hidden[i] = tensor.numpy().reshape(-1)
-        rdmatrix = analysis.rdm_spearman(hidden)
+        hiddens = []
+        for j in range(num_runs_per_network):
+            hidden, _ = accuracy_test(model, name=str(i), noise=noise)
+            for k, tensor in enumerate(hidden):
+                hidden[k] = tensor.numpy().reshape(-1)
+            hiddens.append(hidden)
+        rdmatrix = analysis.rdm_noisy_mahalanobis(hiddens)
         rdmatrices.append(rdmatrix)
 
     # Now average over all matrices
@@ -225,6 +227,64 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
         else:
             avg_matrix += matrix
     avg_matrix = avg_matrix / num_networks
+    name = name + '_' + rdm_type
+    np.savetxt(name + "_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
+    labels = []
+    for i, sequence in enumerate(pnas2018task.seqs):
+        for action in sequence[1:]:
+            labels.append(str(i) + '_' + action)
+    analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
+    if save_files:
+        plt.savefig(name + '_rdm')
+    plt.clf()
+
+    mdsy = analysis.mds(avg_matrix)
+    for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
+        analysis.plot_mds_points(mdsy[6 * i:6 * i + 6], range(6), labels=labels[6 * i:6 * i + 6], style=style)
+    plt.title(title)
+    if save_files:
+        plt.savefig(name + '_mds')
+    plt.clf()
+    return avg_matrix
+
+
+def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True, skips=[],
+                      rdm_type=analysis.SPEARMAN):
+    # Make one rdm for each network
+    rdmatrices = []
+    for i in range(num_networks+len(skips)):
+        if i in skips:
+            continue
+        model = utils.load_object(name, i)
+        if with_goals:
+            hidden = pnashierarchy.accuracy_test_with_goals(model)
+        else:
+            hidden, _ = accuracy_test(model, name=str(i))
+        # Turn into a list of simple vectors
+        for i, tensor in enumerate(hidden):
+            hidden[i] = tensor.numpy().reshape(-1)
+
+        if rdm_type==analysis.SPEARMAN:
+            rdmatrix = analysis.rdm_spearman(hidden)
+        elif rdm_type==analysis.MAHALANOBIS:
+            rdmatrix = analysis.rdm_mahalanobis(hidden)
+        elif rdm_type ==analysis.EUCLIDIAN:
+            rdmatrix = analysis.rdm_euclidian(hidden)
+        elif rdm_type ==analysis.CRAPPYNOBIS:
+            rdmatrix = analysis.rdm_crappynobis(hidden)
+        else:
+            raise ValueError("Only implemented rdm types are mahalanobis, spearman, euclidian")
+        rdmatrices.append(rdmatrix)
+
+    # Now average over all matrices
+    avg_matrix = None
+    for matrix in rdmatrices:
+        if avg_matrix is None:
+            avg_matrix = matrix
+        else:
+            avg_matrix += matrix
+    avg_matrix = avg_matrix / num_networks
+    name=name+'_'+rdm_type
     np.savetxt(name+"_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
     labels = []
     for i, sequence in enumerate(pnas2018task.seqs):

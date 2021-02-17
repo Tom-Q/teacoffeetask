@@ -383,8 +383,8 @@ class GoalEnv(state.Environment):
                 if c.o_fix_sugar_box: n.h_sugar_box_open = 0
                 elif c.o_fix_coffee_jar: n.h_coffee_jar_open = 0
                 elif c.o_fix_teabags: n.h_teabags_box_open = 0
-                elif c.o_fix_milk: n.h_milk_carton_open = 0
-                elif c.o_fix_cream: n.h_cream_carton_open = 0
+                elif c.o_fix_milk_carton: n.h_milk_carton_open = 0
+                elif c.o_fix_cream_carton: n.h_cream_carton_open = 0
                 else: raise ActionException("Impossible action: object fixated can't be closed")
             else:
                 raise ActionException("Impossible action: object fixated can't be closed")

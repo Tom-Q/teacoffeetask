@@ -1,12 +1,14 @@
 import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
-
 from sklearn.manifold import MDS
-
 
 import seaborn as sns
 
+SPEARMAN="spearman"
+MAHALANOBIS = "mahalanobis"
+EUCLIDIAN = "euclidian"
+CRAPPYNOBIS = "crappynobis"
 
 #Multidimensional scaling
 def mds(vectors):
@@ -43,6 +45,57 @@ def rdm_spearman(vectors):
         for j, vec2 in enumerate(vectors):
             matrix[i, j] = 1 - stats.spearmanr(vec1, vec2)[0]
     return matrix
+
+def rdm_euclidian(vectors):
+    matrix = np.zeros((len(vectors), len(vectors)))
+    for i, vec1 in enumerate(vectors):
+        for j, vec2 in enumerate(vectors):
+            matrix[i, j] = np.sqrt(np.sum((vec1-vec2)**2))
+    return matrix
+
+def rdm_mahalanobis(vectors):
+    vectors_mat = np.asarray(vectors)
+    covmat = np.cov(np.transpose(vectors_mat))
+    invcovmat = np.linalg.inv(covmat)
+    matrix = np.zeros((len(vectors), len(vectors)))
+    for i, vec1 in enumerate(vectors):
+        for j, vec2 in enumerate(vectors):
+            matrix[i, j] = np.matmul(np.transpose(vec1-vec2), np.matmul(invcovmat, (vec1-vec2)))
+    return matrix
+
+def rdm_noisy_mahalanobis(vectors):
+    """
+    :param vectors: list of lists vectors (unlike other rdm functions which are just lists of vectors)
+    """
+    # 1. Compute the invcovmat based on everything
+    #vectors_mat = np.asarray(vectors)
+    #vectors_mat = vectors_mat.reshape(-1, *vectors_mat.shape[2:])
+    #covmat = np.cov(np.transpose(vectors_mat))
+    #invcovmat = np.linalg.inv(covmat)
+    # 2. compute distances for all runs and sum them
+    sum_matrix = np.zeros((len(vectors[0]), len(vectors[0])))
+    for run in vectors:
+        vectors_mat = np.asarray(run)
+        covmat = np.cov(np.transpose(vectors_mat))
+        invcovmat = np.linalg.inv(covmat)
+        matrix = np.zeros((len(run), len(run)))
+        for i, vec1 in enumerate(run):
+            for j, vec2 in enumerate(run):
+                matrix[i, j] = np.matmul(np.transpose(vec1-vec2), np.matmul(invcovmat, (vec1-vec2)))
+        sum_matrix += matrix
+    return sum_matrix/len(vectors)
+
+
+def rdm_crappynobis(vectors):
+    # Normalize according to the stdev of each individual unit, then compute the euclidian distance. DOESN'T LOOK AT *COVARIANCE*.
+    vectors_mat = np.asarray(vectors)
+    zvecs = stats.zscore(vectors_mat, axis=1)
+    matrix = np.zeros((len(vectors), len(vectors)))
+    for i in range(len(zvecs)):
+        for j in range(len(zvecs)):
+            matrix[i, j] = np.sqrt(np.sum((zvecs[i, :]-zvecs[j, :])**2))
+    return matrix
+
 
 
 def plot_rdm(matrix, labels, title, show_rdm=False):

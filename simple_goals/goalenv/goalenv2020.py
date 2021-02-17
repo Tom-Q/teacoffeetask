@@ -5,6 +5,7 @@ from goalenv import environment, task
 import neuralnet as nn
 import scripts
 from termcolor import colored
+import copy
 
 def _sequence_equals(sequence1, sequence2):
     if len(sequence1) == len(sequence2):
@@ -14,7 +15,7 @@ def _sequence_equals(sequence1, sequence2):
 # This runs the accuracy test by allowing all sequences to complete, with the environment reacting organically.
 # The report is a % of sequences that match one of the original sequences +
 # print-out of all targets + all observed sequences with a count
-def accuracy_test_botvinick(model, sequence_ids, noise=0, num_tests=10, goals=False, initialization="uniform", verbose=True):
+def accuracy_test_botvinick(model, sequence_ids, noise=0, noise_step=None, num_tests=10, goals=False, initialization="uniform", verbose=True):
     # This runs a hundred version of the model with different random initializations
     env = environment.GoalEnv()
     output_actions = []
@@ -34,9 +35,9 @@ def accuracy_test_botvinick(model, sequence_ids, noise=0, num_tests=10, goals=Fa
         for field_set in [False, True]:  # Try both with the field set and with the field not set.
             for i in range(num_tests):
                 # Initialize the sequence.
-                env.reinitialize(sequence.initial_state)
-                if field_set:
-                    env.state.current.set_field("o_sequence"+str(seqid+1), 1)
+                env.reinitialize(copy.deepcopy(sequence.initial_state))
+                #if field_set:
+                #    env.state.current.set_field("o_sequence"+str(seqid+1), 1)
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
 
                 # run the network
@@ -48,10 +49,10 @@ def accuracy_test_botvinick(model, sequence_ids, noise=0, num_tests=10, goals=Fa
                         if goals:
                             model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
                             model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
-                    for i in range(max_length):
-                        #model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                    for j in range(max_length):
                         # Add noise to context layer
-                        model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
+                        if j == noise_step or noise_step is None:
+                            model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
                         observation = env.observe()
                         model.feedforward(observation)
                         try:
@@ -162,8 +163,7 @@ def accuracy_test(model, sequences, noise=0, goals=False):
 def accuracy_test_allow_all():
     pass
 
-def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01,
-          L2_reg=0.00001, noise=0., sequences=None):
+def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_reg=0.00001, noise=0., sequences=None):
     if sequences is None:
         sequences = [0]
     env = environment.GoalEnv()
@@ -188,7 +188,7 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01,
     for iteration in range(num_iterations):
         seqid = np.random.choice(sequences)
         sequence = task.sequences_list[seqid]
-        env.reinitialize(sequence.initial_state)
+        env.reinitialize(copy.deepcopy(sequence.initial_state))
         if np.random.random() > 0.5:
             env.state.current.set_field("o_sequence"+str(seqid+1), 1)
         model.action = np.zeros((1, model.size_action), dtype=np.float32)

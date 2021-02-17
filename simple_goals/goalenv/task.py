@@ -58,10 +58,12 @@ class Target(object):
         return self._goal2_one_hot
 
 
+import copy
+
 class BehaviorSequence(object):
     def __init__(self, initial_state, targets=None):
         self.targets = targets
-        self.initial_state = initial_state
+        self.initial_state = copy.deepcopy(initial_state)
         self._actions_list = [t.action_one_hot for t in self.targets]
         self._goals1_list = [t.goal1_one_hot for t in self.targets]
         self._goals2_list = [t.goal2_one_hot for t in self.targets]
@@ -595,7 +597,7 @@ actions_teamilk2sugar = [   # dip teabag
     "a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_done"]
 topgoals_teamilk2sugar = ["g_1_make_tea"] * len(actions_teamilk2sugar)
 midgoals_teamilk2sugar = ["g_2_infuse_tea"] * 6 + ["g_2_stir"] * 6 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + \
-                           ["g_2_add_sugar"] * 8 + ["g_2_stir"] * 6 +["g_2_clean_up"] * 2 +  ["g_2_drink"] * 6
+                           ["g_2_add_sugar"] * 8 + ["g_2_stir"] * 6 +["g_2_clean_up"] * 2 + ["g_2_drink"] * 6
 targets = _make_targets(topgoals_teamilk2sugar, midgoals_teamilk2sugar, actions_teamilk2sugar)
 sequence_teamilk2sugar = BehaviorSequence(default_state, targets)
 

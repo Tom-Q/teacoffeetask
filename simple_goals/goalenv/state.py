@@ -120,16 +120,16 @@ class State(object):
     This is just to avoid any bug that could occur from updating the state "in place".
     """
     def __init__(self, data: AbstractData):
-        self.current = copy.copy(data)
-        self.next = copy.copy(data)
+        self.current = copy.deepcopy(data)
+        self.next = copy.deepcopy(data)
 
     def next_time_step(self):
         self.current = self.next
-        self.next = copy.copy(self.current)
+        self.next = copy.deepcopy(self.current)
 
     def reset(self):
         self.current = self.current.__class__()  # To reinitialize to default values, make a new instance of the data.
-        self.next = copy.copy(self.current)
+        self.next = copy.deepcopy(self.current)
 
 
 class Environment(ABC):
