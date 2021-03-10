@@ -251,6 +251,7 @@ def make_rdm_noisy(name, num_networks, noise, num_runs_per_network=10, title="-"
 def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True, skips=[],
                       rdm_type=analysis.SPEARMAN):
     # Make one rdm for each network
+    hidden_activations = []
     rdmatrices = []
     for i in range(num_networks+len(skips)):
         if i in skips:
@@ -260,6 +261,7 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
             hidden = pnashierarchy.accuracy_test_with_goals(model)
         else:
             hidden, _ = accuracy_test(model, name=str(i))
+        hidden_activations.append(hidden)
         # Turn into a list of simple vectors
         for i, tensor in enumerate(hidden):
             hidden[i] = tensor.numpy().reshape(-1)
@@ -284,15 +286,16 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
         else:
             avg_matrix += matrix
     avg_matrix = avg_matrix / num_networks
-    name=name+'_'+rdm_type
-    np.savetxt(name+"_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
+    name=name.replace('.', '_')+'_'+rdm_type
+    if save_files:
+        np.savetxt(name+"_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
     labels = []
     for i, sequence in enumerate(pnas2018task.seqs):
         for action in sequence[1:]:
             labels.append(str(i)+'_'+action)
     analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
     if save_files:
-        plt.savefig(name+'_rdm')
+        plt.savefig(name+'_rdm.jpeg')
     plt.clf()
 
     mdsy = analysis.mds(avg_matrix)
@@ -302,4 +305,5 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
     if save_files:
         plt.savefig(name + '_mds')
     plt.clf()
-    return avg_matrix
+    return avg_matrix, hidden_activations
+

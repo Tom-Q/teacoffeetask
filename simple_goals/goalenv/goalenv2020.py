@@ -20,55 +20,60 @@ def accuracy_test_botvinick(model, sequence_ids, noise=0, noise_step=None, num_t
     env = environment.GoalEnv()
     output_actions = []
 
+
     # Find the max sequence length
-    max_length = 0
     target_actions_sequences = []
     sequences = []
+    max_length = 0
     for seqid in sequence_ids:
         sequence = task.sequences_list[seqid]
         sequences.append(sequence)
-        if len(sequence.targets) > max_length:
-            max_length = len(sequence.targets)
         target_actions_sequences.append(sequence.get_actions_one_hot())
+        if max_length < sequence.length:
+            max_length = sequence.length
+    max_length += 10  # add a bit of a margin for additions
 
     for seqid, sequence in enumerate(sequences):
-        for field_set in [False, True]:  # Try both with the field set and with the field not set.
-            for i in range(num_tests):
-                # Initialize the sequence.
-                env.reinitialize(copy.deepcopy(sequence.initial_state))
-                #if field_set:
-                #    env.state.current.set_field("o_sequence"+str(seqid+1), 1)
-                model.action = np.zeros((1, model.size_action), dtype=np.float32)
+        #for field_set in [False, True]:  # Try both with the field set and with the field not set.
+        for i in range(num_tests):
+            # Initialize the sequence.
+            env.reinitialize(copy.deepcopy(sequence.initial_state))
+            #if field_set:
+            #    env.state.current.set_field("o_sequence"+str(seqid+1), 1)
+            model.action = np.zeros((1, model.size_action), dtype=np.float32)
 
-                # run the network
-                with tf.GradientTape() as tape:
-                    # Initialize context with random/uniform values.
-                    if initialization == 'uniform':
-                        model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
-                        model.action = np.zeros_like(sequence.targets[0].action_one_hot)
-                        if goals:
-                            model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
-                            model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
-                    for j in range(max_length):
-                        # Add noise to context layer
-                        if j == noise_step or noise_step is None:
-                            model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
-                        observation = env.observe()
-                        model.feedforward(observation)
-                        try:
-                            env.do_action(model.h_action_wta[-1])
-                        except environment.ActionException as error:  # The action doesn't make sense and cannot be executed in the environment.
-                            print(error)
-                            break
-                        action_str = utils.onehot_to_str(model.h_action_wta[-1], environment.GoalEnvData.actions_list)
-                        if action_str == environment.TERMINAL_ACTION:
-                            break  # we said "done", we're done.
+            # run the network
+            with tf.GradientTape() as tape:
+                # Initialize context with random/uniform values.
+                if initialization == 'uniform':
+                    model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
+                    model.action = np.zeros_like(sequence.targets[0].action_one_hot)
+                    if goals:
+                        model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
+                        model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
+                for j in range(max_length):
+                    # Add noise to context layer
+                    if j == noise_step or noise_step is None:
+                        model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
+                    observation = env.observe()
+                    model.feedforward(observation)
+                    # if there's an impossible action, ignore it and continue.
+                    next_state = copy.deepcopy(env.state.next)
+                    try:
+                        env.do_action(model.h_action_wta[-1])
+                    except environment.ActionException as error:  # The action doesn't make sense and cannot be executed in the environment.
+                        print(error)
+                        # reset the state when an impossible action is attempted.
+                        env.state.next = next_state
+                    action_str = utils.onehot_to_str(model.h_action_wta[-1], environment.GoalEnvData.actions_list)
+                    if action_str == environment.TERMINAL_ACTION:
+                        break  # we said "done", we're done.
 
-                    # Get some statistics about the sequences actually observed. Is it a recognized sequence? If not,
-                    # What kind of mistake appeared?
-                    actions = np.array(model.h_action_wta).reshape((-1, environment.GoalEnvData.num_actions))
-                    output_actions.append(actions)
-                    model.clear_history()
+                # Get some statistics about the sequences actually observed. Is it a recognized sequence? If not,
+                # What kind of mistake appeared?
+                actions = np.array(model.h_action_wta).reshape((-1, environment.GoalEnvData.num_actions))
+                output_actions.append(actions)
+                model.clear_history()
 
     # Make a list of all observed sequences
     unique_output_sequences = []
@@ -107,32 +112,32 @@ def accuracy_test(model, sequences, noise=0, goals=False):
     actions_output_sequences = []
     env = environment.GoalEnv()
     for seqid in sequences:
-        for field_set in [False, True]: # Try both with the field set and with the field not set.
-            sequence = task.sequences_list[seqid]
-            env.reinitialize(sequence.initial_state)
-            if field_set:
-                env.state.current.set_field("o_sequence"+str(seqid+1), 1)
-            model.action = np.zeros((1, model.size_action), dtype=np.float32)
+        #for field_set in [False, True]: # Try both with the field set and with the field not set.
+        sequence = task.sequences_list[seqid]
+        env.reinitialize(sequence.initial_state)
+        #if field_set:
+        #    env.state.current.set_field("o_sequence"+str(seqid+1), 1)
+        model.action = np.zeros((1, model.size_action), dtype=np.float32)
 
-            # run the network
-            with tf.GradientTape() as tape:
-                # Initialize context with random/uniform values.
-                model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
-                # Alternative: zeros
-                #model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
-                for i, target in enumerate(sequence.targets):
-                    model.action = np.zeros((1, model.size_action), dtype=np.float32)
-                    # Add noise to context layer
-                    model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
-                    observation = env.observe()
-                    model.feedforward(observation)
-                    env.do_action(target.action_one_hot)
+        # run the network
+        with tf.GradientTape() as tape:
+            # Initialize context with random/uniform values.
+            model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
+            # Alternative: zeros
+            #model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            for i, target in enumerate(sequence.targets):
+                model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                # Add noise to context layer
+                model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
+                observation = env.observe()
+                model.feedforward(observation)
+                env.do_action(target.action_one_hot)
 
-                # Get some statistics about the percentage of correct behavior
-                actions = np.array(model.h_action_wta).reshape((-1, environment.GoalEnvData.num_actions))
-                target_actions = sequence.get_actions_one_hot()
-                actions_output_sequences.append([actions, target_actions])
-                model.clear_history()
+            # Get some statistics about the percentage of correct behavior
+            actions = np.array(model.h_action_wta).reshape((-1, environment.GoalEnvData.num_actions))
+            target_actions = sequence.get_actions_one_hot()
+            actions_output_sequences.append([actions, target_actions])
+            model.clear_history()
 
     # Now display all the actions and target actions, but converted back to text.
     for i in range(len(actions_output_sequences)):
@@ -169,12 +174,12 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
     env = environment.GoalEnv()
     if model is None:
         if goals:
-            model = nn.NeuralNet(size_hidden=50, size_observation=29, size_action=18,
+            model = nn.NeuralNet(size_hidden=50, size_observation=28, size_action=18,
                                  size_goal1=len(environment.GoalEnvData.goals1_list),
                                  size_goal2=len(environment.GoalEnvData.goals2_list),
                                  algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
         else:
-            model = nn.NeuralNet(size_hidden=50, size_observation=29, size_action=18,  size_goal1=len(sequences), size_goal2=0,
+            model = nn.NeuralNet(size_hidden=50, size_observation=28, size_action=18,  size_goal1=len(sequences), size_goal2=0,
                                  algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
 
     model.L2_regularization = L2_reg
@@ -189,8 +194,8 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
         seqid = np.random.choice(sequences)
         sequence = task.sequences_list[seqid]
         env.reinitialize(copy.deepcopy(sequence.initial_state))
-        if np.random.random() > 0.5:
-            env.state.current.set_field("o_sequence"+str(seqid+1), 1)
+        #if np.random.random() > 0.5:
+        #    env.state.current.set_field("o_sequence"+str(seqid+1), 1)
         model.action = np.zeros((1, model.size_action), dtype=np.float32)
 
         # run the network

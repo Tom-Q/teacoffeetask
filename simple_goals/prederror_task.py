@@ -6,6 +6,7 @@ import scripts
 import analysis
 import matplotlib.pyplot as plt
 import timeit
+from pnas import pnashierarchy
 
 np.set_printoptions(precision=3)
 all_inputs = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "servetea", "servecoffee", "sugar", "end"]
@@ -119,9 +120,12 @@ def train(model = None, mse=False, noise= 0., iterations=5000, l2reg=0.0, learni
     return model
 
 
-def train_with_goals(model = None, mse=False, learning_rate=0.1, noise=0., iterations=5000, l2reg=0.0, algorithm=nn.SGD, hidden_units=15):
+def train_with_goals(model=None, mse=False, learning_rate=0.1, noise=0., iterations=5000, l2reg=0.0,
+                     algorithm=nn.SGD, hidden_units=15,
+                     reg_strength=0., reg_increase="square"):
+    num_goals = 2
     if model is None:
-        model = nn.NeuralNet(size_hidden=hidden_units, algorithm=algorithm, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=2, size_goal2=0)
+        model = nn.NeuralNet(size_hidden=hidden_units, algorithm=algorithm, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=num_goals, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = 0.5 if mse else learning_rate
     model.L2_regularization = l2reg
@@ -160,11 +164,47 @@ def train_with_goals(model = None, mse=False, learning_rate=0.1, noise=0., itera
             tchoices = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
             ratios = scripts.evaluate([tchoices], [targets])
 
+            cols = model.size_hidden
+            # Regularization in the hidden layer weights
+            # Recurrent hidden to hidden connections
+            extra_loss = pnashierarchy.weight_regularization_calculator(model.hidden_layer.w,
+                                                          [0, model.size_hidden], [0, cols],
+                                                          reg_strength, reg_type="recurrent", reg_increase=reg_increase)
+            # Prev action to hidden
+            # extra_loss += weight_regularization_calculator(model.hidden_layer.w,
+            #                                               [model.size_hidden+9, model.size_hidden+9+model.size_action],
+            #                                               [0, cols],
+            #                                               reg_strength, reg_type="input_right", reg_increase=reg_increase)
+            # Prev goal to hidden
+            extra_loss += pnashierarchy.weight_regularization_calculator(model.hidden_layer.w,
+                                                          [model.size_hidden+9+model.size_action, model.size_hidden+9+model.size_action+num_goals],
+                                                          [0, cols],
+                                                          reg_strength, reg_type="input_left", reg_increase=reg_increase)
+
+            # SWITCHED OUTPUT LEFT AND OUTPUT RIGHT.
+            #Regularization in the output layers (goals and actions) weights
+            # hidden to next action
+            extra_loss += pnashierarchy.weight_regularization_calculator(model.action_layer.w,
+                                                           [0, model.size_hidden], [0, model.size_action],
+                                                           reg_strength, reg_type="output_right", reg_increase=reg_increase)
+            # Hidden to next goal
+            extra_loss += pnashierarchy.weight_regularization_calculator(model.goal1_layer.w,
+                                                           [0, model.size_hidden], [0, model.size_action],
+                                                           reg_strength, reg_type="output_left", reg_increase=reg_increase)
+
+            # Regularization of the observation (only goes to the action side)
+            #extra_loss += weight_regularization_calculator(model.hidden_layer.w,
+            #                                                     [model.size_hidden, model.size_hidden+model.size_observation],
+            #                                                     [0, cols],
+            #                                                     reg_strength, reg_type="input_right", reg_increase=reg_increase)
+
+            loss, _ = model.train_obsolete(targets, goal, None, tape, extra_loss)
+
             # Train model, record loss.
-            if mse:
-                loss = model.train_MSE(targets, None, None, tape)
-            else:
-                loss, gradients = model.train_obsolete(targets, targets_goal1, None, tape)
+            #if mse:
+            #    loss = model.train_MSE(targets, None, None, tape)
+            #else:
+            #    loss, gradients = model.train_obsolete(targets, targets_goal1, None, tape)
         # Monitor progress using rolling averages.
         speed = 2. / (episode + 2) if episode < 1000 else 0.001  # enables more useful evaluations for early trials
         rng_avg_loss = utils.rolling_avg(rng_avg_loss, loss, speed)
@@ -256,7 +296,7 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
     nps = 5 # number of elements per sequence
 
     if save_files:
-        np.savetxt(name+".csv", avg_matrix, delimiter=",")
+        np.savetxt(name+"_rdm_mat"+utils.datestr()+".txt", avg_matrix, delimiter="\t", fmt='%.2e')
     labels = []
     for i, sequence in enumerate(seqs):
         for action in sequence[1:-1]:
@@ -277,7 +317,7 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
 
 
 import predictivenet
-
+# This should achieve 100% prediction success.
 def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorithm=nn.RMSPROP, l2reg = 0, hidden_units=15):
     inputs_str = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "serve", "sugar", "end"]
     outputs_str = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "servetea", "servecoffee", "sugar", "end"]
@@ -287,6 +327,7 @@ def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorit
     seq2t = ['start', 'coffee',  'water', 'stir', 'milk', 'servecoffee', 'end']  # 20%
     seq3in = ['start', 'tea',  'water', 'stir', 'sugar', 'serve', 'end']  # 20%
     seq3t = ['start', 'tea', 'water', 'stir', 'sugar', 'servetea', 'end']  # 20%
+
     inputs_seqs = [seq1in, seq2in, seq3in]
     target_seqs = [seq1t, seq2t, seq3t]
 
@@ -460,7 +501,7 @@ def make_rdm_multiple_predictive(name, num_networks,title="-", save_files=True):
     nps = 5  # number of elements per sequence
 
     if save_files:
-        np.savetxt(name+".csv", avg_matrix, delimiter=",")
+        np.savetxt(name+"_rdm_mat"+utils.datestr()+".txt", avg_matrix, delimiter="\t", fmt='%.2e')
     labels = []
     for i, sequence in enumerate(seqs):
         for action in sequence[1:-1]:
@@ -478,3 +519,109 @@ def make_rdm_multiple_predictive(name, num_networks,title="-", save_files=True):
         plt.savefig(name + '_mds')
     plt.clf()
     return avg_matrix
+
+"""
+# TODO: (good to have when I find more time) refactor this to match the pnas2018hierarchy stuff...
+# ...this is basically identical to that
+def accuracy_test_reg_hierarchy(model, model_num=None):
+    hidden_activation = []
+    all_choices = []
+    for j, sequence in enumerate(seqs):
+        goal = goals[j]
+        seq_choices = []
+        all_choices.append(seq_choices)
+        inputs = utils.liststr_to_onehot(sequence[:-1], all_inputs)
+        targets = utils.liststr_to_onehot(sequence[1:], all_outputs)
+        model.action = np.zeros((1, model.size_action), dtype=np.float32)
+        # run the network
+        with tf.GradientTape() as tape:
+            # Initialize context with random/uniform values.
+            model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            model.goal1 = goal[0]#np.zeros_like(goal[0]) #
+            # Reset the previous action
+            for i in range(len(targets)):
+                model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                observation = inputs[i].reshape(1, -1)
+                model.feedforward(observation)
+                hidden_activation.append(model.context)
+            # Get some statistics about what was correct and what wasn't
+            choice = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
+            model.h_action_wta.clear()
+            seq_choices.append(choice)
+
+    # Now evaluate accuracy:
+    accuracy_totals = np.zeros((len(seq1) - 1))
+    for i in range(len(all_choices)):
+        targets = utils.liststr_to_onehot(seqs[i][1:], all_outputs)
+        for j in range(len(targets)):
+            if (all_choices[i][0][j] == targets[j]).all():
+                accuracy_totals[j] += 1
+    accuracy_totals /= 4
+    if model_num is not None:
+        print(model_num, accuracy_totals)
+    else:
+        print(accuracy_totals)
+    return hidden_activation
+"""
+
+
+def make_rdm_multiple_hierarchy(name, num_networks, title="-", save_files=True, file_save_name=None, skips=[]):
+    if file_save_name == None:
+        file_save_name = name
+    # Make one rdm for each network
+    rdmatrices_left = []
+    rdmatrices_right = []
+    for i in range(num_networks + len(skips)):
+        # Skip number
+        if skips is not None and i in skips:
+           continue
+        model = utils.load_object(name, i)
+        hidden, _ = accuracy_test_with_goals(model, i)
+
+        # Turn a list of tensors into a list of np vectors
+        for i, tensor in enumerate(hidden):
+            hidden[i] = tensor.numpy().reshape(-1)
+
+        # Now cut that in two and make an RDM for each
+        cutoff = int(len(hidden[0])//2)
+        left_units = [vector[:cutoff] for vector in hidden]
+        rdm_left= analysis.rdm_spearman(left_units)
+        rdmatrices_left.append(rdm_left)
+
+        right_units = [vector[cutoff:] for vector in hidden]
+        rdm_right = analysis.rdm_spearman(right_units)
+        rdmatrices_right.append(rdm_right)
+
+    matrices = []
+    # Do the same processing for each side (low level/left and high_level/right)
+    for side in [[rdmatrices_left, "_goals"], [rdmatrices_right, "_actions"]]:
+        # Now average over all matrices
+        avg_matrix = None
+        for matrix in side[0]:
+            if avg_matrix is None:
+                avg_matrix = matrix
+            else:
+                avg_matrix += matrix
+        avg_matrix = avg_matrix / num_networks
+        side_name = file_save_name+side[1]
+        np.savetxt(side_name+"_rdm_mat"+utils.datestr()+".txt", avg_matrix, delimiter="\t", fmt='%.2e')
+        labels = []
+        for i, sequence in enumerate(seqs):
+            for action in sequence[1:]:
+                labels.append(str(i)+'_'+action)
+        analysis.plot_rdm(avg_matrix, labels, title+side_name + " spearman rho matrix")
+        if save_files:
+            plt.savefig(side_name+'_rdm'+utils.datestr())
+        plt.clf()
+
+        nps = 5  # number of elements per sequence
+        mdsy = analysis.mds(avg_matrix)
+        for i, style in enumerate(['ro-', 'b|--', 'gx-.']):
+            analysis.plot_mds_points(mdsy[nps * i:nps * i + nps], range(nps), labels=labels[nps * i:nps * i + nps],
+                                     style=style)
+        plt.title(title+side_name)
+        if save_files:
+            plt.savefig(side_name + '_mds'+utils.datestr())
+        plt.clf()
+        matrices.append(avg_matrix)
+    return matrices

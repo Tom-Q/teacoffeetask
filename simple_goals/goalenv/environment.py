@@ -28,13 +28,12 @@ class GoalEnvData(state.AbstractData):
     """
 
     # Observable state
-    # Sequence indicators / goals
-    o_sequence1: int = 0
-    o_sequence2: int = 0
-    o_sequence3: int = 0
-    o_sequence4: int = 0
-    o_sequence5: int = 0
-    o_sequence6: int = 0
+    # Instructions
+    o_dcoffee: int = 0
+    o_dtea: int = 0
+    o_dsugar: int = 0
+    o_dextrasugar: int = 0
+    o_ddairy: int = 0
 
     # Containers
     o_fix_container_door_open: int = 0
@@ -225,6 +224,13 @@ class GoalEnv(state.Environment):
         # Make the code a bit more compact
         c = self.state.current
         n = self.state.next
+
+        # 0. Regardless of action, set the instructions/desires to 0.
+        n.o_ddairy = 0.
+        n.o_dcoffee = 0.
+        n.o_dtea = 0.
+        n.o_dsugar = 0.
+        n.o_dextrasugar = 0.
 
         # 1. Fixation
         if c.is_fixate_action():

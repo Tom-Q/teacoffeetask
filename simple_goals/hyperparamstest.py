@@ -3,6 +3,9 @@ import utils
 from pnas import pnas2018
 import numpy as np
 import analysis
+import matplotlib.pyplot as plt
+from scipy import stats
+import seaborn as sns
 
 # Train 100 networks of each
 def full_hyperparameter_test():
@@ -59,16 +62,84 @@ def full_hyperparameter_test():
     report.close()
 
 
-def hyperparameter_analysis():
+def hyperparameter_analysis(type=analysis.SPEARMAN, file="hyperparameter_test_rdm.txt"):
     # For each model: generate spearman matrix. Store with a label.
     count = 0
     matrices = []
-    for algorithm in [neuralnet.SGD]:#, neuralnet.RMSPROP, neuralnet.ADAM]:
-        for initialization in [neuralnet.NORMAL]:#, neuralnet.UNIFORM]:
-            for hidden_units in [8]:#, 15, 50]:
-                for l1reg in [0.]:#, 0.001]:
-                    for l2reg in [0.]:#, 0.001]:
-                        for loss_type in [pnas2018.CROSS_ENTROPY, pnas2018.MSE]:
+    for hidden_units in [8, 15, 50]:
+        for loss_type in [pnas2018.CROSS_ENTROPY, pnas2018.MSE]:
+            for l1reg in [0., 0.001]:
+                for l2reg in [0., 0.001]:
+                    for algorithm in [neuralnet.SGD, neuralnet.RMSPROP, neuralnet.ADAM]:
+                        for initialization in [neuralnet.NORMAL, neuralnet.UNIFORM]:
+                                learning_rate = 0.1
+                                if algorithm == neuralnet.RMSPROP or algorithm == neuralnet.ADAM:
+                                    learning_rate *= 0.1
+                                if hidden_units == 8:
+                                    learning_rate *= 2
+                                elif hidden_units == 50:
+                                    learning_rate *= 0.5
+                                elif loss_type == pnas2018.MSE and (
+                                        algorithm != neuralnet.RMSPROP and algorithm != neuralnet.ADAM):
+                                    learning_rate *= 10
+                                name = algorithm + initialization + str(hidden_units) + str(l1reg) + str(
+                                    l2reg) + loss_type# + "{:.3f}".format(learning_rate)
+                                # Generate RDM and hidden activations
+                                matrix, hidden_activation = pnas2018.make_rdm_multiple(name, 10, save_files=False, rdm_type=type)
+                                hidden_activation = np.concatenate(hidden_activation, axis=None).flatten()
+                                # make a graph for this networ
+                                """
+                                plt.hist(hidden_activation, bins=100, range=(0., 1.), rwidth=1, facecolor='blue', density=True)
+                                plt.xlabel('activation')
+                                plt.ylabel('units activating at that level')
+                                plt.title('density plot hidden unit activation: '+name)
+                                plt.grid(True)
+                                plt.tight_layout()
+                                #plt.show()
+                                #plt.savefig(name.replace('.', '_') + '.png')
+                                plt.clf()
+                                """
+                                matrices.append([name, matrix, hidden_activation])
+
+    # Make an average of all the RDMs
+    # mean_mat = np.mean([matrix for name, matrix in matrices], axis=0)
+    # Save that rdm
+    # np.savetxt("mean_mat.txt", mean_mat, delimiter="\t", fmt='%.2e')
+
+    # Compare all spearman matrix. Generate a massive matrix.
+    spearman_mat = np.zeros((len(matrices), len(matrices)))
+    for i, mat1 in enumerate(matrices):
+        for j, mat2 in enumerate(matrices):
+            spearman_mat[i, j] = analysis.compare_matrices(mat1[1], mat2[1])
+
+    # Also compare all hidden activations, generate massive matrix.
+    activation_mat = np.zeros((len(matrices), len(matrices)))
+    for i, mat1 in enumerate(matrices):
+        for j, mat2 in enumerate(matrices):
+            activation_mat[i, j] = analysis.kolmogorov_smirnov(mat1[2], mat2[2])
+
+    # Now compare the two top level matrices: pearson
+    # Only keep the upper triangle when pearson-correlating.
+    spearman_mat_indices = spearman_mat[np.triu_indices_from(spearman_mat, k=1)]
+    activation_mat_indices = activation_mat[np.triu_indices_from(activation_mat, k=1)]
+    print(stats.pearsonr(spearman_mat_indices, activation_mat_indices))
+    print(stats.spearmanr(spearman_mat_indices, activation_mat_indices))
+    # Make a giant rdm with labels
+    #labels = [mat[0] for mat in matrices]
+    #analysis.plot_rdm(spearman_mat, labels, "Hyperparameter test general spearman matrix", vmin=-0.5, vmax=1.)
+    #np.savetxt(file, spearman_mat, delimiter="\t", fmt='%.2e')
+    #plt.tight_layout()
+    #plt.savefig(file[:-3] + ".png")
+
+
+def reload(file="hyperparameter_test_rdm.txt"):
+    characteristics = []
+    for hidden_units in [8, 15, 50]:
+        for loss_type in [pnas2018.CROSS_ENTROPY, pnas2018.MSE]:
+            for l1reg in [0., 0.001]:
+                for l2reg in [0., 0.001]:
+                    for algorithm in [neuralnet.SGD, neuralnet.RMSPROP, neuralnet.ADAM]:
+                        for initialization in [neuralnet.NORMAL, neuralnet.UNIFORM]:
                             learning_rate = 0.1
                             if algorithm == neuralnet.RMSPROP or algorithm == neuralnet.ADAM:
                                 learning_rate *= 0.1
@@ -79,19 +150,79 @@ def hyperparameter_analysis():
                             elif loss_type == pnas2018.MSE and (
                                     algorithm != neuralnet.RMSPROP and algorithm != neuralnet.ADAM):
                                 learning_rate *= 10
-                            name = algorithm + initialization + str(hidden_units) + str(l1reg) + str(
-                                l2reg) + loss_type# + "{:.3f}".format(learning_rate)
-                            matrix = pnas2018.make_rdm_multiple(name, 50)
-                            matrices.append([name, matrix])
+                            if l1reg == 0.001:
+                                L1 = 'l1'
+                            else:
+                                L1 = ''
+                            if l2reg == 0.001:
+                                L2 = 'l2'
+                            else:
+                                L2 = ''
+                            if l1reg == l2reg == 0.:
+                                L1 = 'no_reg'
+                            name = str(hidden_units) + ' units, ' + loss_type + ', ' + 'LR:{:.2f}'.format(learning_rate) + ', ' + L1 + L2 + ', ' + algorithm + ', ' + initialization # + "{:.3f}".format(learning_rate)
+                            characteristics.append([name, hidden_units, loss_type, learning_rate, l1reg, l2reg, algorithm, initialization])
+
+    matrix = np.loadtxt(file, delimiter="\t")
+    print(sort_quality(matrix))
+    rows = matrix.tolist()
+    # Now sort. Ugliest python line ever, what it does is this:
+    # 1. Zip characteristics and rows, so that each row is paired with its characteristics in a tuple
+    # 2. Sort this list of tuple for multiple conditions, using the characteristics in the order given
+    # 3. Retrieve the sorted characteristics and rows separately
+    sorted_stuff = [(sorted_chars, row) for sorted_chars, row in sorted(zip(characteristics, rows),
+                                                key=lambda x: (x[0][1], x[0][2], x[0][3], x[0][4], x[0][5], x[0][6], x[0][7]))]
+    sorted_rows = [row for (sorted_chars, row) in sorted_stuff]
+    sorted_characteristics = [sorted_chars for (sorted_chars, row) in sorted_stuff]
+    # Now transpose and sort again
+    columns = np.asarray(sorted_rows).transpose().tolist()
+    sorted_columns = [col for _, col in sorted(zip(characteristics, columns),
+                                             key=lambda x: (x[0][1], x[0][2], x[0][3], x[0][4], x[0][5], x[0][6], x[0][7]))]
+
+    matrix = np.asarray(sorted_columns)
+    labels = [char[0] for char in sorted_characteristics]
+
+    # Metric for sort quality: how much difference is there between consecutive values
+    print(sort_quality(matrix))
+
+    plt.figure(dpi=200)
+    plt.subplots(figsize=(45, 30))
+    analysis.plot_rdm(matrix, labels, "Hyperparameter test general spearman matrix", vmin=-0.5, vmax=1.)
+    plt.tight_layout()
+    plt.savefig(file[:-3] + ".png", dpi=300)
+
+def sort_quality(rdm):
+    total = 0
+    for i in range(len(rdm)):
+        for j in range(len(rdm)-1):
+            total += np.abs(rdm[i, j]-rdm[i,j+1])
+    return total
+
+
+#names = ["sgdnormal150.00.0cross_entropy", "adamuniform500.0010.001mse", "rmspropnormal150.00.0cross_entropy"]
+def hyperparameter_individual_matrix_analysis(names):
+    # For each model: generate spearman matrix. Store with a label.
+    count = 0
+    matrices = []
+    for name in names:
+        # Generate RDM and hidden activations
+        matrix, hidden_activation = pnas2018.make_rdm_multiple(name, 50, save_files=True)
+        matrices.append([name, matrix])
+
     # Compare all spearman matrix. Generate a massive matrix.
     spearman_mat = np.zeros((len(matrices), len(matrices)))
     for i, mat1 in enumerate(matrices):
         for j, mat2 in enumerate(matrices):
             spearman_mat[i, j] = analysis.compare_matrices(mat1[1], mat2[1])
 
+    print(spearman_mat)
+
     # Make a giant rdm with labels
-    labels = [mat[0] for mat in matrices]
-    analysis.plot_rdm(spearman_mat, labels, "Hyperparameter test general spearman matrix")
+    #labels = [mat[0] for mat in matrices]
+    #analysis.plot_rdm(spearman_mat, labels, "Hyperparameter test general spearman matrix", vmin=-0.5, vmax=1.)
+    #np.savetxt(file, spearman_mat, delimiter="\t", fmt='%.2e')
+    #plt.tight_layout()
+    #plt.savefig(file[:-3] + ".png")
 
 """
 # Simulations: extra variations

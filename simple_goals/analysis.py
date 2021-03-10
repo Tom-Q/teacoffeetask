@@ -96,10 +96,11 @@ def rdm_crappynobis(vectors):
             matrix[i, j] = np.sqrt(np.sum((zvecs[i, :]-zvecs[j, :])**2))
     return matrix
 
-
-
-def plot_rdm(matrix, labels, title, show_rdm=False):
-    sns.heatmap(matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels)
+def plot_rdm(matrix, labels, title, show_rdm=False, vmin=None, vmax=None):
+    if vmin is None and vmax is None:
+        sns.heatmap(matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels)
+    else:
+        sns.heatmap(matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels, vmin = vmin, vmax = vmax)
     plt.title(title)
     if show_rdm:
         plt.show()
@@ -108,3 +109,13 @@ def compare_matrices(matrix1, matrix2):
     if matrix1.shape != matrix2.shape:
         raise ValueError("both matrices must be the same shape")
     return stats.spearmanr(matrix1.flatten(), matrix2.flatten())[0]
+
+
+def compare_matrices_person(matrix1, matrix2):
+    if matrix1.shape != matrix2.shape:
+        raise ValueError("both matrices must be the same shape")
+    return stats.pearsonr(matrix1.flatten(), matrix2.flatten())[0]
+
+# Do activation distributions differences predict matrix differences
+def kolmogorov_smirnov(sample1, sample2):
+        return stats.ks_2samp(sample1, sample2)[0]

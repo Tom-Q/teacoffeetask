@@ -5,12 +5,83 @@ from pnas import pnashierarchy
 import neuralnet
 import utils
 import sys
-
+import analysis
 import hyperparamstest
+import prederror_task
+import neuralnet as nn
 
-hyperparamstest.hyperparameter_analysis()
+# Regular SGD
+for i in range(0):
+    model = prederror_task.train()
+    prederror_task.accuracy_test(model)
+    utils.save_object('prederror_basic', model)
+prederror_task.make_rdm_multiple('prederror_basic', 100)
+
+# reload them and train them further
+for i in range(110):
+    print(i)
+    model = utils.load_object('prederror_basic', latest=i)
+    model = prederror_task.train(model, iterations=3000)
+    utils.save_object('prederror_basic_v2', model)
+prederror_task.make_rdm_multiple('prederror_basic_v2', 100)
+
+# With 2 goals
+for i in range(0):
+    print(i)
+    model = prederror_task.train_with_goals()
+    prederror_task.accuracy_test_with_goals(model)
+    utils.save_object('prederror_goals', model)
+prederror_task.make_rdm_multiple('prederror_goals', 100, with_goals=True)
+
+# reload them and train them further
+for i in range(110):
+    print(i)
+    model = utils.load_object('prederror_goals', latest=i)
+    model = prederror_task.train_with_goals(model, iterations=3000)
+    utils.save_object('prederror_goals_v2', model)
+prederror_task.make_rdm_multiple('prederror_goals_v2', 100, with_goals=True)
+
+
+# With 2 goals + gradient
+for i in range(110):
+    print(i)
+    model = prederror_task.train_with_goals(reg_strength=0.0001, iterations=10000)
+    prederror_task.accuracy_test_with_goals(model)
+    utils.save_object('prederror_gradient', model)
+prederror_task.make_rdm_multiple_hierarchy('prederror_gradient', 100)
+
+
+# using predictive net
+for i in range(110):
+    print(i)
+    model = prederror_task.train_predictive_net(algorithm=nn.SGD, iterations=20000, learning_rate=0.03)
+    prederror_task.accuracy_test_predictive(model)
+    utils.save_object('prederror_prednet', model)
+prederror_task.make_rdm_multiple_predictive('prederror_prednet', 100)
+
 sys.exit()
+
 """
+hyperparamstest.hyperparameter_analysis(file="deleteme.txt")
+sys.exit()
+names = ["sgdnormal150.00.0cross_entropy", "adamuniform500.0010.001mse", "rmspropnormal150.00.001cross_entropy"]
+hyperparamstest.hyperparameter_individual_matrix_analysis(names)
+sys.exit()
+file = "hyperparams_test_rdm_spearman"
+hyperparamstest.hyperparameter_analysis(file=file, type=analysis.SPEARMAN)
+sys.exit()
+hyperparamstest.reload(file)
+
+file = "hyperparams_test_rdm_mahalanobis"
+#hyperparamstest.hyperparameter_analysis(file=file, type=analysis.MAHALANOBIS)
+hyperparamstest.reload(file)
+
+
+file = "hyperparams_test_rdm_euclidian"
+#hyperparamstest.hyperparameter_analysis(file=file, type=analysis.EUCLIDIAN)
+hyperparamstest.reload(file)
+
+sys.exit()
 #start = timeit.default_timer()
 
 with tf.device('/cpu:0'):
@@ -73,14 +144,17 @@ env = environment.GoalEnv()
 #goalenv2020.accuracy_test_botvinick(model, num_tests=100, sequences=[0, 1, 2, 3, 4, 5])
 #sys.exit()
 
+#model = utils.load_object("bigmodel1")
 for i in range(0):
     model = goalenv2020.train(goals=True, num_iterations=50000, learning_rate=0.003, L2_reg=0.0001, noise=0.05, sequences=range(21))
     utils.save_object("bigmodel1", model)
-    #model = utils.load_object("bigmodel")
-    goalenv2020.accuracy_test_botvinick(model, goals=True, sequence_ids=range(21))
-    goalenv2020.accuracy_test_botvinick(model, noise=0.3, goals=True, sequence_ids=range(21))
-    goalenv2020.accuracy_test_botvinick(model, noise=0.5, noise_step=5, goals=True, sequence_ids=range(21))
+model = utils.load_object("bigmodel1")
+goalenv2020.accuracy_test_botvinick(model, noise=0., goals=True, num_tests=100, sequence_ids=range(21))
+goalenv2020.accuracy_test_botvinick(model, noise=0.1, goals=True, num_tests=100, sequence_ids=range(21))
+goalenv2020.accuracy_test_botvinick(model, noise=0.3, goals=True, num_tests= 100, sequence_ids=range(21))
+goalenv2020.accuracy_test_botvinick(model, noise=0.5, noise_step=5, num_tests= 100, goals=True, sequence_ids=range(21))
 
+sys.exit()
 #model = utils.load_object("bigmodel1")
 #goalenv2020.accuracy_test_botvinick(model, noise=0.15, goals=True, sequence_ids=range(21))
 #goalenv2020.accuracy_test_botvinick(model, noise=0.2, goals=True, sequence_ids=range(21))
