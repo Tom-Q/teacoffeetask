@@ -34,6 +34,7 @@ class GoalEnvData(state.AbstractData):
     o_dsugar: int = 0
     o_dextrasugar: int = 0
     o_ddairy: int = 0
+    o_ddairy_first: int = 0  # 1 for dairy first, -1 for dairy last, 0 is neutral.
 
     # Containers
     o_fix_container_door_open: int = 0
@@ -120,7 +121,8 @@ class GoalEnvData(state.AbstractData):
     a_add_to_mug: int = 0
     a_stir: int = 0
     a_sip: int = 0
-    a_say_done: int = 0
+    a_say_good_tea: int = 0
+    a_say_good_coffee: int = 0
 
     # Top-level goals
     g_1_make_coffee: int = 0
@@ -134,7 +136,8 @@ class GoalEnvData(state.AbstractData):
     g_2_add_milk: int = 0
     g_2_add_cream: int = 0
     g_2_clean_up: int = 0
-    g_2_drink: int = 0
+    g_2_drink_tea: int = 0
+    g_2_drink_coffee: int = 0
 
     # Special fields = class fields
     sorted_fields: typing.ClassVar[list]
@@ -192,7 +195,7 @@ GoalEnvData.num_percepts = len(GoalEnvData.observations_list)
 GoalEnvData.num_actions = len(GoalEnvData.actions_list)
 GoalEnvData.num_goals1 = len(GoalEnvData.goals1_list)
 GoalEnvData.num_goals2 = len(GoalEnvData.goals2_list)
-TERMINAL_ACTION = "a_say_done"
+TERMINAL_ACTIONS = ["a_say_good_tea", "a_say_good_coffee"]
 
 
 class GoalEnv(state.Environment):
@@ -231,6 +234,7 @@ class GoalEnv(state.Environment):
         n.o_dtea = 0.
         n.o_dsugar = 0.
         n.o_dextrasugar = 0.
+        n.o_ddairy_first = 0.
 
         # 1. Fixation
         if c.is_fixate_action():
@@ -417,7 +421,7 @@ class GoalEnv(state.Environment):
                 elif c.o_held_sugar_cube: pass # sugar cube disappears
                 else: raise ActionException("Impossible action: object can't be put down")
             else:
-                raise ActionException("Impossible Action: already holding something")
+                raise ActionException("Impossible action: already holding something")
         elif c.a_add_to_mug:
             if c.o_fix_mug:
                 if c.o_held_cream_carton:
@@ -436,9 +440,9 @@ class GoalEnv(state.Environment):
                     n.h_tea_dipped = 1.
                     n.o_fix_mug_dark = 1.
                     n.reset_held() # We're no longer holding the teabag
-                else: ActionException("Impossible Action: object cannot be poured in the mug")
+                else: ActionException("Impossible action: object cannot be poured in the mug")
             else:
-                raise ActionException("Impossible Action: pouring in something other than the mug")
+                raise ActionException("Impossible action: pouring in something other than the mug")
         elif c.a_stir:
             if c.o_held_spoon and c.o_fix_mug:
                 if c.h_cream_poured: n.h_cream_stirred = 1
@@ -447,7 +451,7 @@ class GoalEnv(state.Environment):
                 if c.h_coffee_poured: n.h_coffee_stirred = 1
                 if c.h_sugar_poured: n.h_sugar_poured = 1
             else:
-                raise ActionException("Impossible Action: can't stir without holding a spoon and looking at the mug")
+                raise ActionException("Impossible action: can't stir without holding a spoon and looking at the mug")
         elif c.a_sip:
             if c.o_held_mug:
                 n.h_mug_full = 0.
@@ -468,7 +472,7 @@ class GoalEnv(state.Environment):
                 n.h_tea_stirred = 0
             else:
                 raise ActionException("Impossible action: drinking without holding the mug")
-        elif c.a_say_done:
+        elif c.a_say_good_tea or c.a_say_good_coffee:
             pass  # Not sure if this serves a purpose
 
         # Activate the transition!!

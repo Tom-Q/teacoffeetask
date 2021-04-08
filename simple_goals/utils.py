@@ -5,6 +5,8 @@ import pickle
 import os
 import re
 import tensorflow as tf
+from timeit import default_timer as timer
+
 
 SAVE_FOLDER='models'
 
@@ -128,9 +130,53 @@ def load_objects(name, number):
 
 
 def flatten_onelevel(list):
+    # Flattens the top 2 levels
     return [item for sublist in list for item in sublist]
 
 
 
 def datestr():
     return '_' + datetime.today().strftime('%Y%m%d')
+
+# Single use progress bar
+class ProgressBar(object):
+    def __init__(self):
+        # percentages at which to update progress
+        self.updates = [0., 0.1, 1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 98, 99, 100]
+        self.update_counter = 0
+        self.start_time = None
+
+    # Print iterations progress (from https://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console)
+    def updateProgress (self, iteration, total, prefix='Progress', suffix='complete', decimals=1, length=100, fill='█', printEnd="\r"):
+        """
+        Call in a loop to create terminal progress bar
+        @params:
+            iteration   - Required  : current iteration (Int)
+            total       - Required  : total iterations (Int)
+            prefix      - Optional  : prefix string (Str)
+            suffix      - Optional  : suffix string (Str)
+            decimals    - Optional  : positive number of decimals in percent complete (Int)
+            length      - Optional  : character length of bar (Int)
+            fill        - Optional  : bar fill character (Str)
+            printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+        """
+        if iteration == 0:
+            self.start_time = timer()
+        ETC = '' #Estimated Time to Completion
+        if (iteration/total)*100 >= self.updates[self.update_counter]:
+            elapsed = timer() - self.start_time
+            if iteration != 0:
+                minutes = int((elapsed * total/iteration - elapsed)//60)
+                seconds = int((elapsed * total/iteration - elapsed)%60)
+                ETC = "(~{:d} mins {:d}s left)".format(minutes, seconds)
+            percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+            filledLength = int(length * iteration // total)
+            bar = fill * filledLength + '-' * (length - filledLength)
+            # Unfortunately \r doesn't work in the pycharm console, so we have to reprint the whole bar everytime,
+            # clogging the console.
+            #print(f'\r{prefix} |{bar}| {percent}% {suffix} {ETC}', end = printEnd)
+            print(f'{prefix} |{bar}| {percent}% {suffix} {ETC}')
+            # Print New Line on Complete
+            if iteration == total:
+                print()
+            self.update_counter += 1

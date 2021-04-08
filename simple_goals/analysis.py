@@ -2,6 +2,7 @@ import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 from sklearn.manifold import MDS
+import utils
 
 import seaborn as sns
 
@@ -17,9 +18,9 @@ def mds(vectors):
 
     # Set-up manifold methods
     mds = MDS(n_components=2, metric=True)
-
     # Plot results
     Y = mds.fit_transform(vectors_array)
+    print(mds.stress_)
     return Y
 
 def plot_mds_points(mds_y, points, labels=None, style='rx-'):
@@ -41,7 +42,11 @@ def plot_mds_points(mds_y, points, labels=None, style='rx-'):
 #  Representational dissimilarity matrices, based on a list of vectors.
 def rdm_spearman(vectors):
     matrix = np.zeros((len(vectors), len(vectors)))
+    # Added because very large RDMs take a lot of time to compute
+    progress_bar = utils.ProgressBar()
     for i, vec1 in enumerate(vectors):
+        if len(vectors)>100:
+            progress_bar.updateProgress(i, len(vectors), prefix="Generating RDM:")
         for j, vec2 in enumerate(vectors):
             matrix[i, j] = 1 - stats.spearmanr(vec1, vec2)[0]
     return matrix
@@ -87,7 +92,8 @@ def rdm_noisy_mahalanobis(vectors):
 
 
 def rdm_crappynobis(vectors):
-    # Normalize according to the stdev of each individual unit, then compute the euclidian distance. DOESN'T LOOK AT *COVARIANCE*.
+    # Normalize according to the stdev of each individual unit, then compute the euclidian distance.
+    # THIS IS NOT REALLY MAHALANOBIS BECAUSE IT MAKES USE OF VARIANCE BUT NOT COVARIANCE.
     vectors_mat = np.asarray(vectors)
     zvecs = stats.zscore(vectors_mat, axis=1)
     matrix = np.zeros((len(vectors), len(vectors)))

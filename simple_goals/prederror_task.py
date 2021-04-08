@@ -18,9 +18,11 @@ goals = [[[0., 1.]] * 7, [[0., 1.]] * 7, [[1., 0]] * 7]
 goals = [np.asarray(goal, dtype=np.float32).reshape((-1, 1, 2)) for goal in goals]
 seqs = [seq1, seq2, seq3]
 sequence_probabilities = [0.6, 0.2, 0.2]
+#sequence_probabilities = [1./3, 1./3, 1./3]
 optimal_accuracy = np.asarray([0.8, 1., 1., 0.8, 1., 1.])
 optimal_accuracy_goals = np.asarray([1., 1., 1., 0.8, 1., 1.])
-
+#optimal_accuracy = np.asarray([2./3, 1., 1., 2./3, 1., 1.])
+#optimal_accuracy_goals = np.asarray([1., 1., 1., 2./3, 1., 1.])
 
 def accuracy_test(model, test_number=None):
     hidden_activation = []
@@ -264,11 +266,13 @@ def accuracy_test_with_goals(model, test_number=None):
     return hidden_activation, optimal
 
 
-def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True):
+def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True, skips=[]):
     # Make one rdm for each network
     optimal_list = []
     rdmatrices = []
-    for i in range(num_networks):
+    for i in range(num_networks+len(skips)):
+        if i in skips:
+            continue
         model = utils.load_object(name, i)
         if with_goals:
             hidden, optimal = accuracy_test_with_goals(model, i)
@@ -318,7 +322,7 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
 
 import predictivenet
 # This should achieve 100% prediction success.
-def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorithm=nn.RMSPROP, l2reg = 0, hidden_units=15):
+def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorithm=nn.RMSPROP, l2reg = 0, hidden_units=15, type='sigmoid'):
     inputs_str = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "serve", "sugar", "end"]
     outputs_str = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "servetea", "servecoffee", "sugar", "end"]
     seq1in = ['start', 'coffee',  'water', 'stir', 'cream', 'serve', 'end']  # 60%
@@ -357,11 +361,13 @@ def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorit
         # Initialize context with random/uniform values.
         with tf.GradientTape() as tape:
             model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            model.prediction_wta = np.zeros((1, model.size_observation), dtype=np.float32)
+            model.prediction_probability = np.zeros((1, model.size_observation), dtype=np.float32)
             for i in range(len(action_targets)):
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
                 #model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
                 observation = inputs[i].reshape(1, -1)
-                model.feedforward(observation)
+                model.feedforward(observation, type)
 
             # Get some statistics about what was correct and what wasn't
             tchoices = np.array(model.h_action_wta).reshape((-1, len(action_targets[0])))
@@ -389,7 +395,7 @@ def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorit
     return model
 
 
-def accuracy_test_predictive(model, test_number=None):
+def accuracy_test_predictive(model, test_number=None, type='sigmoid'):
     inputs_str = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "serve", "sugar", "end"]
     outputs_str = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "servetea", "servecoffee", "sugar", "end"]
     seq1in = ['start', 'coffee',  'water', 'stir', 'cream', 'serve', 'end']  # 60%
@@ -423,7 +429,7 @@ def accuracy_test_predictive(model, test_number=None):
             for i in range(len(action_targets)):
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
                 observation = inputs[i].reshape(1, -1)
-                model.feedforward(observation)
+                model.feedforward(observation, type)
                 hidden_activation.append(model.context)
 
             # Get some statistics about what was correct and what wasn't
@@ -460,7 +466,7 @@ def accuracy_test_predictive(model, test_number=None):
     if test_number is None:
         print(accuracy, accuracy_weighted, optimal_actions, accuracy_preds, accuracy_preds_weighted, optimal_predictions)
     else:
-        print("Actions: {0} ({1}) - network {2} -- {3}".format(accuracy, accuracy_weighted, test_number, optimal_actions))
+        print("Actions: {0} ({1}) - network {2} -- {3}".format(accuracy, accuracy_weighted, test_number, optimal_actions and optimal_predictions))
     if not optimal_actions or not optimal_predictions:
         print("actions:")
         for i in range(len(seqs)):
@@ -471,13 +477,15 @@ def accuracy_test_predictive(model, test_number=None):
     return hidden_activation, optimal_actions and optimal_predictions
 
 
-def make_rdm_multiple_predictive(name, num_networks,title="-", save_files=True):
+def make_rdm_multiple_predictive(name, num_networks, type='sigmoid', title="-", save_files=True, skips=[]):
     # Make one rdm for each network
     optimal_list = []
     rdmatrices = []
-    for i in range(num_networks):
+    for i in range(num_networks+len(skips)):
+        if i in skips:
+            continue
         model = utils.load_object(name, i)
-        hidden, optimal = accuracy_test_predictive(model, i)
+        hidden, optimal = accuracy_test_predictive(model, i, type=type)
         optimal_list.append(optimal)
         # Turn into a list of simple vectors
         for i, tensor in enumerate(hidden):
@@ -603,18 +611,25 @@ def make_rdm_multiple_hierarchy(name, num_networks, title="-", save_files=True, 
             else:
                 avg_matrix += matrix
         avg_matrix = avg_matrix / num_networks
+
+        # delete the unwanted rows and columns:
+        avg_matrix = np.delete(avg_matrix, [0, 6, 12], 0)
+        avg_matrix = np.delete(avg_matrix, [0, 6, 12], 1)
+        nps = 5  # number of elements per sequence
+
         side_name = file_save_name+side[1]
         np.savetxt(side_name+"_rdm_mat"+utils.datestr()+".txt", avg_matrix, delimiter="\t", fmt='%.2e')
         labels = []
         for i, sequence in enumerate(seqs):
-            for action in sequence[1:]:
+            for action in sequence[1:-1]:
                 labels.append(str(i)+'_'+action)
+
         analysis.plot_rdm(avg_matrix, labels, title+side_name + " spearman rho matrix")
         if save_files:
             plt.savefig(side_name+'_rdm'+utils.datestr())
         plt.clf()
 
-        nps = 5  # number of elements per sequence
+#        nps = 5  # number of elements per sequence
         mdsy = analysis.mds(avg_matrix)
         for i, style in enumerate(['ro-', 'b|--', 'gx-.']):
             analysis.plot_mds_points(mdsy[nps * i:nps * i + nps], range(nps), labels=labels[nps * i:nps * i + nps],
