@@ -10,6 +10,13 @@ import hyperparamstest
 import prederror_task
 import neuralnet as nn
 
+# Try out the multilayer predictive network. On what task? --> PNAS.
+for i in range(10):
+    model = nn.DeepPredNet(size_observation=9, size_action=8, algorithm=neuralnet.SGD)
+    model = pnas2018.train(model=model, iterations=10000, learning_rate=0.2, loss_type=None)
+    utils.save_object("deepprednetpnas", model)
+pnas2018.make_rdm_multiple_deepprednet("deepprednetpnas", 10, with_goals=False)
+sys.exit()
 
 #prederror_task.make_rdm_multiple_predictive('prederror_prednet_sigmoid15', 100, type='sigmoid')
 #prederror_task.make_rdm_multiple_predictive('prederror_prednet_wta15', 100, type='wta', skips=[41, 62, 75, 80, 81, 83, 85])
@@ -210,11 +217,16 @@ for i in range(0):
 model = utils.load_object("bigmodel4")
 
 #model = utils.load_object("bigmodel3_bis3")
-#goalenv2020.accuracy_test_botvinick(model, noise=0., goals=True, num_tests=10, sequence_ids=range(21))
-test_data = goalenv2020.generate_test_data(model, noise=0.4, noise_per_step=True, goal1_noise=0., goal2_noise=0., goals=True, num_tests=1, sequence_ids=range(21))
-utils.save_object("test_data_tsne", test_data)
+#test_data = goalenv2020.generate_test_data(model, noise=0.4, noise_per_step=True, goal1_noise=0., goal2_noise=0., goals=True, num_tests=3, sequence_ids=range(21))
+#utils.save_object("test_data_tsne", test_data)
 test_data = utils.load_object("test_data_tsne")
-goalenv2020.analyse_test_data(test_data, do_rdm=False)
+#tsne_results = goalenv2020.analyse_test_data(test_data, do_rdm=False)
+#utils.save_object("tsne_results", tsne_results)
+tsne_results = utils.load_object("tsne_results")
+goalenv2020.plot_tsne(tsne_results, test_data, tsne_actions=True, filename="tsne_actions")
+goalenv2020.plot_tsne(tsne_results, test_data, tsne_subgoals=True, filename="tsne_subgoals")
+goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=True, filename="tsne_goals")
+goalenv2020.plot_tsne(tsne_results, test_data, tsne_actions=True, tsne_sequence=[900, 901, 902, 1034], filename="tsne_actions_plus_seqs")
 sys.exit()
 #model = utils.load_object("bigmodel1")
 #goalenv2020.accuracy_test_botvinick(model, noise=0.15, goals=True, sequence_ids=range(21))

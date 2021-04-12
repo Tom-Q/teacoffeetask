@@ -11,9 +11,10 @@ import neuralnet
 MSE='mse'
 CROSS_ENTROPY='cross_entropy'
 
+
 def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorithm=neuralnet.SGD, size_hidden=15, learning_rate=0.1, loss_type='cross_entropy', initialization="normal"):
     if model is None:
-        model = nn.NeuralNet(size_hidden=size_hidden, size_observation=9, size_action=8, size_goal1=0, size_goal2=0, algorithm=algorithm, initialization="normal")
+        model = nn.ElmanGoalNet(size_hidden=size_hidden, size_observation=9, size_action=8, size_goal1=0, size_goal2=0, algorithm=algorithm, initialization="normal")
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L1_regularization = l1reg
@@ -24,20 +25,21 @@ def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorith
     rng_avg_sequence = 0.
 
     for episode in range(num_episodes):
+        model.new_episode()
         seqid = utils.idx_from_probabilities(pnas2018task.sequence_probabilities)
 
         sequence = pnas2018task.seqs[seqid]
         inputs = utils.liststr_to_onehot(sequence[:-1], pnas2018task.all_inputs)
         targets = utils.liststr_to_onehot(sequence[1:], pnas2018task.all_outputs)
-        model.action = np.zeros((1, model.size_action), dtype=np.float32)
+        #model.action = np.zeros((1, model.size_action), dtype=np.float32)
         # run the network
         with tf.GradientTape() as tape:
             # Initialize context with random/uniform values.
-            model.context = np.zeros((1, model.size_hidden), dtype=np.float32) #np.float32(np.random.uniform(0.01, 0.99, (1, model.size_hidden)))
+            #model.context = np.zeros((1, model.size_hidden), dtype=np.float32) #np.float32(np.random.uniform(0.01, 0.99, (1, model.size_hidden)))
             #model.context = np.float32(np.random.randint(0, 1, (1, model.size_hidden)))
             for i in range(len(targets)):
-                model.action = np.zeros((1, model.size_action), dtype=np.float32)
-                model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
+                #model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                #model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
                 observation = inputs[i].reshape(1, -1)
                 model.feedforward(observation)
 
@@ -50,7 +52,7 @@ def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorith
             elif loss_type==CROSS_ENTROPY:
                 loss, _ = model.train_obsolete(targets, None, None, tape)
             else:
-                raise ValueError('only cross entropy and mse implemented')
+                loss, _ = model.train(tape, targets)
 
         # Monitor progress using rolling averages.
         speed = 2. / (episode + 2) if episode < 1000 else 0.001  # enables more useful evaluations for early trials
@@ -307,3 +309,114 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
     plt.clf()
     return avg_matrix, hidden_activations
 
+
+
+def make_rdm_multiple_deepprednet(name, num_networks, with_goals=False, title="-", save_files=True, skips=[],
+                      rdm_type=analysis.SPEARMAN):
+    # Make one rdm for each network
+    hidden_activations1 = []
+    hidden_activations2 = []
+    rdmatrices1 = []
+    rdmatrices2 = []
+    for i in range(num_networks+len(skips)):
+        if i in skips:
+            continue
+        model = utils.load_object(name, i)
+        if with_goals:
+            hidden = pnashierarchy.accuracy_test_with_goals(model)
+        else:
+            hidden1, hidden2, _ = accuracy_test_deepprednet(model, name=str(i))
+        hidden_activations1.append(hidden1)
+        hidden_activations2.append(hidden2)
+        # Turn into a list of simple vectors
+        for i, tensor in enumerate(hidden1):
+            hidden1[i] = tensor.numpy().reshape(-1)
+            hidden2[i] = tensor.numpy().reshape(-1)
+
+        if rdm_type==analysis.SPEARMAN:
+            rdmatrix1 = analysis.rdm_spearman(hidden1)
+            rdmatrix2 = analysis.rdm_spearman(hidden2)
+        elif rdm_type==analysis.MAHALANOBIS:
+            rdmatrix1 = analysis.rdm_mahalanobis(hidden1)
+            rdmatrix2 = analysis.rdm_mahalanobis(hidden2)
+        elif rdm_type ==analysis.EUCLIDIAN:
+            rdmatrix1 = analysis.rdm_euclidian(hidden1)
+            rdmatrix2 = analysis.rdm_euclidian(hidden2)
+        elif rdm_type ==analysis.CRAPPYNOBIS:
+            rdmatrix1 = analysis.rdm_crappynobis(hidden1)
+            rdmatrix2 = analysis.rdm_crappynobis(hidden2)
+        else:
+            raise ValueError("Only implemented rdm types are mahalanobis, spearman, euclidian")
+        rdmatrices1.append(rdmatrix1)
+        rdmatrices2.append(rdmatrix2)
+
+    # Now average over all matrices
+    for level, rdmatrices in enumerate([rdmatrices1, rdmatrices2]):
+        avg_matrix = None
+        for matrix in rdmatrices:
+            if avg_matrix is None:
+                avg_matrix = matrix
+            else:
+                avg_matrix += matrix
+        avg_matrix = avg_matrix / num_networks
+        name=name.replace('.', '_')+'_'+rdm_type
+        if save_files:
+            np.savetxt(name+"_level_"+str(level)+"_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
+        labels = []
+        for i, sequence in enumerate(pnas2018task.seqs):
+            for action in sequence[1:]:
+                labels.append(str(i)+'_'+action)
+        analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
+        if save_files:
+            plt.savefig(name+'_rdm.jpeg')
+        plt.clf()
+
+        mdsy = analysis.mds(avg_matrix)
+        for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
+            analysis.plot_mds_points(mdsy[6 * i:6 * i + 6], range(6), labels=labels[6 * i:6 * i + 6], style=style)
+        plt.title(title)
+        if save_files:
+            plt.savefig(name + '_mds')
+        plt.clf()
+    return
+
+def accuracy_test_deepprednet(model, name=None, noise=0.):
+    hidden_activation1 = []
+    hidden_activation2 = []
+    all_choices = []
+    for sequence in pnas2018task.seqs:
+        seq_choices = []
+        all_choices.append(seq_choices)
+        inputs = utils.liststr_to_onehot(sequence[:-1], pnas2018task.all_inputs)
+        targets = utils.liststr_to_onehot(sequence[1:], pnas2018task.all_outputs)
+        model.action = np.zeros((1, model.size_action), dtype=np.float32)
+        # run the network
+        with tf.GradientTape() as tape:
+            # Initialize context with random/uniform values.
+            model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            # Reset the previous action
+            for i in range(len(targets)):
+                model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
+                observation = inputs[i].reshape(1, -1)
+                model.feedforward(observation)
+                hidden_activation1.append(model.context1)
+                hidden_activation2.append(model.context2)
+            # Get some statistics about what was correct and what wasn't
+            choice = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
+            model.h_action_wta.clear()
+            seq_choices.append(choice)
+
+    # Now evaluate accuracy:
+    accuracy_totals = np.zeros((len(pnas2018task.seq1) - 1))
+    for i in range(len(all_choices)):
+        targets = utils.liststr_to_onehot(pnas2018task.seqs[i][1:], pnas2018task.all_outputs)
+        for j in range(len(targets)):
+            if (all_choices[i][0][j] == targets[j]).all():
+                accuracy_totals[j] += 1
+    accuracy_totals /= 4
+    if name is not None:
+        print(name, accuracy_totals)
+    else:
+        print(accuracy_totals)
+    return hidden_activation1, hidden_activation2, accuracy_totals

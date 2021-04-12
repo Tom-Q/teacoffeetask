@@ -10,9 +10,9 @@ import scripts
 
 def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorithm=nn.RMSPROP, hidden_units=15):
     if model is None:
-        model = predictivenet.PredictiveNet(size_hidden=hidden_units, algorithm=algorithm,
-                                            size_observation=len(pnas2018task.all_inputs),
-                                            size_action=len(pnas2018task.all_outputs))
+        model = nn.PredictiveNet(size_hidden=hidden_units, algorithm=algorithm,
+                                 size_observation=len(pnas2018task.all_inputs),
+                                 size_action=len(pnas2018task.all_outputs))
     num_episodes = iterations
     model.learning_rate = learning_rate
 
@@ -46,7 +46,7 @@ def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorit
             ratios_predictions = scripts.evaluate([tpreds], [prediction_targets])
 
             # Train model, record loss. NOTE: targets and predictions are identical for this task!!!
-            loss, gradients = model.train_MSE(action_targets, prediction_targets, tape)
+            loss, gradients = model.train(tape, [action_targets, prediction_targets])
 
         # Monitor progress using rolling averages.
         speed = 2. / (episode + 2) if episode < 1000 else 0.001  # enables more useful evaluations for early trials

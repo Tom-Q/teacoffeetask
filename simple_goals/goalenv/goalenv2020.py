@@ -9,6 +9,8 @@ import copy
 import analysis
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 from sklearn.manifold import TSNE
 import seaborn as sns
 import pandas as pd
@@ -48,35 +50,43 @@ def _sequence_to_text(seq):
 
 def _print_sequences_stats(sequences):
     unique_output_sequences = []
-    counters = []
+    #counters = []
+    #seqids=[]
     for output_sequence in sequences:
         unique = True
         for i, sequence in enumerate(unique_output_sequences):
-            if sequence.equals(output_sequence):#_sequence_equals(sequence, output_sequence):
+            if sequence.equals(output_sequence):
                 unique = False
-                counters[i]+=1
+                sequence.clones.append(output_sequence)
+                #counters[i]+=1
+                #seqids[i].append(output_sequence.id)
         if unique:
             unique_output_sequences.append(output_sequence)
-            counters.append(1)
+            output_sequence.clones = []
+            #counters.append(1)
+            #seqids.append([output_sequence.id])
 
-    # Sort sequences and counters, starting with most frequent:
-    zipped = zip(counters, unique_output_sequences)
-
-    unique_output_sequences = [x for _, x in sorted(zipped, reverse=True, key=lambda pair: pair[0])]
-    counters = sorted(counters, reverse=True)
+    # Sort sequences and counters and seqids, starting with most frequent:
+    #zipped = zip(counters, unique_output_sequences)
+    #unique_output_sequences = [x for _, x in sorted(zipped, reverse=True, key=lambda pair: pair[0])]
+    #counters = sorted(counters, reverse=True)
+    unique_output_sequences = sorted(unique_output_sequences, reverse=True,
+                                     key=lambda unique_seq: len(unique_seq.clones))
 
     # Now display each unique sequence, but converted back to text:
     for i, seq in enumerate(unique_output_sequences):
-        line = str(counters[i]) + ": "
+        line = ""
+
         # Check if it's one of the target sequences
         is_target = False
         for target_sequence in task.sequences_list:
-            if unique_output_sequences[i].equals(target_sequence): #_sequence_equals(unique_output_sequences[i], target_sequence.get_actions_one_hot()):
-                line += "(TARGET: "+target_sequence.name+")\n"
+            if unique_output_sequences[i].equals(target_sequence):
+                line += "TARGET: "+target_sequence.name
                 is_target = True
                 break
         if not is_target:
-            line += "(NOT A TARGET)\n"
+            line += "NOT A TARGET"
+        line += ", " + str(1 + len(seq.clones)) + " " + str([seq.id] + [clone.id for clone in seq.clones]) + " " + ":\n"
         line += _sequence_to_text(seq)
         print(line)
     print(" \n")
@@ -105,6 +115,94 @@ def _print_stats_per_sequence(sequence_ids, outputs_per_sequence):
         print("{0}/{1} correct".format(num_correct, len(outputs_per_sequence[i])))
         _print_sequences_stats(outputs_per_sequence[i])
 
+def generate_test_data(model, sequence_ids, noise_per_step=True, noise=0., goal1_noise=0., goal2_noise=0., num_tests=10, goals=False,
+                       initialization="uniform", verbose=False):
+    # This runs a hundred version of the model with different random initializations
+    env = environment.GoalEnv()
+    outputs_per_sequence = []
+
+    # Find the max sequence length
+    target_actions_sequences = []
+    sequences = []
+    max_length = 0
+    for seqid in sequence_ids:
+        sequence = task.sequences_list[seqid]
+        sequences.append(sequence)
+        target_actions_sequences.append(sequence.get_actions_one_hot())
+        if max_length < sequence.length:
+            max_length = sequence.length
+    max_length += 10  # add a bit of a margin for additions
+
+    # Set up model learning rate and L2 regularization to compute loss.
+    model.learning_rate = 0.
+    model.L2_regularization = 0.
+
+    seq_counter = 0
+    for seqid, sequence in enumerate(sequences):
+        print("testing sequence: "+str(seqid))
+        outputs_per_noise_step = []
+        num_noise_steps = sequence.length if noise_per_step else 1
+        for noise_step in range(num_noise_steps):
+            outputs = []
+            for i in range(num_tests):
+                # Initialize the sequence.
+                init_state = sequence.initial_state
+                # Set up the current state to be 0.
+                init_state.current.o_ddairy_first = 0
+                env.reinitialize(init_state)
+                model.action = np.zeros((1, model.size_action), dtype=np.float32)
+
+                # run the network
+                with tf.GradientTape() as tape:
+                    # Initialize context with random/uniform values.
+                    if initialization == 'uniform':
+                        model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
+                        model.action = np.zeros_like(sequence.targets[0].action_one_hot)
+                        if goals:
+                            model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
+                            model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
+
+                    output_sequence = task.BehaviorSequence(sequence.initial_state)
+                    output_sequence.activations = []
+                    output_sequence.losses = []
+                    for j in range(max_length):
+                        # Add noise to context layer
+                        if j == noise_step or not noise_per_step:
+                            model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
+                            model.goal1 += np.float32(np.random.normal(0., goal1_noise, size=(1, model.size_goal1)))
+                            model.goal2 += np.float32(np.random.normal(0., goal2_noise, size=(1, model.size_goal2)))
+                        observation = env.observe()
+                        model.feedforward(observation)
+
+                        # Learning rate is set to 0 so this is just to grab the loss as a so-called "prediction error"
+                        loss = model.train(sequence.targets, tape)
+                        output_sequence.losses.append(loss)
+
+                        output_sequence.activations.append(model.context)
+                        # if there's an impossible action, ignore it and continue.
+                        next_state = copy.deepcopy(env.state.next)
+                        try:
+                            env.do_action(model.h_action_wta[-1])
+                        except environment.ActionException as error:  # The action doesn't make sense and cannot be executed in the environment.
+                            if verbose:
+                                print(error)
+                            # reset the state when an impossible action is attempted.
+                            env.state.next = next_state
+                        action_str = utils.onehot_to_str(model.h_action_wta[-1], environment.GoalEnvData.actions_list)
+                        if action_str in environment.TERMINAL_ACTIONS:
+                            break  # we said "done", we're done.
+
+                    # Get some statistics about the sequences actually observed. Is it a recognized sequence? If not,
+                    # What kind of mistake appeared?
+                    output_sequence.set_targets(model.h_goal1_wta, model.h_goal2_wta, model.h_action_wta)
+                    output_sequence.id = seq_counter
+                    output_sequence.noise_step = noise_step
+                    seq_counter += 1
+                    outputs.append(output_sequence)
+                    model.clear_history()
+            outputs_per_noise_step.append(outputs)
+        outputs_per_sequence.append(outputs_per_noise_step)
+    return outputs_per_sequence
 
 def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
     sequence_ids = range(len(test_data))
@@ -183,129 +281,91 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
     print("Generating t-SNE...")
     activations = np.concatenate(activations_flat, axis=0)
     start = time.time()
-    tsne = TSNE() #all default
+    tsne = TSNE(perplexity=10.0, n_iter=3000)  # Defaults are perplexity=30 and n_iter=1000.
+    # Reducing perplexity captures global structure better. increasing n_iter makes sure we've converged.
     tsne_results = tsne.fit_transform(X=activations)
+    print("KL divergence="+str(tsne.kl_divergence_))
     end = time.time()
     print(end - start)
     print("...Done")
-    results_pd = pd.DataFrame(tsne_results, columns=["x", "y"])
     #df_subset['tsne-2d-one'] = tsne_results[:, 0]
     #df_subset['tsne-2d-two'] = tsne_results[:, 1]
     #x = tsne_results[:, 0]
     #y = tsne_results[:, 1]
-    print("plotting:")
+    return tsne_results
+
+def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequence=[], filename="tsne"):
+    # Flatten test data
+    outputs_no_noise_step_distinction = []
+    for seq_outputs in test_data:
+        outputs_no_noise_step_distinction.append(utils.flatten_onelevel(seq_outputs))
+    outputs_sequences_flat = utils.flatten_onelevel(outputs_no_noise_step_distinction)
+
     plt.figure(figsize=(16, 10))
     # Color points corresponding to sequence 1 in red, color points corresponding to action "add to mug" in blue,
     # Color points corresponding to subgoal "stir" in green
-    x = tsne_results[:,0]
-    y = tsne_results[:,1]
+    x = tsne_results[:, 0]
+    y = tsne_results[:, 1]
     plt.plot(x, y, ',k')
 
     # Add the TSNE plot points to the sequences.
     counter = 0
     for sequence in outputs_sequences_flat:
-        sequence.additional_info = tsne_results[counter:counter+sequence.length, :]
+        sequence.tsne_coords = tsne_results[counter:counter + sequence.length, :]
         counter += sequence.length
 
+    colors = ["aquamarine", "blueviolet", "coral",
+              "crimson", "gold", "hotpink",
+              "olivedrab", "royalblue", "sienna",
+              "springgreen", "tomato", "skyblue",
+              "red", "limegreen",
+              "darkorchid", "brown", "darkseagreen",
+              "goldenrod", "khaki", "navyblue", "webgreen"]
     # Now plot whatever fancy shit we want.
     for seqid, sequence in enumerate(outputs_sequences_flat):
-        if seqid == 100:
+        if seqid in tsne_sequence:
             # Plot the whole sequence in red
-            plt.plot(sequence.additional_info[:, 0], sequence.additional_info[:, 1], '-r')
+            plt.plot(sequence.tsne_coords[:, 0], sequence.tsne_coords[:, 1], linestyle='-', linewidth=0.5,
+                     color=colors[tsne_sequence.index(seqid)])
+            # If there's a noise_step, make it a special point.
+            plt.plot(sequence.tsne_coords[sequence.noise_step ,0], sequence.tsne_coords[sequence.noise_step, 1],
+                     marker='o', color=colors[tsne_sequence.index(seqid)])
         for index, target in enumerate(sequence.targets):
-            if target.goal2_str == "g_2_stir":
-                plt.plot(sequence.additional_info[index, 0], sequence.additional_info[index, 1], 'xg')
-            if target.action_str == "a_take":
-                plt.plot(sequence.additional_info[index, 0], sequence.additional_info[index, 1], '+m')
-            #if target.goal1_str == "g_1_make_coffee":
-            #    plt.plot(sequence.additional_info[index, 0], sequence.additional_info[index, 1], 'ob')
+            idx = None
+            if tsne_goals:
+                idx = environment.GoalEnvData.goals1_list.index(target.goal1_str)
+            elif tsne_subgoals:
+                idx = environment.GoalEnvData.goals2_list.index(target.goal2_str)
+            elif tsne_actions:
+                idx = environment.GoalEnvData.actions_list.index(target.action_str)
+            plt.plot(sequence.tsne_coords[index, 0], sequence.tsne_coords[index, 1], color=colors[idx], marker=',')
 
+    # Generate legends
 
-    #sns.scatterplot(
+    patches = []
+    if tsne_goals:
+        for index, label in enumerate(environment.GoalEnvData.goals1_list):
+            patches.append(mpatches.Patch(color=colors[index], label=label[2:]))
+    elif tsne_subgoals:
+        for index, label in enumerate(environment.GoalEnvData.goals2_list):
+            patches.append(mpatches.Patch(color=colors[index], label=label[2:]))
+    elif tsne_actions:
+        for index, label in enumerate(environment.GoalEnvData.actions_list):
+            patches.append(mpatches.Patch(color=colors[index], label=label[2:]))
+    for seqid in tsne_sequence:
+        patches.append(mlines.Line2D([], [], color=colors[tsne_sequence.index(seqid)], label='Sequence '+str(seqid)))
+
+    plt.legend(handles=patches, loc='upper right')
+    plt.tight_layout()
+    # sns.scatterplot(
     #    x="x", y="y",
     #    hue="y",
     #    #palette=sns.color_palette("hls", 10),
     #    data=results_pd,
     #    legend="full",
     #    alpha=0.3
-    #)
-    plt.savefig("tsne")
-
-
-def generate_test_data(model, sequence_ids, noise_per_step=True, noise=0., goal1_noise=0., goal2_noise=0., num_tests=10, goals=False,
-                       initialization="uniform", verbose=False):
-    # This runs a hundred version of the model with different random initializations
-    env = environment.GoalEnv()
-    outputs_per_sequence = []
-
-    # Find the max sequence length
-    target_actions_sequences = []
-    sequences = []
-    max_length = 0
-    for seqid in sequence_ids:
-        sequence = task.sequences_list[seqid]
-        sequences.append(sequence)
-        target_actions_sequences.append(sequence.get_actions_one_hot())
-        if max_length < sequence.length:
-            max_length = sequence.length
-    max_length += 10  # add a bit of a margin for additions
-
-    for seqid, sequence in enumerate(sequences):
-        print("testing sequence: "+str(seqid))
-        outputs_per_noise_step = []
-        num_noise_steps = sequence.length if noise_per_step else 1
-        for noise_step in range(num_noise_steps):
-            outputs = []
-            for i in range(num_tests):
-                # Initialize the sequence.
-                init_state = sequence.initial_state
-                # Set up the current state to be 0.
-                init_state.current.o_ddairy_first = 0
-                env.reinitialize(init_state)
-                model.action = np.zeros((1, model.size_action), dtype=np.float32)
-
-                # run the network
-                with tf.GradientTape() as tape:
-                    # Initialize context with random/uniform values.
-                    if initialization == 'uniform':
-                        model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
-                        model.action = np.zeros_like(sequence.targets[0].action_one_hot)
-                        if goals:
-                            model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
-                            model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
-
-                    output_sequence = task.BehaviorSequence(sequence.initial_state)
-                    output_sequence.activations = []
-                    for j in range(max_length):
-                        # Add noise to context layer
-                        if j == noise_step or not noise_per_step:
-                            model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
-                            model.goal1 += np.float32(np.random.normal(0., goal1_noise, size=(1, model.size_goal1)))
-                            model.goal2 += np.float32(np.random.normal(0., goal2_noise, size=(1, model.size_goal2)))
-                        observation = env.observe()
-                        model.feedforward(observation)
-                        output_sequence.activations.append(model.context)
-                        # if there's an impossible action, ignore it and continue.
-                        next_state = copy.deepcopy(env.state.next)
-                        try:
-                            env.do_action(model.h_action_wta[-1])
-                        except environment.ActionException as error:  # The action doesn't make sense and cannot be executed in the environment.
-                            if verbose:
-                                print(error)
-                            # reset the state when an impossible action is attempted.
-                            env.state.next = next_state
-                        action_str = utils.onehot_to_str(model.h_action_wta[-1], environment.GoalEnvData.actions_list)
-                        if action_str in environment.TERMINAL_ACTIONS:
-                            break  # we said "done", we're done.
-
-                    # Get some statistics about the sequences actually observed. Is it a recognized sequence? If not,
-                    # What kind of mistake appeared?
-                    output_sequence.set_targets(model.h_goal1_wta, model.h_goal2_wta, model.h_action_wta)
-                    outputs.append(output_sequence)
-                    model.clear_history()
-            outputs_per_noise_step.append(outputs)
-        outputs_per_sequence.append(outputs_per_noise_step)
-    return outputs_per_sequence
+    # )
+    plt.savefig(filename)
 
 
 def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_reg=0.00001, noise=0., sequences=None):
@@ -314,13 +374,13 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
     env = environment.GoalEnv()
     if model is None:
         if goals:
-            model = nn.NeuralNet(size_hidden=50, size_observation=29, size_action=19,
-                                 size_goal1=len(environment.GoalEnvData.goals1_list),
-                                 size_goal2=len(environment.GoalEnvData.goals2_list),
-                                 algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
+            model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+                                    size_goal1=len(environment.GoalEnvData.goals1_list),
+                                    size_goal2=len(environment.GoalEnvData.goals2_list),
+                                    algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
         else:
-            model = nn.NeuralNet(size_hidden=50, size_observation=29, size_action=19,  size_goal1=len(sequences), size_goal2=0,
-                                 algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
+            model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19, size_goal1=len(sequences), size_goal2=0,
+                                    algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
 
     model.L2_regularization = L2_reg
 
@@ -373,7 +433,7 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
                 ratio_goals2 = scripts.ratio_correct(goals2, target_goals2)
 
             # Train model, record loss.
-            loss = model.train(sequence.targets, tape)
+            loss = model.train(tape, sequence.targets)
 
         # Monitor progress using rolling averages.
         full_sequence = int(ratio_actions == 1)

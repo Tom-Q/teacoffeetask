@@ -140,7 +140,7 @@ def train_supervised(model, env, num_episodes):
 
 def train_and_save(num_models, name, num_episodes):
     for i in range(num_models):
-        model = nn.NeuralNet()
+        model = nn.ElmanGoalNet()
         train_supervised_teacoffeeenv(model, num_episodes)
         utils.save_object(name, model)
         print('Trained and saved model #{0} of {1}\n'.format(i+1, num_models))

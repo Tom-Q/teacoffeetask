@@ -76,7 +76,7 @@ def test_weight_regularization(regtype):
 
 
 def train_with_goals(noise=0, iterations=10000, learning_rate=0.1):
-    model = nn.NeuralNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=2, size_goal2=0)
+    model = nn.ElmanGoalNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=2, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.
@@ -122,8 +122,9 @@ def train_with_goals(noise=0, iterations=10000, learning_rate=0.1):
                     episode, rng_avg_loss, rng_avg_actions, rng_avg_goals))
     return model
 
+
 def train_hierarchical_nogoals(noise=0, iterations=10000, learning_rate=0.1, reg_strength=0.001, reg_increase="linear"):
-    model = nn.NeuralNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=0, size_goal2=0)
+    model = nn.ElmanGoalNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=0, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.
@@ -133,6 +134,7 @@ def train_hierarchical_nogoals(noise=0, iterations=10000, learning_rate=0.1, reg
     rng_avg_goals = 0.
 
     for episode in range(num_episodes):
+        model.new_episode()
         seqid = utils.idx_from_probabilities(pnas2018task.sequence_probabilities)
 
         #goal = pnas2018task.goals[seqid]
@@ -143,10 +145,10 @@ def train_hierarchical_nogoals(noise=0, iterations=10000, learning_rate=0.1, reg
         # run the network
         with tf.GradientTape() as tape:
             # Initialize context with random/uniform values.
-            model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            #model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
             #model.goal1 = np.zeros_like(goal[0])
             for i in range(len(targets)):
-                model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                #model.action = np.zeros((1, model.size_action), dtype=np.float32)
                 # Add noise
                 model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
                 observation = inputs[i].reshape(1, -1)
@@ -206,7 +208,7 @@ def train_hierarchical_nogoals(noise=0, iterations=10000, learning_rate=0.1, reg
 
 def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strength=0.001, reg_increase="linear", num_goals=2):
     #model = nn.NeuralNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=2, size_goal2=0)
-    model = nn.NeuralNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=num_goals, size_goal2=0)
+    model = nn.ElmanGoalNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=num_goals, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.
@@ -216,20 +218,21 @@ def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strengt
     rng_avg_goals = 0.
 
     for episode in range(num_episodes):
+        model.new_episode()
         seqid = utils.idx_from_probabilities(pnas2018task.sequence_probabilities)
         goal = pnas2018task.goals[seqid]
         sequence = pnas2018task.seqs[seqid]
         inputs = utils.liststr_to_onehot(sequence[:-1], pnas2018task.all_inputs)
         targets = utils.liststr_to_onehot(sequence[1:], pnas2018task.all_outputs)
-        model.action = np.zeros((1, model.size_action), dtype=np.float32)
+        #model.action = np.zeros((1, model.size_action), dtype=np.float32)
         # run the network
         with tf.GradientTape() as tape:
             # Initialize context with random/uniform values.
             #model.context = np.float32(np.abs(np.random.randint(0, 2, (1, model.size_hidden))-0.1))#np.zeros((1, model.size_hidden), dtype=np.float32)
-            model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            #model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
             model.goal1 = goal[0] #np.zeros_like(goal[0]) ##
             for i in range(len(targets)):
-                model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                #model.action = np.zeros((1, model.size_action), dtype=np.float32)
                 # Add noise
                 model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
                 observation = inputs[i].reshape(1, -1)

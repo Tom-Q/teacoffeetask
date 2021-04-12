@@ -70,7 +70,7 @@ def accuracy_test(model, test_number=None):
 
 def train(model = None, mse=False, noise= 0., iterations=5000, l2reg=0.0, learning_rate=0.1, algorithm=nn.SGD, hidden_units=15):
     if model is None:
-        model = nn.NeuralNet(size_hidden=hidden_units, algorithm=algorithm, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=0, size_goal2=0)
+        model = nn.ElmanGoalNet(size_hidden=hidden_units, algorithm=algorithm, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=0, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = l2reg
@@ -127,7 +127,7 @@ def train_with_goals(model=None, mse=False, learning_rate=0.1, noise=0., iterati
                      reg_strength=0., reg_increase="square"):
     num_goals = 2
     if model is None:
-        model = nn.NeuralNet(size_hidden=hidden_units, algorithm=algorithm, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=num_goals, size_goal2=0)
+        model = nn.ElmanGoalNet(size_hidden=hidden_units, algorithm=algorithm, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=num_goals, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = 0.5 if mse else learning_rate
     model.L2_regularization = l2reg
@@ -320,7 +320,6 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
     return avg_matrix
 
 
-import predictivenet
 # This should achieve 100% prediction success.
 def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorithm=nn.RMSPROP, l2reg = 0, hidden_units=15, type='sigmoid'):
     inputs_str = ["start", "coffee", "milk", "cream", "water", "stir", "tea", "serve", "sugar", "end"]
@@ -336,10 +335,10 @@ def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorit
     target_seqs = [seq1t, seq2t, seq3t]
 
     if model is None:
-        model = predictivenet.PredictiveNet(size_hidden=hidden_units,
-                                            algorithm=algorithm,
-                                            size_observation=len(inputs_str),
-                                            size_action=len(outputs_str))
+        model = nn.PredictiveNet(size_hidden=hidden_units,
+                                 algorithm=algorithm,
+                                 size_observation=len(inputs_str),
+                                 size_action=len(outputs_str))
     num_episodes = iterations
     model.learning_rate = learning_rate
 
@@ -367,7 +366,7 @@ def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorit
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
                 #model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
                 observation = inputs[i].reshape(1, -1)
-                model.feedforward(observation, type)
+                model.feedforward(observation)
 
             # Get some statistics about what was correct and what wasn't
             tchoices = np.array(model.h_action_wta).reshape((-1, len(action_targets[0])))
@@ -376,7 +375,7 @@ def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorit
             ratios_predictions = scripts.evaluate([tpreds], [prediction_targets])
 
             # Train model, record loss. NOTE: targets and predictions are identical for this task!!!
-            loss, gradients = model.train_MSE(action_targets, prediction_targets, tape)
+            loss, gradients = model.train(tape, [action_targets, prediction_targets])
 
         # Monitor progress using rolling averages.
         speed = 2. / (episode + 2) if episode < 1000 else 0.001  # enables more useful evaluations for early trials
