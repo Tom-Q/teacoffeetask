@@ -4,7 +4,6 @@ import numpy as np
 import tensorflow as tf
 import analysis
 import matplotlib.pyplot as plt
-import predictivenet
 import neuralnet as nn
 import scripts
 

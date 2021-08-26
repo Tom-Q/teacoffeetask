@@ -102,12 +102,17 @@ def rdm_crappynobis(vectors):
             matrix[i, j] = np.sqrt(np.sum((zvecs[i, :]-zvecs[j, :])**2))
     return matrix
 
-def plot_rdm(matrix, labels, title, show_rdm=False, vmin=None, vmax=None):
+def plot_rdm(matrix, labels, title, show_rdm=False, vmin=None, vmax=None, figsize=None, fontsize=None):
+    if fontsize is not None:
+        sns.set(font_scale=fontsize)
+    if figsize is not None:
+        plt.figure(figsize = (figsize, figsize))
     if vmin is None and vmax is None:
         sns.heatmap(matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels)
     else:
         sns.heatmap(matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels, vmin = vmin, vmax = vmax)
     plt.title(title)
+    plt.tight_layout()
     if show_rdm:
         plt.show()
 

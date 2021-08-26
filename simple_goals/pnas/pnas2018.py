@@ -7,6 +7,7 @@ import analysis
 import matplotlib.pyplot as plt
 from pnas import pnashierarchy, pnas2018task
 import neuralnet
+import random
 
 MSE='mse'
 CROSS_ENTROPY='cross_entropy'
@@ -33,33 +34,36 @@ def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorith
         targets = utils.liststr_to_onehot(sequence[1:], pnas2018task.all_outputs)
         #model.action = np.zeros((1, model.size_action), dtype=np.float32)
         # run the network
-        with tf.GradientTape() as tape:
+        with tf.GradientTape(persistent=True) as tape:
             # Initialize context with random/uniform values.
-            #model.context = np.zeros((1, model.size_hidden), dtype=np.float32) #np.float32(np.random.uniform(0.01, 0.99, (1, model.size_hidden)))
+            model.context = np.zeros((1, model.size_hidden), dtype=np.float32) #np.float32(np.random.uniform(0.01, 0.99, (1, model.size_hidden)))
             #model.context = np.float32(np.random.randint(0, 1, (1, model.size_hidden)))
             for i in range(len(targets)):
-                #model.action = np.zeros((1, model.size_action), dtype=np.float32)
-                #model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
+                model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
                 observation = inputs[i].reshape(1, -1)
                 model.feedforward(observation)
 
-            # Get some statistics about what was correct and what wasn't
-            tchoices = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
-            ratios = scripts.evaluate([tchoices], [targets])
-            # Train model, record loss.
-            if loss_type==MSE:
-                loss, _ = model.train_MSE(targets, None, None, tape)
-            elif loss_type==CROSS_ENTROPY:
-                loss, _ = model.train_obsolete(targets, None, None, tape)
-            else:
-                loss, _ = model.train(tape, targets)
+            if episode % 2 == 0:
+                # Get some statistics about what was correct and what wasn't
+                tchoices = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
+                ratios = scripts.evaluate([tchoices], [targets])
+                # Train model, record loss.
+                if loss_type==MSE:
+                    loss, _ = model.train_MSE(targets, None, None, tape)
+                elif loss_type==CROSS_ENTROPY:
+                    loss, _ = model.train_obsolete(targets, None, None, tape)
+                else:
+                    loss, _ = model.train(tape, targets)
+        del tape
 
-        # Monitor progress using rolling averages.
-        speed = 2. / (episode + 2) if episode < 1000 else 0.001  # enables more useful evaluations for early trials
-        rng_avg_loss = utils.rolling_avg(rng_avg_loss, loss, speed)
-        rng_avg_actions = utils.rolling_avg(rng_avg_actions, ratios[0], speed)
-        rng_avg_sequence = utils.rolling_avg(rng_avg_sequence, ratios[0] == 1,
-                                          speed)  # whole action sequence correct ?
+        if episode % 2 == 0:
+            # Monitor progress using rolling averages.
+            speed = 2. / (episode + 2) if episode < 1000 else 0.001  # enables more useful evaluations for early trials
+            rng_avg_loss = utils.rolling_avg(rng_avg_loss, loss, speed)
+            rng_avg_actions = utils.rolling_avg(rng_avg_actions, ratios[0], speed)
+            rng_avg_sequence = utils.rolling_avg(rng_avg_sequence, ratios[0] == 1,
+                                              speed)  # whole action sequence correct ?
         # Display on the console at regular intervals
         if (episode < 1000 and episode in [3 ** n for n in range(50)]) or episode % 1000 == 0 \
                 or episode + 1 == num_episodes:
@@ -140,6 +144,7 @@ def make_models(num_models):
         models.append(train())
         accuracy_test(models[-1])
 
+
 def accuracy_test(model, name=None, noise=0.):
     hidden_activation = []
     all_choices = []
@@ -151,8 +156,7 @@ def accuracy_test(model, name=None, noise=0.):
         model.action = np.zeros((1, model.size_action), dtype=np.float32)
         # run the network
         with tf.GradientTape() as tape:
-            # Initialize context with random/uniform values.
-            model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            model.new_episode()
             # Reset the previous action
             for i in range(len(targets)):
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
@@ -178,6 +182,7 @@ def accuracy_test(model, name=None, noise=0.):
     else:
         print(accuracy_totals)
     return hidden_activation, accuracy_totals
+
 
 def make_rdm_and_mds(name, with_goals=False):
     model = utils.load_object(name, 1)  # eg 'noise_test2'
@@ -310,6 +315,123 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
     return avg_matrix, hidden_activations
 
 
+def accuracy_test_keepcontext(model, name=None, num_samples=100):
+    num_actions = len(pnas2018task.seq1)-1
+    # List of 4 lists of 6 empty lists
+    hidden_activation = [[[] for _ in range(num_actions)] for _ in range(len(pnas2018task.seqs))]
+
+    all_choices = []
+
+    # Make a list of 400 sequences
+    sequences = [0, 1, 2, 3]*num_samples
+    random.shuffle(sequences)
+
+    for seq_id in sequences:
+        sequence = pnas2018task.seqs[seq_id]
+        seq_choices = []
+        all_choices.append(seq_choices)
+        inputs = utils.liststr_to_onehot(sequence[:-1], pnas2018task.all_inputs)
+        targets = utils.liststr_to_onehot(sequence[1:], pnas2018task.all_outputs)
+        model.action = np.zeros((1, model.size_action), dtype=np.float32)
+        # run the network
+        with tf.GradientTape() as tape:
+            model.new_episode()
+            # Reset the previous action
+            for i in range(len(targets)):
+                model.action = np.zeros((1, model.size_action), dtype=np.float32)
+                #model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
+                observation = inputs[i].reshape(1, -1)
+                model.feedforward(observation)
+                hidden_activation[seq_id][i].append(model.context.numpy())
+            # Get some statistics about what was correct and what wasn't
+            choice = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
+            model.h_action_wta.clear()
+            seq_choices.append(choice)
+
+    hidden_activations_averaged = []
+    # Average the hidden activations per action
+    for seq in hidden_activation:
+        for action in seq:
+            average = np.zeros_like(action[0])
+            for instance in action:
+                average += instance
+            average /= len(action)
+            hidden_activations_averaged.append(average)
+
+    # Now evaluate accuracy:
+    accuracy_totals = np.zeros(num_actions)
+    for i in range(len(all_choices)):
+        targets = utils.liststr_to_onehot(pnas2018task.seqs[sequences[i]][1:], pnas2018task.all_outputs)
+        for j in range(len(targets)):
+            if (all_choices[i][0][j] == targets[j]).all():
+                accuracy_totals[j] += 1
+    accuracy_totals /= 4 * num_samples
+    if name is not None:
+        print(name, accuracy_totals)
+    else:
+        print(accuracy_totals)
+    return hidden_activations_averaged, accuracy_totals
+
+
+def make_rdm_multiple_keepcontext(name, num_networks, with_goals=False, title="-", save_files=True, skips=[],
+                      rdm_type=analysis.SPEARMAN):
+    # Make one rdm for each network
+    hidden_activations = []
+    rdmatrices = []
+    for i in range(num_networks+len(skips)):
+        if i in skips:
+            continue
+        model = utils.load_object(name, i)
+        if with_goals:
+            hidden = pnashierarchy.accuracy_test_with_goals(model)
+        else:
+            hidden, _ = accuracy_test_keepcontext(model, name=str(i))
+        hidden_activations.append(hidden)
+        # Turn into a list of simple vectors - already done in accuracy test in this version.
+        for i, vector in enumerate(hidden):
+            hidden[i] = vector.reshape(-1)
+
+        if rdm_type==analysis.SPEARMAN:
+            rdmatrix = analysis.rdm_spearman(hidden)
+        elif rdm_type==analysis.MAHALANOBIS:
+            rdmatrix = analysis.rdm_mahalanobis(hidden)
+        elif rdm_type ==analysis.EUCLIDIAN:
+            rdmatrix = analysis.rdm_euclidian(hidden)
+        elif rdm_type ==analysis.CRAPPYNOBIS:
+            rdmatrix = analysis.rdm_crappynobis(hidden)
+        else:
+            raise ValueError("Only implemented rdm types are mahalanobis, spearman, euclidian")
+        rdmatrices.append(rdmatrix)
+
+    # Now average over all matrices
+    avg_matrix = None
+    for matrix in rdmatrices:
+        if avg_matrix is None:
+            avg_matrix = matrix
+        else:
+            avg_matrix += matrix
+    avg_matrix = avg_matrix / num_networks
+    name=name.replace('.', '_')+'_'+rdm_type
+    if save_files:
+        np.savetxt(name+"_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
+    labels = []
+    for i, sequence in enumerate(pnas2018task.seqs):
+        for action in sequence[1:]:
+            labels.append(str(i)+'_'+action)
+    analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
+    if save_files:
+        plt.savefig(name+'_rdm.jpeg')
+    plt.clf()
+
+    mdsy = analysis.mds(avg_matrix)
+    for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
+        analysis.plot_mds_points(mdsy[6 * i:6 * i + 6], range(6), labels=labels[6 * i:6 * i + 6], style=style)
+    plt.title(title)
+    if save_files:
+        plt.savefig(name + '_mds')
+    plt.clf()
+    return avg_matrix, hidden_activations
+
 
 def make_rdm_multiple_deepprednet(name, num_networks, with_goals=False, title="-", save_files=True, skips=[],
                       rdm_type=analysis.SPEARMAN):
@@ -329,9 +451,10 @@ def make_rdm_multiple_deepprednet(name, num_networks, with_goals=False, title="-
         hidden_activations1.append(hidden1)
         hidden_activations2.append(hidden2)
         # Turn into a list of simple vectors
-        for i, tensor in enumerate(hidden1):
-            hidden1[i] = tensor.numpy().reshape(-1)
-            hidden2[i] = tensor.numpy().reshape(-1)
+        for j, tensor in enumerate(hidden1):
+            hidden1[j] = tensor.numpy().reshape(-1)
+        for j, tensor in enumerate(hidden2):
+            hidden2[j] = tensor.numpy().reshape(-1)
 
         if rdm_type==analysis.SPEARMAN:
             rdmatrix1 = analysis.rdm_spearman(hidden1)
@@ -359,16 +482,16 @@ def make_rdm_multiple_deepprednet(name, num_networks, with_goals=False, title="-
             else:
                 avg_matrix += matrix
         avg_matrix = avg_matrix / num_networks
-        name=name.replace('.', '_')+'_'+rdm_type
+        name_level=name.replace('.', '_')+'_'+rdm_type+"_level_"+str(level)
         if save_files:
-            np.savetxt(name+"_level_"+str(level)+"_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
+            np.savetxt(name_level+"_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
         labels = []
         for i, sequence in enumerate(pnas2018task.seqs):
             for action in sequence[1:]:
                 labels.append(str(i)+'_'+action)
         analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
         if save_files:
-            plt.savefig(name+'_rdm.jpeg')
+            plt.savefig(name_level+'_rdm.jpeg')
         plt.clf()
 
         mdsy = analysis.mds(avg_matrix)
@@ -376,28 +499,29 @@ def make_rdm_multiple_deepprednet(name, num_networks, with_goals=False, title="-
             analysis.plot_mds_points(mdsy[6 * i:6 * i + 6], range(6), labels=labels[6 * i:6 * i + 6], style=style)
         plt.title(title)
         if save_files:
-            plt.savefig(name + '_mds')
+            plt.savefig(name_level + '_mds')
         plt.clf()
     return
+
 
 def accuracy_test_deepprednet(model, name=None, noise=0.):
     hidden_activation1 = []
     hidden_activation2 = []
     all_choices = []
     for sequence in pnas2018task.seqs:
+        model.new_episode()
         seq_choices = []
         all_choices.append(seq_choices)
         inputs = utils.liststr_to_onehot(sequence[:-1], pnas2018task.all_inputs)
         targets = utils.liststr_to_onehot(sequence[1:], pnas2018task.all_outputs)
-        model.action = np.zeros((1, model.size_action), dtype=np.float32)
+        #model.action = np.zeros((1, model.size_action), dtype=np.float32)
         # run the network
         with tf.GradientTape() as tape:
             # Initialize context with random/uniform values.
-            model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            #model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
             # Reset the previous action
             for i in range(len(targets)):
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
-                model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
                 observation = inputs[i].reshape(1, -1)
                 model.feedforward(observation)
                 hidden_activation1.append(model.context1)

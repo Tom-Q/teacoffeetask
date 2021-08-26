@@ -1,26 +1,118 @@
 # Entry point of the program. Mostly loads scripts from scripts, which themselves rely on more serious code.
-from goalenv import goalenv2020, environment, task
-from pnas import pnas2018
-from pnas import pnashierarchy
-import neuralnet
 import utils
 import sys
-import analysis
-import hyperparamstest
-import prederror_task
 import neuralnet as nn
+from cognitiveload import cogloadtask
 
-# Try out the multilayer predictive network. On what task? --> PNAS.
-for i in range(10):
-    model = nn.DeepPredNet(size_observation=9, size_action=8, algorithm=neuralnet.SGD)
-    model = pnas2018.train(model=model, iterations=10000, learning_rate=0.2, loss_type=None)
-    utils.save_object("deepprednetpnas", model)
-pnas2018.make_rdm_multiple_deepprednet("deepprednetpnas", 10, with_goals=False)
+"""
+for i in range(1
+               ):
+    #model = utils.load_object("bigmodel3")
+    model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+                            size_goal1=0,#len(environment.GoalEnvData.goals1_list),
+                            size_goal2=0,#len(environment.GoalEnvData.goals2_list),
+                            algorithm=nn.RMSPROP, learning_rate=0.001, initialization="uniform",
+                            last_action_inputs=True)
+    model = goalenv2020.train(model=model, goals=False, num_iterations=200000, learning_rate=0.001, L2_reg=0.00001, noise=0.05, sequences=range(21))
+    utils.save_object("bigmodel4", model)
+#sys.exit()
+model = utils.load_object("bigmodel4")
+#sys.exit()
+#test_data = utils.load_object("test_data_tsne")
+#test_data = goalenv2020.generate_test_data(model, noise=0.5, one_run_per_step=True, goal1_noise=0., goal2_noise=0., goals=True, num_tests=3, sequence_ids=range(21))
+test_data = goalenv2020.generate_test_data(model, noise=0.,  goal1_noise=0., goal2_noise=0., goals=False, num_tests=1, sequence_ids=range(21), noise_per_step=True, disruption_per_step=False, initialization="seminormal")
+tsne_results, test_data = goalenv2020.analyse_test_data(test_data, do_error_analysis=True, do_rdm=False)
+utils.save_object("test_data_tsne_disrupt", test_data)
+utils.save_object("tsne_results_disrupt", tsne_results)
+test_data = utils.load_object("test_data_tsne_disrupt")
+tsne_results = utils.load_object("tsne_results_disrupt")
+
 sys.exit()
 
-#prederror_task.make_rdm_multiple_predictive('prederror_prednet_sigmoid15', 100, type='sigmoid')
+"""
+# BEV #
+num_training_steps = 5000
+nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
+                       size_observation=len(cogloadtask.symbols), size_action=len(cogloadtask.symbols), learning_rate=0.01, algorithm=nn.ADAM)
+nnet.L2_regularization = 0.00001
+cogloadtask.train_bev(nnet, num_training_steps)
+utils.save_object("cogloadtasknet_bev", nnet)
+nnet = utils.load_object("cogloadtasknet_bev")
+cogloadtask.generate_rdm_bev(nnet, name="cogloadtasknet_bev")
+
+sys.exit(0)
+
+# ARI #
+num_training_steps = 20000
+nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
+                       size_observation=len(cogloadtask.symbols), size_action=len(cogloadtask.symbols), learning_rate=0.01, algorithm=nn.ADAM)
+nnet.L2_regularization = 0.00001
+cogloadtask.train_ari(nnet, num_training_steps)
+utils.save_object("cogloadtasknet_ari", nnet)
+nnet = utils.load_object("cogloadtasknet_ari")
+cogloadtask.generate_rdm_ari(nnet, name="cogloadtasknet_ari")
+
+sys.exit(0)
+
+
+# COMBINED #
+num_training_steps = 100000
+nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
+                       size_observation=len(cogloadtask.symbols), size_action=len(cogloadtask.symbols), learning_rate=0.01, algorithm=nn.ADAM)
+nnet.L2_regularization = 0.00001
+cogloadtask.train_all(nnet, num_training_steps)
+utils.save_object("cogloadtasknet", nnet)
+nnet = utils.load_object("cogloadtasknet")
+cogloadtask.generate_rdm_all(nnet, name="cogloadtasknet")
+
+sys.exit(0)
+
+""""""
+# Try out the multilayer predictive network. On what task? --> PNAS.
+"""
+context_initialization = np.random.random(size=(1,15)).astype(np.float32)
+print(context_initialization)
+for i in range(90):
+    print(i)
+    model = nn.ElmanGoalNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=0, size_goal2=0,
+                            algorithm=nn.SGD, initialization="normal")
+    model.context = context_initialization
+    model, _ = pnas2018.train(model=model, iterations=10000, learning_rate=.1, loss_type=pnas2018.CROSS_ENTROPY,
+                              context_initialization=None)
+    #pnas2018.accuracy_test(model, context_initialization=None)
+    utils.save_object("pnas_keepcontext_2seqs", model)
+pnas2018.make_rdm_multiple_keepcontext("pnas_keepcontext_2seqs", num_networks=100)
+#pnas2018.make_rdm_multiple_deepprednet("deepcontrolprednetpnas", 10, with_goals=False)
+sys.exit()
+"""
+"""
+for i in range(0):
+    print(i)
+    model = prederror_task.train(algorithm=nn.SGD, iterations=10000, learning_rate=0.5,
+                                 hidden_units=15, l2reg=0.0001, mse=True)
+    prederror_task.accuracy_test(model)
+    utils.save_object('prederror_l2reg', model)
+
+spearmanRDM = prederror_task.make_rdm_multiple('prederror_redo3', 100, type="spearman", skips=[11])#8, 15, 17, 25, 32, 49, 65, 68, 93])
+euclidianRDM = prederror_task.make_rdm_multiple('prederror_redo3', 100, type="euclidian", skips=[11])#8, 15, 17, 25, 32, 49, 65, 68, 93])
+sub = euclidianRDM-spearmanRDM
+add = euclidianRDM+spearmanRDM
+nonzero_idxs = np.where(add == 0)
+add[nonzero_idxs] = 1.
+normed_sub = np.divide(sub, add)
+labels = []
+for i, sequence in enumerate(prederror_task.seqs):
+    for action in sequence[1:-1]:
+        labels.append(str(i) + '_' + action)
+import matplotlib.pyplot as plt
+analysis.plot_rdm(normed_sub, labels, "normed_sub_matrix")
+plt.savefig('normed_sub_rdm_redo3')
+plt.clf()
+
+np.savetxt('normed_sub_rdm_redo3' + ".txt", normed_sub, delimiter="\t", fmt='%.2e')
+
 #prederror_task.make_rdm_multiple_predictive('prederror_prednet_wta15', 100, type='wta', skips=[41, 62, 75, 80, 81, 83, 85])
-#sys.exit()
+sys.exit()
 """
 # using predictive net
 for i in range(93):
@@ -112,7 +204,6 @@ prederror_task.make_rdm_multiple_hierarchy('prederror_gradient', 100, skips=[17,
 sys.exit()
 
 """
-"""
 hyperparamstest.hyperparameter_analysis(file="deleteme.txt")
 sys.exit()
 names = ["sgdnormal150.00.0cross_entropy", "adamuniform500.0010.001mse", "rmspropnormal150.00.001cross_entropy"]
@@ -158,9 +249,8 @@ with tf.device('/gpu:0'):
     #print('Time: ', stop - start)
 
     sys.exit("DONE THANK U")
-"""
 
-"""import analysis
+import analysis
 for i in range(5):
     print(i)
     model, _ = pnas2018.train(noise=0.15)
@@ -186,9 +276,9 @@ sys.exit()
 """
 
 
-
-env = environment.GoalEnv()
+#env = environment.GoalEnv()
 #env.test_environment(task.sequences_list)
+#sys.exit()
 #model = goalenv2020.train(goals=False, num_iterations=100000, learning_rate=0.0001, L2_reg=0.00001, noise=0., sequences=[0, 1, 2, 3, 4, 5])
 
 #model = utils.load_object("bigmodel1")
@@ -210,23 +300,31 @@ env = environment.GoalEnv()
 #goalenv2020.accuracy_test_noise(model, noise=0.4, goals=True, num_tests=10, sequence_ids=range(21))
 #goalenv2020.accuracy_test_botvinick(model, noise=0.5, noise_step=5, num_tests= 10, goals=True, sequence_ids=range(21))
 for i in range(0):
-    model = utils.load_object("bigmodel4")
-    model = goalenv2020.train(model=model, goals=True, num_iterations=50000, learning_rate=0.001, L2_reg=0.00001, noise=0.05, sequences=range(21))
+    #model = utils.load_object("bigmodel3")
+    model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+                            size_goal1=len(environment.GoalEnvData.goals1_list),
+                            size_goal2=len(environment.GoalEnvData.goals2_list),
+                            algorithm=nn.RMSPROP, learning_rate=0.001, initialization="uniform",
+                            last_action_inputs=True)
+    model = goalenv2020.train(model=model, goals=True, num_iterations=150000, learning_rate=0.001, L2_reg=0.00001, noise=0.05, sequences=range(21))
     utils.save_object("bigmodel4", model)
-
+#sys.exit()
 model = utils.load_object("bigmodel4")
-
-#model = utils.load_object("bigmodel3_bis3")
-#test_data = goalenv2020.generate_test_data(model, noise=0.4, noise_per_step=True, goal1_noise=0., goal2_noise=0., goals=True, num_tests=3, sequence_ids=range(21))
-#utils.save_object("test_data_tsne", test_data)
-test_data = utils.load_object("test_data_tsne")
-#tsne_results = goalenv2020.analyse_test_data(test_data, do_rdm=False)
-#utils.save_object("tsne_results", tsne_results)
-tsne_results = utils.load_object("tsne_results")
-goalenv2020.plot_tsne(tsne_results, test_data, tsne_actions=True, filename="tsne_actions")
-goalenv2020.plot_tsne(tsne_results, test_data, tsne_subgoals=True, filename="tsne_subgoals")
-goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=True, filename="tsne_goals")
-goalenv2020.plot_tsne(tsne_results, test_data, tsne_actions=True, tsne_sequence=[900, 901, 902, 1034], filename="tsne_actions_plus_seqs")
+#sys.exit()
+#test_data = utils.load_object("test_data_tsne")
+#test_data = goalenv2020.generate_test_data(model, noise=0.5, one_run_per_step=True, goal1_noise=0., goal2_noise=0., goals=True, num_tests=3, sequence_ids=range(21))
+test_data = goalenv2020.generate_test_data(model, noise=0.,  goal1_noise=0., goal2_noise=0., goals=True, num_tests=1, sequence_ids=range(21), noise_per_step=True, disruption_per_step=False, initialization="seminormal")
+tsne_results, test_data = goalenv2020.analyse_test_data(test_data, do_error_analysis=True, do_rdm=False)
+utils.save_object("test_data_tsne_disrupt", test_data)
+utils.save_object("tsne_results_disrupt", tsne_results)
+test_data = utils.load_object("test_data_tsne_disrupt")
+tsne_results = utils.load_object("tsne_results_disrupt")
+#goalenv2020.plot_tsne(tsne_results, test_data, tsne_actions=True, filename="tsne_actions")
+#goalenv2020.plot_tsne(tsne_results, test_data, tsne_subgoals=True, filename="tsne_subgoals")
+#goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=True, filename="tsne_goals")
+#goalenv2020.plot_tsne(tsne_results, test_data, tsne_sequences=True, filename="tsne_sequences")
+#goalenv2020.plot_tsne(tsne_results, test_data, tsne_errors=True, filename="tsne_errors")
+#goalenv2020.plot_tsne(tsne_results, test_data, tsne_actions=True, annotate=True, tsne_sequence=[1548, 1550, 1614], tsne_sequence_interval=[14, 34], filename="tsne_actions_plus_seqs")
 sys.exit()
 #model = utils.load_object("bigmodel1")
 #goalenv2020.accuracy_test_botvinick(model, noise=0.15, goals=True, sequence_ids=range(21))

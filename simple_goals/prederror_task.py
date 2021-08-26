@@ -27,9 +27,15 @@ optimal_accuracy_goals = np.asarray([1., 1., 1., 0.8, 1., 1.])
 def accuracy_test(model, test_number=None):
     hidden_activation = []
     all_choices = []
+    all_choices_probas = []
     for sequence in seqs:
+
         seq_choices = []
         all_choices.append(seq_choices)
+
+        seq_choices_probas = []
+        all_choices_probas.append(seq_choices_probas)
+
         inputs = utils.liststr_to_onehot(sequence[:-1], all_inputs)
         targets = utils.liststr_to_onehot(sequence[1:], all_outputs)
         model.action = np.zeros((1, model.size_action), dtype=np.float32)
@@ -45,10 +51,18 @@ def accuracy_test(model, test_number=None):
                 hidden_activation.append(model.context)
             # Get some statistics about what was correct and what wasn't
             choice = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
+            seq_choices_probas.append(np.array(model.h_action_softmax))
             model.h_action_wta.clear()
+            model.h_action_softmax.clear()
             seq_choices.append(choice)
 
     # Now evaluate accuracy:
+    full_accuracy = np.zeros((3,6,11), dtype=np.float32)
+    for i in range(len(all_choices_probas)):
+        targets = utils.liststr_to_onehot(seqs[i][1:], all_outputs)
+        for j in range(len(targets)):
+            full_accuracy[i, j, :] = targets[j] - 1./(1+np.exp(-all_choices_probas[i][0][j]))
+
     accuracy = np.zeros((len(seq1) - 1))
     accuracy_weighted = np.zeros((len(seq1) - 1))
     for i in range(len(all_choices)):
@@ -65,7 +79,7 @@ def accuracy_test(model, test_number=None):
     if not optimal:
         for i in range(len(seqs)):
             print([utils.onehot_to_str(all_choices[i][0][j], all_outputs) for j in range(len(targets))])
-    return hidden_activation, optimal
+    return hidden_activation, optimal, full_accuracy
 
 
 def train(model = None, mse=False, noise= 0., iterations=5000, l2reg=0.0, learning_rate=0.1, algorithm=nn.SGD, hidden_units=15):
@@ -266,10 +280,13 @@ def accuracy_test_with_goals(model, test_number=None):
     return hidden_activation, optimal
 
 
-def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True, skips=[]):
+def make_rdm_multiple(name, num_networks, type="spearman", with_goals=False, title="-", save_files=True, skips=[]):
     # Make one rdm for each network
     optimal_list = []
     rdmatrices = []
+    error_per_step = np.zeros((3, 6, 11), dtype=np.float32)  # number of steps
+    hidden_avg = []
+    hiddens =  np.zeros((3, 6), dtype=np.float32)
     for i in range(num_networks+len(skips)):
         if i in skips:
             continue
@@ -277,14 +294,46 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
         if with_goals:
             hidden, optimal = accuracy_test_with_goals(model, i)
         else:
-            hidden, optimal = accuracy_test(model, i)
+            hidden, optimal, error_per_step_model = accuracy_test(model, i)
+            error_per_step += error_per_step_model
         optimal_list.append(optimal)
         # Turn into a list of simple vectors
-        for i, tensor in enumerate(hidden):
-            hidden[i] = tensor.numpy().reshape(-1)
-        rdmatrix = analysis.rdm_spearman(hidden)
+        for j, tensor in enumerate(hidden):
+            hidden[j] = tensor.numpy().reshape(-1)
+            hidden_avg.append(np.average(hidden[j]))  # Get the average activation for that time-step
+        if type == "spearman":
+            rdmatrix = analysis.rdm_spearman(hidden)
+        elif type == "euclidian":
+            rdmatrix = analysis.rdm_euclidian(hidden)
+        else:
+            raise Exception("RDM type " + type + " not implemented")
         rdmatrices.append(rdmatrix)
+
+    # Now
+    i = j = 0
+    for act_avg in hidden_avg:
+        hiddens[i, j] += act_avg
+        j += 1
+        if j>5:
+            j = 0
+            i += 1
+            if i>2:
+                i = 0
+                j = 0
+    print(hiddens/num_networks)
     print("{0} networks, of which {1} achieve optimal accuracy".format(num_networks, optimal_list.count(True)))
+
+    # Hidden activation per step averages
+    #for i, hidden_act in enumerate(hidden):
+    #    hidden[i] = np.average(hidden_act)
+    #hidden_avg = hidden.reshape(18, 11)
+    #print(enumerate(hidden_avg))
+
+    # Error per step averages
+    error_avg = error_per_step/100.
+    error_avg = error_avg.reshape(18, 11)
+    print(error_avg)
+
     # Now average over all matrices
     avg_matrix = None
     for matrix in rdmatrices:
@@ -300,14 +349,15 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
     nps = 5 # number of elements per sequence
 
     if save_files:
-        np.savetxt(name+"_rdm_mat"+utils.datestr()+".txt", avg_matrix, delimiter="\t", fmt='%.2e')
+        np.savetxt(name+"_rdm_mat_"+type+utils.datestr()+".txt", avg_matrix, delimiter="\t", fmt='%.2e')
+        np.savetxt(name+"_errors"+utils.datestr()+".txt", error_avg, delimiter="\t", fmt='%.2e')
     labels = []
     for i, sequence in enumerate(seqs):
         for action in sequence[1:-1]:
             labels.append(str(i)+'_'+action)
-    analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
+    analysis.plot_rdm(avg_matrix, labels, title + " " + type + " matrix")
     if save_files:
-        plt.savefig(name+'_rdm')
+        plt.savefig(name+'_rdm_'+type)
     plt.clf()
 
     mdsy = analysis.mds(avg_matrix)

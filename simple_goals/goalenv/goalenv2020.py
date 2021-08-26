@@ -15,6 +15,7 @@ from sklearn.manifold import TSNE
 import seaborn as sns
 import pandas as pd
 import time
+import random
 
 
 def _sequence_to_text(seq):
@@ -31,7 +32,7 @@ def _sequence_to_text(seq):
         if target.goal1_str == seq.targets[prev].goal1_str and idx < seq.length - 1:
             top_goal_counter += 1
         else:
-            # Print the previous action
+            # Print the previous time-step
             top_goal_line += str(idx - top_goal_counter + 1) + ':' + seq.targets[prev].goal1_str + ' x' + str(
                 top_goal_counter) + ' - '
             top_goal_counter = 1
@@ -39,7 +40,7 @@ def _sequence_to_text(seq):
         if target.goal2_str == seq.targets[prev].goal2_str and idx < seq.length - 1:
             mid_goal_counter += 1
         else:
-            # Print the previous action
+            # Print the previous time-step
             mid_goal_line += str(idx - mid_goal_counter + 1) + ':' + seq.targets[prev].goal2_str + ' x' + str(
                 mid_goal_counter) + ' - '
             mid_goal_counter = 1
@@ -115,8 +116,22 @@ def _print_stats_per_sequence(sequence_ids, outputs_per_sequence):
         print("{0}/{1} correct".format(num_correct, len(outputs_per_sequence[i])))
         _print_sequences_stats(outputs_per_sequence[i])
 
-def generate_test_data(model, sequence_ids, noise_per_step=True, noise=0., goal1_noise=0., goal2_noise=0., num_tests=10, goals=False,
-                       initialization="uniform", verbose=False):
+
+# TODO: put that in the model. I'm only putting it here cause I can't be bothered to add this to the already trained model.
+def compute_last_step_loss(model, target, include_regularization=False):
+    loss = 0
+    loss += tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, model.h_action_softmax[-1])
+    if target.goal1_one_hot is not None:
+        loss += tf.nn.softmax_cross_entropy_with_logits(target.goal1_one_hot, model.h_goal1_softmax[-1])
+    if target.goal2_one_hot is not None:
+        loss += tf.nn.softmax_cross_entropy_with_logits(target.goal2_one_hot, model.h_goal2_softmax[-1])
+    if include_regularization:
+        loss += model.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in model.all_weights])
+    return loss.numpy()[0]
+
+def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_noise=0., num_tests=10, goals=False,
+                       initialization="uniform", verbose=False,
+                       noise_per_step=True, disruption_per_step=False):
     # This runs a hundred version of the model with different random initializations
     env = environment.GoalEnv()
     outputs_per_sequence = []
@@ -141,8 +156,8 @@ def generate_test_data(model, sequence_ids, noise_per_step=True, noise=0., goal1
     for seqid, sequence in enumerate(sequences):
         print("testing sequence: "+str(seqid))
         outputs_per_noise_step = []
-        num_noise_steps = sequence.length if noise_per_step else 1
-        for noise_step in range(num_noise_steps):
+        num_runs = sequence.length if (noise_per_step or disruption_per_step) else 1
+        for noise_step in range(num_runs):
             outputs = []
             for i in range(num_tests):
                 # Initialize the sequence.
@@ -154,9 +169,17 @@ def generate_test_data(model, sequence_ids, noise_per_step=True, noise=0., goal1
 
                 # run the network
                 with tf.GradientTape() as tape:
+                    model.new_episode()
                     # Initialize context with random/uniform values.
                     if initialization == 'uniform':
                         model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
+                        model.action = np.zeros_like(sequence.targets[0].action_one_hot)
+                        if goals:
+                            model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
+                            model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
+                    elif initialization == 'seminormal':
+                        model.context = np.random.normal(0.01, 0.1, (1, model.size_hidden)).astype(dtype=np.float32)
+                        model.context[model.context < 0.01] = 0.  # it's impossible for a sigmoid activation to be <0
                         model.action = np.zeros_like(sequence.targets[0].action_one_hot)
                         if goals:
                             model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
@@ -167,22 +190,30 @@ def generate_test_data(model, sequence_ids, noise_per_step=True, noise=0., goal1
                     output_sequence.losses = []
                     for j in range(max_length):
                         # Add noise to context layer
-                        if j == noise_step or not noise_per_step:
-                            model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
-                            model.goal1 += np.float32(np.random.normal(0., goal1_noise, size=(1, model.size_goal1)))
-                            model.goal2 += np.float32(np.random.normal(0., goal2_noise, size=(1, model.size_goal2)))
+                        if j == noise_step:
+                            if noise_per_step:
+                                model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
+                                model.goal1 += np.float32(np.random.normal(0., goal1_noise, size=(1, model.size_goal1)))
+                                model.goal2 += np.float32(np.random.normal(0., goal2_noise, size=(1, model.size_goal2)))
+                            if disruption_per_step:
+                                # Change the state
+                                env.state = disrupt_state(env.state, initial_state=sequence.initial_state, #mode=REINITIALIZE)
+                                                          mode=HOLD_RANDOM_OBJECT)
                         observation = env.observe()
                         model.feedforward(observation)
 
-                        # Learning rate is set to 0 so this is just to grab the loss as a so-called "prediction error"
-                        loss = model.train(sequence.targets, tape)
-                        output_sequence.losses.append(loss)
+                        if j < len(sequence.targets):  # after that it's not defined.
+                            loss = compute_last_step_loss(model, sequence.targets[j], include_regularization=False)
+                            output_sequence.losses.append(loss)
+                        else:
+                            output_sequence.losses.append(None)  # loss is undefined
 
                         output_sequence.activations.append(model.context)
                         # if there's an impossible action, ignore it and continue.
                         next_state = copy.deepcopy(env.state.next)
                         try:
                             env.do_action(model.h_action_wta[-1])
+
                         except environment.ActionException as error:  # The action doesn't make sense and cannot be executed in the environment.
                             if verbose:
                                 print(error)
@@ -196,6 +227,7 @@ def generate_test_data(model, sequence_ids, noise_per_step=True, noise=0., goal1
                     # What kind of mistake appeared?
                     output_sequence.set_targets(model.h_goal1_wta, model.h_goal2_wta, model.h_action_wta)
                     output_sequence.id = seq_counter
+                    output_sequence.target_seq_id = seqid
                     output_sequence.noise_step = noise_step
                     seq_counter += 1
                     outputs.append(output_sequence)
@@ -203,6 +235,48 @@ def generate_test_data(model, sequence_ids, noise_per_step=True, noise=0., goal1
             outputs_per_noise_step.append(outputs)
         outputs_per_sequence.append(outputs_per_noise_step)
     return outputs_per_sequence
+
+HOLD_RANDOM_OBJECT = 1
+REINITIALIZE = 2
+def disrupt_state(state, initial_state, mode=HOLD_RANDOM_OBJECT):
+    if mode == HOLD_RANDOM_OBJECT:
+        c = state.current
+        n = state.next
+        if c.o_held_nothing == 0:
+            # Drop what we're holding
+            c.reset_held()
+            n.reset_held()
+        else:
+            c.reset_held()
+            n.reset_held()
+            # Hold something at random among the 7 possible objects
+            val = random.randint(1, 7)
+            if val == 1:
+                c.o_held_coffee_jar = 1
+                n.o_held_coffee_jar = 1
+            elif val == 2:
+                c.o_held_sugar_cube= 1
+                n.o_held_sugar_cube= 1
+            elif val == 3:
+                c.o_held_milk_carton = 1
+                n.o_held_milk_carton = 1
+            elif val == 4:
+                c.o_held_cream_carton = 1
+                n.o_held_cream_carton = 1
+            elif val == 5:
+                c.o_held_teabag = 1
+                n.o_held_teabag = 1
+            elif val == 6:
+                c.o_held_mug = 1
+                n.o_held_mug = 1
+            elif val == 7:
+                c.o_held_spoon = 1
+                n.o_held_spoon = 1
+            c.o_held_nothing = 0
+            n.o_held_nothing = 0
+        return state
+    elif mode == REINITIALIZE:
+        return initial_state
 
 def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
     sequence_ids = range(len(test_data))
@@ -216,10 +290,13 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
         outputs_no_noise_step_distinction.append(utils.flatten_onelevel(seq_outputs))
 
     _print_stats_per_sequence(sequence_ids, outputs_no_noise_step_distinction)
+    outputs_sequences_flat = utils.flatten_onelevel(outputs_no_noise_step_distinction)
+    activations = [seq.activations for seq in outputs_sequences_flat]
+    activations_flat = utils.flatten_onelevel(activations)  # all this list wrangling is ugly as hell
 
-    ####################################################################################################
-    # Analysis 3: Noise. How long after the noise did the first problem occur? Was that step a switch? #
-    ####################################################################################################
+    ##################################################################################################
+    # Analysis 3: Noise. How long after the noise did the first error occur? Was that step a switch? #
+    ##################################################################################################
     if do_error_analysis:
         # Need to store actions per error state as well as per sequence - done
         # Need to detect at what step the first error is made
@@ -231,6 +308,7 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
             for noise_step, trials in enumerate(seq):
                 first_error = [0] * target_sequence.length
                 for trial in trials:
+                    trial.first_error = None  # This trial is error-free
                     for j, action in enumerate(trial.get_actions_one_hot()):
                         error = 1
                         # It's only an error if it's an error for every target...
@@ -240,11 +318,64 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
                                 error *= 0
                         if error:
                             first_error[j] += 1
+                            trial.first_error = j  # Add a first_error attribute to the sequence.
                             break
+
                 # Need to color the step at which noise is introduced.
                 print("Target sequence " + str(i) + " (" + target_sequence.name + ") noise at step " + str(noise_step) + ": errors = " + str(first_error))
 
-    # Analysis 4: RDM, MDS, and T-SNE
+
+    ####################
+    # Analysis 4: Loss #
+    ####################
+    # Compute average loss, and average loss at first error and on subsequent points
+    counter_total = 0
+    loss_total = 0
+
+    counter_first_error = 0
+    first_error_loss_total = 0
+
+    noise_loss_total = 0
+    counter_noise = 0
+
+    prior_to_error_loss_total = 0
+    counter_prior_to_error = 0
+
+    prior_to_noise_loss_total = 0
+    counter_prior_to_noise = 0
+    for sequence in outputs_sequences_flat:
+        for i, loss in enumerate(sequence.losses):
+            if loss is not None:
+                #sequence.losses[i] = sequence.losses[i].numpy()[0]
+                loss_total += sequence.losses[i]
+                counter_total += 1
+                if sequence.first_error is not None and i < sequence.first_error:
+                    prior_to_error_loss_total += sequence.losses[i]
+                    counter_prior_to_error+=1
+                if sequence.noise_step is not None and i < sequence.noise_step:
+                    prior_to_noise_loss_total += sequence.losses[i]
+                    counter_prior_to_noise+=1
+        if sequence.first_error is not None:
+            first_error_loss_total += sequence.losses[sequence.first_error]
+            counter_first_error += 1
+        # noise step can be > sequence length when the sequence terminated early
+        if sequence.noise_step is not None and sequence.noise_step < sequence.length:
+            noise_loss_total += sequence.losses[sequence.noise_step]
+            counter_noise += 1
+    loss_avg = loss_total/counter_total
+    loss_first_error_avg = first_error_loss_total / counter_first_error
+    loss_noise_avg = noise_loss_total / counter_noise
+    loss_prior_error_avg = prior_to_error_loss_total / counter_prior_to_error
+    loss_prior_noise_avg = prior_to_noise_loss_total / counter_prior_to_noise
+    print("average loss={0}, loss on first error={1}, loss on noise={2}, loss_good_seq={3}, loss_before_noise={4}".format(loss_avg,
+                                                                                loss_first_error_avg,
+                                                                                loss_noise_avg,
+                                                                                loss_prior_error_avg,
+                                                                                loss_prior_noise_avg))
+
+    ###################################
+    # Analysis 5: RDM, MDS, and T-SNE #
+    ###################################
     # 1. RDM - from EVERY SEQUENCE
     # 1.a. Make a list of every sequence step. That means flattening everything into a list of steps.
 
@@ -281,7 +412,7 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
     print("Generating t-SNE...")
     activations = np.concatenate(activations_flat, axis=0)
     start = time.time()
-    tsne = TSNE(perplexity=10.0, n_iter=3000)  # Defaults are perplexity=30 and n_iter=1000.
+    tsne = TSNE(perplexity=50.0, n_iter=3000)  # Defaults are perplexity=30 and n_iter=1000.
     # Reducing perplexity captures global structure better. increasing n_iter makes sure we've converged.
     tsne_results = tsne.fit_transform(X=activations)
     print("KL divergence="+str(tsne.kl_divergence_))
@@ -292,9 +423,10 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
     #df_subset['tsne-2d-two'] = tsne_results[:, 1]
     #x = tsne_results[:, 0]
     #y = tsne_results[:, 1]
-    return tsne_results
+    return tsne_results, test_data # Test data is enriched during analysis (first error step)
 
-def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequence=[], filename="tsne"):
+def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=False,
+              tsne_errors=False, tsne_sequence=[], tsne_sequence_interval=[], filename="tsne", annotate=False):
     # Flatten test data
     outputs_no_noise_step_distinction = []
     for seq_outputs in test_data:
@@ -318,28 +450,62 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
               "crimson", "gold", "hotpink",
               "olivedrab", "royalblue", "sienna",
               "springgreen", "tomato", "skyblue",
-              "red", "limegreen",
-              "darkorchid", "brown", "darkseagreen",
-              "goldenrod", "khaki", "navyblue", "webgreen"]
-    # Now plot whatever fancy shit we want.
+              "limegreen", "darkorchid", "brown",
+              "darkseagreen", "goldenrod", "khaki",
+              "plum", "maroon", "slateblue", "navyblue",
+              "forestgreen", "red", "gray", "black"]
+    # Now plot whatever fancy shit we want. First the points, errors etc.
+    for seqid, sequence in enumerate(outputs_sequences_flat):
+        for index, target in enumerate(sequence.targets):
+            idx = len(colors)-1  # black
+            if tsne_errors:
+                if sequence.first_error is None or index < sequence.first_error:
+                    plt.plot(sequence.tsne_coords[index, 0], sequence.tsne_coords[index, 1], color="forestgreen", marker=',')
+                elif index == sequence.first_error:
+                    plt.plot(sequence.tsne_coords[index, 0], sequence.tsne_coords[index, 1], color="red", marker='.')
+                elif index > sequence.first_error:
+                    plt.plot(sequence.tsne_coords[index, 0], sequence.tsne_coords[index, 1], color="gray", marker=',')
+            else:
+                if tsne_goals:
+                    idx = environment.GoalEnvData.goals1_list.index(target.goal1_str)
+                elif tsne_subgoals:
+                    idx = environment.GoalEnvData.goals2_list.index(target.goal2_str)
+                elif tsne_actions:
+                    idx = environment.GoalEnvData.actions_list.index(target.action_str)
+                elif tsne_sequences:
+                    idx = sequence.target_seq_id
+                plt.plot(sequence.tsne_coords[index, 0], sequence.tsne_coords[index, 1], color=colors[idx], marker=',')
+    # Then the sequences. In that order because we want the sequences on top.
     for seqid, sequence in enumerate(outputs_sequences_flat):
         if seqid in tsne_sequence:
-            # Plot the whole sequence in red
-            plt.plot(sequence.tsne_coords[:, 0], sequence.tsne_coords[:, 1], linestyle='-', linewidth=0.5,
+            if not tsne_sequence_interval:  # test if list is empty
+                tsne_sequence_interval = [0, sequence.length]
+            seq_start=tsne_sequence_interval[0]
+            seq_end=tsne_sequence_interval[1]
+            # Plot the whole sequence
+            plt.plot(sequence.tsne_coords[seq_start:seq_end, 0], sequence.tsne_coords[seq_start:seq_end, 1], linestyle='-', linewidth=1.,
                      color=colors[tsne_sequence.index(seqid)])
-            # If there's a noise_step, make it a special point.
-            plt.plot(sequence.tsne_coords[sequence.noise_step ,0], sequence.tsne_coords[sequence.noise_step, 1],
+            # Special points get markers
+            # Start
+            plt.plot(sequence.tsne_coords[seq_start, 0], sequence.tsne_coords[seq_start, 1],
+                     marker='>', color=colors[tsne_sequence.index(seqid)])
+            # Noise in
+            if sequence.noise_step is not None and seq_start < sequence.noise_step < seq_end:
+                plt.plot(sequence.tsne_coords[sequence.noise_step, 0], sequence.tsne_coords[sequence.noise_step, 1],
+                         marker='v', color=colors[tsne_sequence.index(seqid)])
+            # Finish
+            plt.plot(sequence.tsne_coords[seq_end-1, 0], sequence.tsne_coords[seq_end-1, 1],
                      marker='o', color=colors[tsne_sequence.index(seqid)])
-        for index, target in enumerate(sequence.targets):
-            idx = None
-            if tsne_goals:
-                idx = environment.GoalEnvData.goals1_list.index(target.goal1_str)
-            elif tsne_subgoals:
-                idx = environment.GoalEnvData.goals2_list.index(target.goal2_str)
-            elif tsne_actions:
-                idx = environment.GoalEnvData.actions_list.index(target.action_str)
-            plt.plot(sequence.tsne_coords[index, 0], sequence.tsne_coords[index, 1], color=colors[idx], marker=',')
-
+            # If there's an error, put a red X there
+            if sequence.first_error is not None and seq_start < sequence.first_error < seq_end:
+                plt.plot(sequence.tsne_coords[sequence.first_error, 0], sequence.tsne_coords[sequence.first_error, 1],
+                          marker='x', color='red')
+            if annotate:
+                # Annotate every point with the corresponding action (and subgoal? and goal?).
+                for i, coords in enumerate(sequence.tsne_coords[seq_start:seq_end, :]):
+                    target = sequence.targets[seq_start + i]
+                    text = str(seq_start+i+1) #+ ':' + target.goal1_str[4:] + '/' + target.goal2_str[4:] + '/' + target.action_str[2:]
+                    plt.annotate(text, coords)
     # Generate legends
 
     patches = []
@@ -352,10 +518,22 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
     elif tsne_actions:
         for index, label in enumerate(environment.GoalEnvData.actions_list):
             patches.append(mpatches.Patch(color=colors[index], label=label[2:]))
-    for seqid in tsne_sequence:
-        patches.append(mlines.Line2D([], [], color=colors[tsne_sequence.index(seqid)], label='Sequence '+str(seqid)))
+    elif tsne_errors:
+        for index, label in enumerate(["Beyond first mistake", "First mistake", "Before first mistake"]):
+            patches.append(mpatches.Patch(color=colors[-2-index], label=label))
+    elif tsne_sequences:
+        for index, sequence in enumerate(task.sequences_list):
+            patches.append(mpatches.Patch(color=colors[index], label=sequence.name))
+    if tsne_sequence:
+        for seqid in tsne_sequence:
+            patches.append(mlines.Line2D([], [], color=colors[tsne_sequence.index(seqid)], label='Sequence '+str(seqid)))
+        patches.append(mlines.Line2D([], [], color="black", marker="o", label="Final action"))
+        patches.append(mlines.Line2D([], [], color="black", marker=">", label="First action"))
+        patches.append(mlines.Line2D([], [], color="black", marker="v", label="Noise injection"))
+        patches.append(mlines.Line2D([], [], linestyle='', color="red", marker="x", label="First error"))
 
-    plt.legend(handles=patches, loc='upper right')
+    #ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.legend(handles=patches, bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0.)
     plt.tight_layout()
     # sns.scatterplot(
     #    x="x", y="y",
@@ -377,7 +555,8 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
             model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
                                     size_goal1=len(environment.GoalEnvData.goals1_list),
                                     size_goal2=len(environment.GoalEnvData.goals2_list),
-                                    algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
+                                    algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform",
+                                    last_action_inputs=True)
         else:
             model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19, size_goal1=len(sequences), size_goal2=0,
                                     algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
@@ -396,16 +575,17 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
         env.reinitialize(sequence.initial_state)
         #if np.random.random() > 0.5:
         #    env.state.current.set_field("o_sequence"+str(seqid+1), 1)
-        model.action = np.zeros((1, model.size_action), dtype=np.float32)
 
         # run the network
         with tf.GradientTape() as tape:
+            model.new_episode()
             # Initialize context with random/uniform values.
             model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
             # Set up the prior actions and goals to what they OUGHT to be
             model.action = np.zeros_like(sequence.targets[0].action_one_hot)
-            model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
-            model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
+            if goals:
+                model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
+                model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
             # Alternative: zeros
             #model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
             for i, target in enumerate(sequence.targets):
@@ -415,9 +595,10 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
                 model.feedforward(observation)
                 env.do_action(target.action_one_hot)
                 # Set the correct recurrent units:
-                model.goal1 = target.goal1_one_hot
-                model.goal2 = target.goal2_one_hot
-                model.action = target.action_one_hot
+                if goals:
+                    model.goal1 = copy.deepcopy(target.goal1_one_hot)
+                    model.goal2 = copy.deepcopy(target.goal2_one_hot)
+                model.action = copy.deepcopy(target.action_one_hot)
 
             # Get some statistics about the percentage of correct behavior
             actions = np.array(model.h_action_wta).reshape((-1, environment.GoalEnvData.num_actions))
@@ -433,7 +614,8 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
                 ratio_goals2 = scripts.ratio_correct(goals2, target_goals2)
 
             # Train model, record loss.
-            loss = model.train(tape, sequence.targets)
+            loss = model.train(tape, sequence.targets, goals)
+
 
         # Monitor progress using rolling averages.
         full_sequence = int(ratio_actions == 1)
@@ -450,3 +632,5 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
             print("{0}: avg loss={1}, \tactions={2}, \tfull_sequence={3}".format(
                     iteration, rng_avg_loss, rng_avg_actions, rng_avg_fullseq, rng_avg_goals1, rng_avg_goals2))
     return model
+
+

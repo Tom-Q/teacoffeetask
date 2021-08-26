@@ -260,11 +260,11 @@ class GoalEnv(state.Environment):
                 n.o_fix_milk_carton = c.h_milk_present * int(c.h_location_milk_carton == FRIDGE)
                 n.o_fix_cream_carton = c.h_cream_present * int(c.h_location_cream_carton == FRIDGE)
                 n.o_fix_spoon = (int(c.h_location_spoon == FRIDGE))
-                n.o_fix_mug = (int(c.h_location_spoon == FRIDGE))
+                n.o_fix_mug = (int(c.h_location_mug == FRIDGE))
         elif c.a_fixate_table:
             n.o_fix_table = 1.
             n.o_fix_spoon = int(c.h_location_spoon == TABLE)
-            n.o_fix_mug = int(c.h_location_spoon == TABLE)
+            n.o_fix_mug = int(c.h_location_mug == TABLE)
             n.o_fix_coffee_jar = c.h_coffee_present * int(c.h_location_coffee_jar == TABLE)
             n.o_fix_milk_carton = c.h_milk_present * int(c.h_location_milk_carton == TABLE)
             n.o_fix_cream_carton = c.h_cream_present * int(c.h_location_cream_carton == TABLE)
@@ -318,7 +318,7 @@ class GoalEnv(state.Environment):
                 if c.o_fix_coffee_jar:
                     n.o_held_nothing = 0
                     n.o_held_coffee_jar = 1
-                    n.h_location_coffee = HELD
+                    n.h_location_coffee_jar = HELD
                 elif c.o_fix_teabags:
                     n.o_held_nothing = 0.
                     n.o_held_teabag = 1
@@ -401,7 +401,6 @@ class GoalEnv(state.Environment):
         elif c.a_put_down:
             if not c.o_held_nothing:
                 # Put the item in the fridge
-                new_loc = None
                 if c.o_fix_fridge and c.o_fix_container_door_open:
                     new_loc = FRIDGE
                 elif c.o_fix_cupboard and c.o_fix_container_door_open:
@@ -412,11 +411,21 @@ class GoalEnv(state.Environment):
                     raise ActionException("Impossible action: nowhere to put object down")
 
                 n.reset_held()
-                if c.o_held_coffee_jar: n.h_location_coffee_jar = new_loc
-                elif c.o_held_cream_carton: n.h_location_cream_carton = new_loc
-                elif c.o_held_milk_carton: n.h_location_milk_carton = new_loc
-                elif c.o_held_spoon: n.h_location_spoon = new_loc
-                elif c.o_held_mug: n.h_location_mug = new_loc
+                if c.o_held_coffee_jar:
+                    n.h_location_coffee_jar = new_loc
+                    n.o_fix_coffee_jar = 1
+                elif c.o_held_cream_carton:
+                    n.h_location_cream_carton = new_loc
+                    n.o_fix_cream_carton = 1
+                elif c.o_held_milk_carton:
+                    n.h_location_milk_carton = new_loc
+                    n.o_fix_milk_carton = 1
+                elif c.o_held_spoon:
+                    n.h_location_spoon = new_loc
+                    n.o_fix_spoon = 1
+                elif c.o_held_mug:
+                    n.h_location_mug = new_loc
+                    n.o_fix_mug = 1
                 elif c.o_held_teabag: pass # teabag disappears
                 elif c.o_held_sugar_cube: pass # sugar cube disappears
                 else: raise ActionException("Impossible action: object can't be put down")
@@ -473,7 +482,7 @@ class GoalEnv(state.Environment):
             else:
                 raise ActionException("Impossible action: drinking without holding the mug")
         elif c.a_say_good_tea or c.a_say_good_coffee:
-            pass  # Not sure if this serves a purpose
+            pass  # These actions don't do anything.
 
         # Activate the transition!!
         self.state.next_time_step()
@@ -497,7 +506,8 @@ class GoalEnv(state.Environment):
 
     def test_environment(self, sequences):
         for i, sequence in enumerate(sequences):
-            self.reinitialize()
-            print("\nSequence number " + str(i + 1))
+            self.reinitialize(sequence.initial_state)
+
+            print("\nSequence number " + str(i + 1) + " " + sequence.name)
             for target in sequence.targets:
                 self.do_action(target.action_str, verbose=True)

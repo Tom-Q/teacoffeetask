@@ -4,6 +4,7 @@ import teacoffeeenv as tce
 import utils
 import timeit
 from abc import ABC, abstractmethod
+import copy
 
 class Layer(object):
     def __init__(self, w, bias=True):
@@ -214,8 +215,9 @@ class ElmanGoalNet(NeuralNet):
         self.h_action_wta = []
         self.h_goal1_wta = []
         self.h_goal2_wta = []
+        self.h_context = []
         self.history = [self.h_action_softmax, self.h_goal1_softmax, self.h_goal2_softmax,
-                        self.h_action_wta, self.h_goal1_wta, self.h_goal2_wta]
+                        self.h_action_wta, self.h_goal1_wta, self.h_goal2_wta, self.h_context]
         if algorithm == SGD:
             self.optimizer = SGDOptimizer(self.all_weights)
         elif algorithm == RMSPROP:
@@ -246,11 +248,11 @@ class ElmanGoalNet(NeuralNet):
             self.goal2_softmax = self.dense_linear(hidden_activation, self.goal2_layer)
             self.goal2 = self.winner_take_all(self.goal2_softmax)
 
-        # The actual chosen action and goal
-        self.save_history()
-
         # Set up the next context.
         self.context = hidden_activation
+
+        # The actual chosen action and goal
+        self.save_history()
 
     def new_episode(self):
         # Reinitialize the entire state of the network (anything that could affect the next episode.)
@@ -270,14 +272,16 @@ class ElmanGoalNet(NeuralNet):
         self.h_action_softmax.append(self.action_softmax)
         self.h_goal1_softmax.append(self.goal1_softmax)
         self.h_goal2_softmax.append(self.goal2_softmax)
-        self.h_action_wta.append(self.action)
+        self.h_action_wta.append(copy.deepcopy(self.action))
         self.h_goal1_wta.append(self.goal1)
         self.h_goal2_wta.append(self.goal2)
+        self.h_context.append(self.context)
 
     def train(self, tape, targets):
         loss = 0
         for i, target in enumerate(targets):
-            loss += tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, self.h_action_softmax[i])
+            if target.action_one_hot is not None:
+                loss += tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, self.h_action_softmax[i])
             if target.goal1_one_hot is not None:
                 loss += tf.nn.softmax_cross_entropy_with_logits(target.goal1_one_hot, self.h_goal1_softmax[i])
             if target.goal2_one_hot is not None:
@@ -443,7 +447,18 @@ class PredictiveNet(NeuralNet):
         return loss, gradients
 """
 
-
+# Deep prednet architecture:
+#           action
+#             ^
+#  pred2 <- hidden2 <-> context2
+#    |         ^
+#    >>>>>>   (-)
+#              ^
+#  pred1 <- hidden1 <-> context1
+#    |         ^
+#    >>>>>>   (-)
+#              ^
+#          observation
 class DeepPredNet(NeuralNet):
     def __init__(self, size_hidden1=15, size_hidden2=15, algorithm=SGD, learning_rate=0.1,
                  size_observation=len(tce.TeaCoffeeData.observations_list),
@@ -566,3 +581,357 @@ class DeepPredNet(NeuralNet):
         self.context2 = np.zeros((1, self.size_hidden2), dtype=np.float32)
         self.action = np.zeros((1, self.size_action), dtype=np.float32)
         self.clear_history()
+
+
+# Deep prednet architecture but the top level is just doing more abstract stuff:
+#  pred2 <- hidden2 <-> context2
+#    |         ^   \
+#    >>>>>>   (-)  v
+#              ^   v
+# action<--    ^   v
+#          \   ^   /
+#  pred1 <- hidden1 <-> context1
+#    |         ^
+#    >>>>>>   (-)
+#              ^
+#          observation
+class DeepControlPredNet(NeuralNet):
+    def __init__(self, size_hidden1=15, size_hidden2=15, algorithm=SGD, learning_rate=0.1,
+                 size_observation=len(tce.TeaCoffeeData.observations_list),
+                 size_action=len(tce.TeaCoffeeData.actions_list)):
+        super().__init__(size_observation=size_observation, size_action=size_action,
+                         algorithm=algorithm, learning_rate=learning_rate)
+        self.algorithm = algorithm
+        self.size_observation = size_observation
+        self.size_hidden1 = size_hidden1
+        self.size_hidden2 = size_hidden2
+        self.size_action = size_action
+
+        self.action = self.context = self.action_linear = self.prediction_linear = None
+
+        self.hidden_layer1 = Layer(np.random.normal(0., .1, size=[self.size_hidden1 + self.size_observation +
+                                                                    self.size_action + size_hidden2,
+                                                                    self.size_hidden1]))
+        self.predictive_layer1 = Layer(np.random.normal(0., .1, size=[self.size_hidden1, self.size_observation]))
+
+        self.hidden_layer2 = Layer(np.random.normal(0., .1, size=[self.size_hidden1 * 2,
+                                                                    self.size_hidden2]))
+        self.predictive_layer2 = Layer(np.random.normal(0., .1, size=[self.size_hidden2, self.size_hidden1]))
+
+        self.action_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden1, self.size_action]))
+
+        self.all_weights =  [self.hidden_layer1.w, self.hidden_layer1.b,
+                            self.hidden_layer2.w, self.hidden_layer2.b,
+                            self.action_layer.w, self.action_layer.b,
+                            self.predictive_layer1.w, self.predictive_layer1.b,
+                            self.predictive_layer2.w, self.predictive_layer2.b]
+
+        self.prediction_weights = [self.hidden_layer1.w, self.hidden_layer1.b,
+                            self.hidden_layer2.w, self.hidden_layer2.b,
+                            self.predictive_layer1.w, self.predictive_layer1.b,
+                            self.predictive_layer2.w, self.predictive_layer2.b]
+
+        self.action_weights = [self.hidden_layer1.w, self.hidden_layer1.b,
+                            self.hidden_layer2.w, self.hidden_layer2.b,
+                            self.action_layer.w, self.action_layer.b]
+
+        self.learning_rate = learning_rate
+        self.L2_regularization = 0.0001
+        self.h_action_linear = []
+        self.h_action_wta = []
+        self.h_prediction1 = []
+        self.h_prediction2 = []
+        self.history = [self.h_action_linear, self.h_action_wta, self.h_prediction1, self.h_prediction2]
+
+        if algorithm == SGD:
+            self.optimizer_prediction = SGDOptimizer(self.prediction_weights)
+            self.optimizer_action = SGDOptimizer(self.action_weights)
+        elif algorithm == RMSPROP:
+            self.optimizer_prediction = RMSPropOptimizer(self.prediction_weights)
+            self.optimizer_action = RMSPropOptimizer(self.action_weights)
+        elif algorithm == ADAM:
+            self.optimizer_prediction = AdamOptimizer(self.prediction_weights)
+            self.optimizer_action = AdamOptimizer(self.action_weights)
+        else:
+            raise ValueError("Algorithm must be SGD, RMSPROP, or ADAM. Nothing else implemented ATM.")
+
+    def feedforward(self, observation):
+        prediction1_error = observation - self.prediction1
+
+        # Concatenate all the inputs for the first hidden layer
+        input_hidden1 = tf.concat([self.context1, prediction1_error, self.context2], 1)
+        for inputs in [self.action]:
+            if inputs is not None:
+                # Not sure if that's necessary? In theory the winner take all has no gradient anyway.
+                inputs = tf.stop_gradient(inputs)
+                input_hidden1 = tf.concat([input_hidden1, inputs], 1)
+
+        hidden_activation1 = self.dense_sigmoid(input_hidden1, self.hidden_layer1)
+        self.prediction1 = self.dense_sigmoid(hidden_activation1, self.predictive_layer1)
+
+
+        prediction2_error = hidden_activation1 - self.prediction2
+        # Concatenate all the inputs for the second hidden layer
+        input_hidden2 = tf.concat([self.context2, prediction2_error], 1)
+
+        hidden_activation2 = self.dense_sigmoid(input_hidden2, self.hidden_layer2)
+
+        self.prediction2 = self.dense_sigmoid(hidden_activation2, self.predictive_layer2)
+        #self.prediction2 = tf.stop_gradient(self.prediction2)
+
+        self.action_linear = self.dense_linear(hidden_activation1, self.action_layer)
+        self.action = self.winner_take_all(self.action_linear)
+
+        # The actual chosen action and goal
+        self.save_history()
+
+        # Set up the next context.
+        self.context1 = hidden_activation1
+        self.context2 = hidden_activation2
+
+    def train(self, tape, targets):
+        targets_action = targets
+        # Compute error + backprop.
+        loss_action = 0
+        for i in range(len(targets_action)):
+            loss_action += tf.reduce_sum((targets_action[i] - tf.nn.sigmoid(self.h_action_linear[i])) ** 2)  # mse
+
+        loss_prediction = 0
+        for i in range(len(self.h_prediction1)-1):
+            loss_prediction += tf.reduce_sum((self.h_prediction1[i] - self.h_prediction1[i+1]) ** 2)
+
+        for i in range(len(self.h_prediction2)-1):
+            loss_prediction += tf.reduce_sum((self.h_prediction2[i] - self.h_prediction2[i+1]) ** 2)
+
+        loss_prediction *= 0.5
+        loss_prediction += self.L2_regularization *\
+                           sum([tf.reduce_sum(weights**2) for weights in self.prediction_weights])
+        gradients_prediction = tape.gradient(loss_prediction, self.prediction_weights)
+        gradients_action = tape.gradient(loss_action, self.action_weights)
+        self.optimizer_prediction.update_weights(gradients_prediction, self.learning_rate)
+        self.optimizer_action.update_weights(gradients_action, self.learning_rate)
+        self.clear_history()
+        return loss_prediction, gradients_prediction
+
+    def clear_history(self):
+        for data in self.history:
+            data.clear()
+
+    def save_history(self):
+        self.h_action_linear.append(self.action_linear)
+        self.h_action_wta.append(self.action)
+        self.h_prediction1.append(self.prediction1)
+        self.h_prediction2.append(self.prediction2)
+
+    def new_episode(self):
+        # Use at the beginning of an episode
+        self.prediction1 = np.zeros((1, self.size_observation), dtype=np.float32)
+        self.prediction2 = np.zeros((1, self.size_hidden1), dtype=np.float32)
+        self.context1 = np.zeros((1, self.size_hidden1), dtype=np.float32)
+        self.context2 = np.zeros((1, self.size_hidden2), dtype=np.float32)
+        self.action = np.zeros((1, self.size_action), dtype=np.float32)
+        self.clear_history()
+
+
+# First test: just doing subtraction
+class BasicSubtractNet(NeuralNet):
+    def __init__(self, size_hidden=15, algorithm=SGD, learning_rate=0.1,
+                 size_observation=2,
+                 size_goal1=0, size_goal2=0,
+                 size_action=1, initialization=NORMAL):
+        super().__init__(size_observation, size_action, initialization=initialization,
+                         algorithm=algorithm, learning_rate=learning_rate)
+        self.size_hidden = size_hidden
+        if initialization == NORMAL:
+            self.hidden_layer = Layer(np.random.normal(0., .1, size=[self.size_observation,
+                                                                     self.size_hidden]))
+            self.action_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_action]))
+
+        elif initialization == UNIFORM:
+            self.hidden_layer = Layer(np.random.uniform(-1, 1., size=[self.size_observation,
+                                                                     self.size_hidden]))
+            self.action_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, self.size_action]))
+        else:
+            raise ValueError("Initialization should be normal or uniform")
+
+        self.all_weights = [self.hidden_layer.w, self.hidden_layer.b,
+                            self.action_layer.w, self.action_layer.b]
+
+        self.learning_rate = learning_rate
+        self.L2_regularization = 0.0
+        self.h_action = []
+        self.history = [self.h_action]
+        if algorithm == SGD:
+            self.optimizer = SGDOptimizer(self.all_weights)
+        elif algorithm == RMSPROP:
+            self.optimizer = RMSPropOptimizer(self.all_weights)
+        elif algorithm == ADAM:
+            self.optimizer = AdamOptimizer(self.all_weights)
+        else:
+            raise ValueError("Algorithm must be SGD, RMSPROP, or ADAM. Nothing else implemented ATM.")
+
+
+    def feedforward(self, observation):
+        network_input = observation
+        hidden_activation = self.dense_sigmoid(network_input, self.hidden_layer)
+        result = self.dense_linear(hidden_activation, self.action_layer)
+        self.h_action.append(result)
+        return result
+
+    def train(self, tape, target):
+            # Compute error + backprop.
+            loss = (target - self.h_action[-1])**2
+            gradients = tape.gradient(loss, self.all_weights)
+            self.optimizer.update_weights(gradients, self.learning_rate)
+            self.clear_history()
+            return loss, gradients
+
+    def clear_history(self):
+        for data in self.history:
+            data.clear()
+
+    def new_episode(self):
+        self.clear_history()
+
+
+class BasicSubtractNetSymbolic(NeuralNet):
+    def __init__(self, size_hidden=15, algorithm=SGD, learning_rate=0.1,
+                 size_observation=12, # 12 symbols 0-9, +-
+                 size_goal1=0, size_goal2=0,
+                 size_action=12, # +/-, 1/0, 0-9
+                 initialization=NORMAL):
+        super().__init__(size_observation, size_action, initialization=initialization,
+                         algorithm=algorithm, learning_rate=learning_rate)
+        self.size_digit = 10
+        self.size_hidden = size_hidden
+        if initialization == NORMAL:
+            self.hidden_layer = Layer(np.random.normal(0., .1, size=[self.size_observation,
+                                                                     self.size_hidden]))
+            self.sign_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, 1]))
+            self.tens_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, 1]))
+            self.unit_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, 10]))
+
+        elif initialization == UNIFORM:
+            self.hidden_layer = Layer(np.random.uniform(-1, 1., size=[self.size_observation,
+                                                                     self.size_hidden]))
+            self.sign_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, 1]))
+            self.tens_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, 1]))
+            self.unit_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, 10]))
+        else:
+            raise ValueError("Initialization should be normal or uniform")
+
+        self.all_weights = [self.hidden_layer.w, self.hidden_layer.b,
+                            self.sign_layer.w, self.sign_layer.b,
+                            self.tens_layer.w, self.tens_layer.b,
+                            self.unit_layer.w, self.unit_layer.b]
+
+        self.learning_rate = learning_rate
+        self.L2_regularization = 0.0
+        self.h_results = []
+        self.history = [self.h_action]
+        if algorithm == SGD:
+            self.optimizer = SGDOptimizer(self.all_weights)
+        elif algorithm == RMSPROP:
+            self.optimizer = RMSPropOptimizer(self.all_weights)
+        elif algorithm == ADAM:
+            self.optimizer = AdamOptimizer(self.all_weights)
+        else:
+            raise ValueError("Algorithm must be SGD, RMSPROP, or ADAM. Nothing else implemented ATM.")
+
+    def feedforward(self, observation):
+        network_input = observation
+        hidden_activation = self.dense_sigmoid(network_input, self.hidden_layer)
+        result_sign = self.dense_sigmoid(hidden_activation, self.sign_layer)
+        result_tens = self.dense_sigmoid(hidden_activation, self.tens_layer)
+        result_unit = self.dense_linear(hidden_activation, self.unit_layer)
+        result = [result_sign, result_tens, result_unit]
+        self.h_results.append(result)
+        return result
+
+    def train(self, tape, target):
+            # Compute error + backprop.
+            loss = 0
+
+            loss += tf.nn.softmax_cross_entropy_with_logits(target[2], self.h_results[-1][2])
+            loss = (target - self.h_action[-1])**2
+            gradients = tape.gradient(loss, self.all_weights)
+            self.optimizer.update_weights(gradients, self.learning_rate)
+            self.clear_history()
+            return loss, gradients
+
+    def clear_history(self):
+        for data in self.history:
+            data.clear()
+
+    def new_episode(self):
+        self.clear_history()
+
+# Second test: subtraction with recurrence - num 1 - operator - num 2
+class RecurrentArithmeticNet(NeuralNet):
+    def __init__(self, size_hidden=15, algorithm=SGD, learning_rate=0.1,
+                 size_observation=2,  # one unit for operator, one unit for numbers.
+                 size_goal1=0, size_goal2=0,
+                 size_action=1, initialization=NORMAL):
+        super().__init__(size_observation, size_action, initialization=initialization,
+                         algorithm=algorithm, learning_rate=learning_rate)
+        self.context = None
+        self.size_hidden = size_hidden
+        if initialization == NORMAL:
+            self.hidden_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden + self.size_observation,
+                                                                     self.size_hidden]))
+            self.hidden_layer2 = Layer(np.random.normal(0., .1, size=[self.size_hidden,
+                                                                     self.size_hidden]))
+            self.action_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_action]))
+
+        elif initialization == UNIFORM:
+            self.hidden_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden + self.size_observation,
+                                                                     self.size_hidden]))
+
+            self.hidden_layer2 = Layer(np.random.uniform(-1., .1, size=[self.size_hidden,
+                                                                     self.size_hidden]))
+            self.action_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, self.size_action]))
+        else:
+            raise ValueError("Initialization should be normal or uniform")
+
+        self.all_weights = [self.hidden_layer.w, self.hidden_layer.b,
+                            self.hidden_layer2.w, self.hidden_layer2.b,
+                            self.action_layer.w, self.action_layer.b]
+
+        self.learning_rate = learning_rate
+        self.L2_regularization = 0.0
+        self.h_action = []
+        self.history = [self.h_action]
+        if algorithm == SGD:
+            self.optimizer = SGDOptimizer(self.all_weights)
+        elif algorithm == RMSPROP:
+            self.optimizer = RMSPropOptimizer(self.all_weights)
+        elif algorithm == ADAM:
+            self.optimizer = AdamOptimizer(self.all_weights)
+        else:
+            raise ValueError("Algorithm must be SGD, RMSPROP, or ADAM. Nothing else implemented ATM.")
+
+
+    def feedforward(self, observation):
+        network_input = tf.concat([self.context, observation], 1)
+        hidden_activation = self.dense_sigmoid(network_input, self.hidden_layer)
+        hidden_activation2 = self.dense_sigmoid(hidden_activation, self.hidden_layer2)
+        result = self.dense_linear(hidden_activation2, self.action_layer)
+        self.h_action.append(result)
+        return result
+
+    def train(self, tape, target):
+        # Compute error + backprop.
+        loss = (target - self.h_action[-1])**2
+        gradients = tape.gradient(loss, self.all_weights)
+        self.optimizer.update_weights(gradients, self.learning_rate)
+        return loss, gradients
+
+    def clear_history(self):
+        for data in self.history:
+            data.clear()
+
+    def new_episode(self):
+        self.context = np.zeros((1, self.size_hidden), dtype=np.float32)
+        self.clear_history()
+
+

@@ -77,7 +77,7 @@ def load_object(name, latest=0):
     # Since the timestamps are in the format YYYYMMDD_HHMMSS, an alphabetical sort will sort them chronologically
     files = sorted(file_names)
     if latest >= len(files):
-        raise Exception("You asked for file #{0} ("+name+") but there are only {1} matching files".format(latest+1, len(files)))
+        raise Exception("You asked for file # {0} ("+name+") but there are only {1} matching files".format(latest+1, len(files)))
 
     filehandler = open(SAVE_FOLDER + '/' + files[-1 - latest], 'rb')
     object = pickle.load(filehandler)
@@ -125,7 +125,7 @@ def winner_take_all(a):
 def load_objects(name, number):
     objects = []
     for i in range(number):
-        objects.append(load_object(name, latest=number))
+        objects.append(load_object(name, latest=i))
     return objects
 
 
@@ -180,3 +180,4 @@ class ProgressBar(object):
             if iteration == total:
                 print()
             self.update_counter += 1
+
