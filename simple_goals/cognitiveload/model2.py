@@ -7,9 +7,67 @@ import numpy as np
 import matplotlib.pyplot as plt
 import neuralnet as nn
 
-# CASE 1: make 3 RDMs, one for the combined task, one for the arithmetic task, one for the beverage task.
-# We're also training 3 different networks.
-# Combined task #
+# Model 2: we're training only one network. This network is trained to perform all 3 tasks.
+# To achieve this, when training for bev or ari we train on the same time-steps (=with a blank timestep in between)
+
+def ff_ari(nnet, seq_ari):
+    zeros = np.zeros_like(utils.str_to_onehot(seq_ari[0], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.symbols))
+    nnet.feedforward(zeros)
+    nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.symbols))
+    nnet.feedforward(zeros)
+    nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.symbols))
+    nnet.feedforward(zeros)
+    nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.symbols))
+    nnet.feedforward(zeros)
+    nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.symbols))
+    nnet.feedforward(zeros)
+    nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.symbols))
+
+def make_targets_ari(seq_ari):
+    targets = []
+    targets.append(task.Target(None))
+    targets.append(task.Target(None))
+    targets.append(task.Target(None))
+    targets.append(task.Target(None))
+    targets.append(task.Target(None))
+    targets.append(task.Target(None))
+    targets.append(task.Target(None))
+    targets.append(task.Target(None))
+    targets.append(task.Target(None))
+    targets.append(task.Target(None))
+    targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.symbols)))
+    return targets
+
+def ff_bev(nnet, seq_bev):
+    zeros = np.zeros_like(utils.str_to_onehot(seq_bev[0], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.symbols))
+    nnet.feedforward(zeros)
+    nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.symbols))
+    nnet.feedforward(zeros)
+    nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.symbols))
+    nnet.feedforward(zeros)
+    nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.symbols))
+    nnet.feedforward(zeros)
+    nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.symbols))
+    nnet.feedforward(zeros)
+    nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.symbols))
+
+def make_targets_bev(seq_bev):
+    targets = []
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.symbols)))
+    targets.append(task.Target(None))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.symbols)))
+    targets.append(task.Target(None))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.symbols)))
+    targets.append(task.Target(None))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.symbols)))
+    targets.append(task.Target(None))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.symbols)))
+    targets.append(task.Target(None))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.symbols)))
+    return targets
+
 def ff_all(nnet, seq_bev, seq_ari):
     nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.symbols))
     nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.symbols))
@@ -40,6 +98,9 @@ def make_targets_all(seq_bev, seq_ari):
     targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.symbols)))
     return targets
 
+ONLY_ARI = 0
+ONLY_BEV = 1
+BOTH = 2
 def train_all(nnet, num_training_steps = 1000000):
     i=0
     avg_loss = 0.
@@ -48,22 +109,30 @@ def train_all(nnet, num_training_steps = 1000000):
         # and a random beverage seq
         seq_ari = random.choice(task.arithmetic_seqs)
         seq_bev = random.choice(task.beverage_seqs)
+        # 1/3rd = only ari, 1/3rd = only bev, 1/3rd = combo.
+        mode = np.random.randint(0, 3)
 
         with tf.GradientTape() as tape:
             nnet.new_episode()
-            targets = make_targets_all(seq_bev,seq_ari)
-
-            # feedforward first number
-            ff_all(nnet, seq_bev, seq_ari)
+            if mode == ONLY_ARI:
+                targets = make_targets_ari(seq_ari)
+                ff_ari(nnet, seq_ari)
+            elif mode == ONLY_BEV:
+                targets = make_targets_bev(seq_bev)
+                ff_ari(nnet, seq_bev)
+            elif mode == BOTH:
+                targets = make_targets_all(seq_bev,seq_ari)
+                ff_all(nnet, seq_bev, seq_ari)
 
             loss = nnet.train(tape, targets)
             loss = loss.numpy()[0]
             avg_loss = 0.999 * avg_loss + 0.001 * loss
             if i % 100 == 0 or i > (num_training_steps - 20):
                 print('{0}, avgloss={1}'.format(i, avg_loss))
-            if i % 1019 == 0:
-                print(seq_ari)
-                print(np.argmax(nnet.action) - 9)
+            if mode == BOTH:
+                if i % 1019 == 0:
+                    print(seq_ari)
+                    print(np.argmax(nnet.action) - 9)
             i += 1
     nnet.new_episode() # just clear up the network history to avoid any bad surprises
 
@@ -77,7 +146,7 @@ def test_network_all(model):
             model.new_episode()
             ff_all(model, seq_bev, seq_ari)
             context = [c.numpy().flatten() for c in model.h_context]
-            hidden_activation.append(context) # collect the activations
+            hidden_activation.append(context)
 
             # Now also test whether the model was correct or not: compare targets with actual outputs
             targets = make_targets_all(seq_bev, seq_ari)
@@ -111,63 +180,6 @@ def test_network_all(model):
             averaged_up_hidden_activation[-1] /= 17
 
     return averaged_up_hidden_activation, accuracy_totals, accuracy_fullseqs
-
-def generate_rdm_all(nnet, name, rdm_type=analysis.SPEARMAN, save_files=True, title="RDM training combined"):
-    if rdm_type != analysis.SPEARMAN:
-        raise Exception("not implemented")
-    hidden, accuracy_totals, accuracy_fullseqs = test_network_all(nnet)
-    print(accuracy_totals)
-    print(accuracy_fullseqs)
-    hidden = utils.flatten_onelevel(hidden)
-    rdmatrix = analysis.rdm_spearman(hidden)
-    labels = utils.flatten_onelevel(task.label_seqs_all)
-    name=name.replace('.', '_')+'_'+rdm_type
-    if save_files:
-        np.savetxt(name+"_rdm_mat.txt", rdmatrix, delimiter="\t", fmt='%.2e')
-    analysis.plot_rdm(rdmatrix, labels, title + " spearman rho matrix", figsize=30, fontsize=0.6)
-    if save_files:
-        plt.savefig(name+'_rdm.png', dpi=300, bbox_inches='tight')
-    plt.clf()
-
-# Arithmetic task #
-def ff_ari(nnet, seq_ari):
-    for i in range(6):
-        nnet.feedforward(utils.str_to_onehot(seq_ari[i], task.symbols))
-
-def make_targets_ari(seq_ari):
-    targets = []
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.symbols)))
-    return targets
-
-def train_ari(nnet, num_training_steps = 1000000):
-    i=0
-    avg_loss = 0.
-    while i < num_training_steps:
-        # Pick a random arithmetic seq:
-        # and a random beverage seq
-        seq_ari = random.choice(task.arithmetic_seqs)
-
-        with tf.GradientTape() as tape:
-            nnet.new_episode()
-            targets = make_targets_ari(seq_ari)
-
-            # feedforward first number
-            ff_ari(nnet, seq_ari)
-
-            loss = nnet.train(tape, targets)
-            loss = loss.numpy()[0]
-            avg_loss = 0.999 * avg_loss + 0.001 * loss
-            if i % 100 == 0 or i > (num_training_steps - 20):
-                print('{0}, avgloss={1}'.format(i, avg_loss))
-            if i % 1019 == 0:
-                print(seq_ari)
-                print(np.argmax(nnet.action) - 9)
-            i += 1
 
 def test_network_ari(model):
     sequence_length = len(make_targets_ari(task.arithmetic_seqs[0])) # wasteful but works
@@ -212,55 +224,6 @@ def test_network_ari(model):
 
     return averaged_up_hidden_activation, accuracy_totals, accuracy_fullseqs
 
-def generate_rdm_ari(nnet, name, rdm_type=analysis.SPEARMAN, save_files=True, title="RDM training arithmetic only"):
-    if rdm_type != analysis.SPEARMAN:
-        raise Exception("not implemented")
-    hidden, accuracy_totals, accuracy_fullseqs = test_network_ari(nnet)
-    print(accuracy_totals)
-    print(accuracy_fullseqs)
-    hidden = utils.flatten_onelevel(hidden)
-    rdmatrix = analysis.rdm_spearman(hidden)
-    labels = utils.flatten_onelevel(task.label_seqs_ari)
-    name=name.replace('.', '_')+'_'+rdm_type
-    if save_files:
-        np.savetxt(name+"_rdm_mat.txt", rdmatrix, delimiter="\t", fmt='%.2e')
-    analysis.plot_rdm(rdmatrix, labels, title + " spearman rho matrix", figsize=10, fontsize=0.6)
-    if save_files:
-        plt.savefig(name+'_rdm.png', dpi=300, bbox_inches='tight')
-    plt.clf()
-
-# Beverage task
-def ff_bev(nnet, seq_bev):
-    for i in range(6):
-        nnet.feedforward(utils.str_to_onehot(seq_bev[i], task.symbols))
-
-def make_targets_bev(seq_bev):
-    targets = []
-    for i in range(1, 7):
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[i], task.symbols)))
-    return targets
-
-def train_bev(nnet, num_training_steps = 100000):
-    i = 0
-    avg_loss = 0.
-    while i < num_training_steps:
-        # Pick a random arithmetic seq:
-        # and a random beverage seq
-        seq_bev = random.choice(task.beverage_seqs)
-
-        with tf.GradientTape() as tape:
-            nnet.new_episode()
-            targets = make_targets_bev(seq_bev)
-            ff_bev(nnet, seq_bev)
-
-            loss = nnet.train(tape, targets)
-            loss = loss.numpy()[0]
-            avg_loss = 0.999 * avg_loss + 0.001 * loss
-            if i % 100 == 0 or i > (num_training_steps - 20):
-                print('{0}, avgloss={1}'.format(i, avg_loss))
-            i += 1
-
-
 def test_network_bev(model):
     sequence_length = len(make_targets_bev(task.beverage_seqs[0])) # wasteful but works
     hidden_activation = []
@@ -292,16 +255,23 @@ def test_network_bev(model):
 
     return hidden_activation, accuracy_totals, accuracy_fullseqs
 
-
-def generate_rdm_bev(nnet, name, rdm_type=analysis.SPEARMAN, save_files=True, title="RDM training beverage only"):
+def generate_rdm_all(nnet, name, rdm_type=analysis.SPEARMAN, save_files=True, title="RDM training combined"):
     if rdm_type != analysis.SPEARMAN:
         raise Exception("not implemented")
-    hidden, accuracy_totals, accuracy_fullseqs = test_network_bev(nnet)
-    print(accuracy_totals)
-    print(accuracy_fullseqs)
-    hidden = utils.flatten_onelevel(hidden)
+    hidden_both, accuracy_totals_both, accuracy_fullseqs_both = test_network_all(nnet)
+    hidden_ari, accuracy_totals_ari, accuracy_fullseqs_ari = test_network_ari(nnet)
+    hidden_bev, accuracy_totals_bev, accuracy_fullseqs_bev = test_network_bev(nnet)
+    print("Both: {0}, {1}".format(accuracy_totals_both, accuracy_fullseqs_both))
+    print("Ari: {0}, {1}".format(accuracy_totals_ari, accuracy_fullseqs_ari))
+    print("Bev: {0}, {1}".format(accuracy_totals_bev, accuracy_fullseqs_bev))
+
+    hidden = utils.flatten_onelevel(hidden_bev) +\
+             utils.flatten_onelevel(hidden_ari) +\
+             utils.flatten_onelevel(hidden_both)
     rdmatrix = analysis.rdm_spearman(hidden)
-    labels = utils.flatten_onelevel(task.label_seqs_bev)
+    labels = utils.flatten_onelevel(task.label_seqs_bev) +\
+             utils.flatten_onelevel(task.label_seqs_ari) +\
+             utils.flatten_onelevel(task.label_seqs_all)
     name=name.replace('.', '_')+'_'+rdm_type
     if save_files:
         np.savetxt(name+"_rdm_mat.txt", rdmatrix, delimiter="\t", fmt='%.2e')
@@ -311,30 +281,7 @@ def generate_rdm_bev(nnet, name, rdm_type=analysis.SPEARMAN, save_files=True, ti
     plt.clf()
 
 
-def run_model1_bev():
-    # BEV #
-    num_training_steps = 5000
-    nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                           size_observation=len(task.symbols), size_action=len(task.symbols), learning_rate=0.01, algorithm=nn.ADAM)
-    nnet.L2_regularization = 0.00001
-    train_bev(nnet, num_training_steps)
-    utils.save_object("cogloadtasknet_bev", nnet)
-    nnet = utils.load_object("cogloadtasknet_bev")
-    generate_rdm_bev(nnet, name="cogloadtasknet_bev")
-
-
-def run_model1_ari():
-    # ARI #
-    num_training_steps = 20000
-    nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                           size_observation=len(task.symbols), size_action=len(task.symbols), learning_rate=0.01, algorithm=nn.ADAM)
-    nnet.L2_regularization = 0.00001
-    train_ari(nnet, num_training_steps)
-    utils.save_object("cogloadtasknet_ari", nnet)
-    nnet = utils.load_object("cogloadtasknet_ari")
-    generate_rdm_ari(nnet, name="cogloadtasknet_ari")
-
-def run_model1_combined():
+def run_model2():
     # COMBINED #
     num_training_steps = 100000
     nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,

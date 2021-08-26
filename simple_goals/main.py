@@ -30,43 +30,9 @@ tsne_results = utils.load_object("tsne_results_disrupt")
 sys.exit()
 
 """
-# BEV #
-num_training_steps = 5000
-nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                       size_observation=len(cogloadtask.symbols), size_action=len(cogloadtask.symbols), learning_rate=0.01, algorithm=nn.ADAM)
-nnet.L2_regularization = 0.00001
-cogloadtask.train_bev(nnet, num_training_steps)
-utils.save_object("cogloadtasknet_bev", nnet)
-nnet = utils.load_object("cogloadtasknet_bev")
-cogloadtask.generate_rdm_bev(nnet, name="cogloadtasknet_bev")
-
+import cognitiveload.model2
+cognitiveload.model2.run_model2()
 sys.exit(0)
-
-# ARI #
-num_training_steps = 20000
-nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                       size_observation=len(cogloadtask.symbols), size_action=len(cogloadtask.symbols), learning_rate=0.01, algorithm=nn.ADAM)
-nnet.L2_regularization = 0.00001
-cogloadtask.train_ari(nnet, num_training_steps)
-utils.save_object("cogloadtasknet_ari", nnet)
-nnet = utils.load_object("cogloadtasknet_ari")
-cogloadtask.generate_rdm_ari(nnet, name="cogloadtasknet_ari")
-
-sys.exit(0)
-
-
-# COMBINED #
-num_training_steps = 100000
-nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                       size_observation=len(cogloadtask.symbols), size_action=len(cogloadtask.symbols), learning_rate=0.01, algorithm=nn.ADAM)
-nnet.L2_regularization = 0.00001
-cogloadtask.train_all(nnet, num_training_steps)
-utils.save_object("cogloadtasknet", nnet)
-nnet = utils.load_object("cogloadtasknet")
-cogloadtask.generate_rdm_all(nnet, name="cogloadtasknet")
-
-sys.exit(0)
-
 """"""
 # Try out the multilayer predictive network. On what task? --> PNAS.
 """
