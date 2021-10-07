@@ -30,8 +30,20 @@ tsne_results = utils.load_object("tsne_results_disrupt")
 sys.exit()
 
 """
-import cognitiveload.model2
-cognitiveload.model2.run_model2()
+
+
+
+import cognitiveload.model3 as mod3
+mod3.FAST_RDM = True
+hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00001)
+mod3.run_model3_multiple(from_file=None, num_networks=10, name="model3_test_gradient", hrp=hrp)
+sys.exit(0)
+
+
+
+import cognitiveload.model2 as mod2
+mod2.FAST_RDM=True
+mod2.run_model2_multiple(num_networks=10)
 sys.exit(0)
 """"""
 # Try out the multilayer predictive network. On what task? --> PNAS.

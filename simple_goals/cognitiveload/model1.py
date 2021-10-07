@@ -325,7 +325,7 @@ def run_model1_bev():
 
 def run_model1_ari():
     # ARI #
-    num_training_steps = 20000
+    num_training_steps = 10000
     nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
                            size_observation=len(task.symbols), size_action=len(task.symbols), learning_rate=0.01, algorithm=nn.ADAM)
     nnet.L2_regularization = 0.00001
@@ -336,11 +336,11 @@ def run_model1_ari():
 
 def run_model1_combined():
     # COMBINED #
-    num_training_steps = 100000
-    nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                           size_observation=len(task.symbols), size_action=len(task.symbols), learning_rate=0.01, algorithm=nn.ADAM)
-    nnet.L2_regularization = 0.00001
-    train_all(nnet, num_training_steps)
-    utils.save_object("cogloadtasknet", nnet)
+    #num_training_steps = 100000
+    #nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
+    #                       size_observation=len(task.symbols), size_action=len(task.symbols), learning_rate=0.01, algorithm=nn.ADAM)
+    #nnet.L2_regularization = 0.00001
+    #train_all(nnet, num_training_steps)
+    #utils.save_object("cogloadtasknet", nnet)
     nnet = utils.load_object("cogloadtasknet")
     generate_rdm_all(nnet, name="cogloadtasknet")

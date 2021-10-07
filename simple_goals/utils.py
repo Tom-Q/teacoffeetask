@@ -6,7 +6,8 @@ import os
 import re
 import tensorflow as tf
 from timeit import default_timer as timer
-
+import matplotlib.pyplot as plt
+import analysis
 
 SAVE_FOLDER='models'
 
@@ -180,4 +181,80 @@ class ProgressBar(object):
             if iteration == total:
                 print()
             self.update_counter += 1
+
+def save_rdm(rdm, name, labels, title):
+    np.savetxt(name+"_rdm_mat.txt", rdm, delimiter="\t", fmt='%.2e')
+    analysis.plot_rdm(rdm, labels, title + " spearman rho matrix", figsize=30, fontsize=0.6)
+    plt.savefig(name+'_rdm.png', dpi=300, bbox_inches='tight')
+    plt.clf()
+
+def weight_regularization_calculator(weight_matrix, index_in, index_out, reg_const, reg_type="step",
+                                     reg_increase="linear"):
+    if reg_type == "step":
+        # Extract the relevant area of the weight matrix:
+        return tf.reduce_sum(
+            tf.abs(weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]])) * reg_const
+    elif reg_type == "recurrent":
+        # 1 Make matrix:
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i, j] = i - j
+        # print(mat)
+    elif reg_type == "input_left":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        # print(weights)
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i, j] = j
+        # print(mat)
+    elif reg_type == "input_right":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        # print(weights)
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i, j] = num_cols - j - 1
+        # print(mat)
+    elif reg_type == "output_left":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        # print(weights)
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i, j] = i
+        # print(mat)
+    elif reg_type == "output_right":
+        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+        # print(weights)
+        mat = np.zeros_like(weights)
+        num_rows, num_cols = mat.shape
+        for i in range(num_rows):
+            for j in range(num_cols):
+                mat[i, j] = (num_rows - i - 1)
+        # print(mat)
+    else:
+        raise ValueError("reg_type not implemented")
+    if reg_increase == "linear":
+        mat = np.abs(mat)
+    elif reg_increase == "square":
+        mat = mat ** 2
+    else:
+        raise ValueError("reg_increase must be either linear or square")
+    return tf.reduce_sum(tf.abs(weights) * mat * reg_const)
+
+
+#mat = np.asarray([0, 1, 2, 3, 4, 5, 6, 7, 8]).reshape([3,3])
+#vector = np.asarray([0, 1 ,2])
+#print(np.matmul(vector, mat))
+def test_weight_regularization(regtype):
+    matrix = np.round(np.random.uniform(-1, 1, [5, 7])) * 2
+    print(matrix)
+    print(weight_regularization_calculator(matrix, [0, 3], [0, 2], 1, regtype))
 

@@ -7,17 +7,29 @@ import random
 import analysis
 import matplotlib.pyplot as plt
 
+# This controls whether I produce fast RDMs (technically incorrect but very quick to do) or slow
+# RDMs (technically correct but takes 90 minutes)
+FAST_RDM=1
+
+# Whether to train on ARI, BEV, or BOTH
+ONLY_ARI = 0
+ONLY_BEV = 1
+BOTH = 2
+
+
 symbols = ['-9', '-8', '-7', '-6', '-5', '-4', '-3', '-2', '-1',
            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
            '10', '11', '12', '13', '14', '15', '16','17', '18', '19',
            '+', '-', '=',
            "init", "tea", "coffee", "water", "stir", "sugar", "cream", "serve_tea", "serve_coffee"]
 
+goal_symbols = ["math", "tea", "coffee"]
+
 beverage_seqs = [
     ["init", "tea", "water", "stir", "sugar", "stir", "serve_tea"],
     ["init", "tea", "sugar", "stir", "water", "stir", "serve_tea"],
     ["init", "coffee", "water", "stir", "cream", "stir", "serve_coffee"],
-    ["init", "coffee", "cream", "stir", "water", "stir", "serve_coffee"],
+    ["init", "coffee", "cream", "stir", "water", "stir", "serve_coffee"]
 ]
 
 arithmetic_seqs = []
@@ -98,8 +110,42 @@ for b in beverage_seqs:
 
 
 
+# Model 2: we're training only one network. This network is trained to perform all 3 tasks.
+# To achieve this, when training for bev or ari we train on the same time-steps (=with a blank timestep in between)
+label_seqs_ari = [['num1', '0', '+', '0', 'num2', '0', '+', '0', 'num3', '0', '='],
+                  ['num1', '0', '+', '0', 'num2', '0', '-', '0', 'num3', '0', '='],
+                  ['num1', '0', '-', '0', 'num2', '0', '+', '0', 'num3', '0', '='],
+                  ['num1', '0', '-', '0', 'num2', '0', '-', '0', 'num3', '0', '=']]
+label_seqs_bev = [
+    ["tea", '0', "water", '0', "stir", '0', "sugar", '0', "stir", '0', "serve_tea"],
+    ["tea", '0', "sugar", '0', "stir", '0', "water", '0', "stir", '0', "serve_tea"],
+    ["coffee", '0', "water", '0', "stir", '0', "cream", '0', "stir", '0', "serve_coffee"],
+    ["coffee", '0', "cream", '0', "stir", '0', "water", '0', "stir", '0', "serve_coffee"]]
+
+label_seqs_ari_noblanks = [['num1', '+', 'num2', '+', 'num3', '='],
+                    ['num1', '+','num2','-', 'num3', '='],
+                    ['num1', '-', 'num2', '+',  'num3',  '='],
+                    ['num1',  '-',  'num2', '-',  'num3',  '=']]
+label_seqs_bev_noblanks = [
+    ["tea", "water", "stir", "sugar", "stir", "serve_tea"],
+    ["tea", "sugar", "stir", "water", "stir", "serve_tea"],
+    ["coffee", "water", "stir", "cream", "stir", "serve_coffee"],
+    ["coffee", "cream", "stir", "water", "stir", "serve_coffee"]
+]
+
 class Target(object):
-    def __init__(self, action):
+    def __init__(self, action, goal1=None):
         self.action_one_hot = action
-        self.goal1_one_hot = None
+        if isinstance(goal1, str):
+            goal1 = utils.str_to_onehot(goal1, goal_symbols)
+        self.goal1_one_hot = goal1
         self.goal2_one_hot = None
+
+goal_target_bev = [
+    ["tea"]*6,
+    ["tea"]*6,
+    ["coffee"]*6,
+    ["coffee"]*6
+]
+
+goal_target_ari = ["math"]*6

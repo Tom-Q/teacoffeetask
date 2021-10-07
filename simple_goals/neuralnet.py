@@ -277,7 +277,7 @@ class ElmanGoalNet(NeuralNet):
         self.h_goal2_wta.append(self.goal2)
         self.h_context.append(self.context)
 
-    def train(self, tape, targets):
+    def train(self, tape, targets, extra_loss=0.):
         loss = 0
         for i, target in enumerate(targets):
             if target.action_one_hot is not None:
@@ -287,6 +287,7 @@ class ElmanGoalNet(NeuralNet):
             if target.goal2_one_hot is not None:
                 loss += tf.nn.softmax_cross_entropy_with_logits(target.goal2_one_hot, self.h_goal2_softmax[i])
         loss += self.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in self.all_weights])
+        loss += extra_loss
         gradients = tape.gradient(loss, self.all_weights)
         self.optimizer.update_weights(gradients, self.learning_rate)
         self.clear_history()
