@@ -86,22 +86,73 @@ RMSPROP = "rmsprop"
 ADAM = "adam"
 
 # Initialization types
-NORMAL = "normal"
+SEMINORMAL = "seminormal"
+NORMAL = "normal"  # for sigmoid, instead of a normal centered on 0.5, I use half a normal distribution, centered on 0.
 UNIFORM = "uniform"
+XAVIER = "xavier"
+HE = "he" # for relu
+ZEROS = "zeros"  # for context initialization
 
+# Nonlinearity
+RELU="relu"
+SIGMOID="sigmoid"
+TANH="tanh"
+
+
+# Convenience classes for encapsulating neural net parameters. It seems this only adds complexity to the NN classes but
+# it is useful e.g. when I want to train multiple neural nets while changing only one or two parameters.
+# Also useful for storing a set of default parameters. Also neat for creating multiple nets from the same set of params
+# Etc.
+class ParamsNeuralNet(object):
+    def __init__(self, size_observation, size_action, initialization, algorithm, nonlinearity, learning_rate, L1_reg, L2_reg):
+        self.size_observation = size_observation
+        self.size_action = size_action
+        self.initialization = initialization
+        self.algorithm = algorithm
+        self.nonlinearity = nonlinearity
+        self.learning_rate = learning_rate
+        self.L1_reg = L1_reg
+        self.L2_reg = L2_reg
+
+class ParamsGoalNet(ParamsNeuralNet):
+    def __init__(self, size_observation, size_action, size_hidden, initialization, algorithm, nonlinearity, learning_rate,
+                 L1_reg=0, L2_reg=0, last_action_inputs=False, size_goal1=0, size_goal2=0):
+        super().__init__(size_observation, size_action, initialization,
+                         algorithm, nonlinearity, learning_rate, L1_reg, L2_reg)
+        self.size_hidden = size_hidden
+        self.size_goal1 = size_goal1
+        self.size_goal2 = size_goal2
+        self.last_action_inputs = last_action_inputs
 
 # Abstract class for neural networks. Contains just the basic stuff.
 class NeuralNet(ABC):
-    def __init__(self, size_observation, size_action, initialization=UNIFORM, algorithm=SGD, learning_rate=0.1,
-                 L1_regularization=0., L2_regularization=0.):
-        self.algorithm = algorithm
-        self.size_observation = size_observation
-        self.size_action = size_action
-        self.learning_rate = learning_rate
-        self.initialization = initialization
-        self.L1_regularization = L1_regularization
-        self.L2_regularization = L2_regularization
+    def __init__(self, size_observation, size_action, initialization=UNIFORM, nonlinearity=SIGMOID,
+                 algorithm=SGD, learning_rate=0.1,
+                 L1_regularization=0., L2_regularization=0., params=None):
+        if params is None:
+            self.algorithm = algorithm
+            self.size_observation = size_observation
+            self.size_action = size_action
+            self.learning_rate = learning_rate
+            self.nonlinearity=nonlinearity
+            self.initialization = initialization
+            self.L1_regularization = L1_regularization
+            self.L2_regularization = L2_regularization
+        else:
+            self.algorithm = params.algorithm
+            self.size_observation = params.size_observation
+            self.size_action = params.size_action
+            self.learning_rate = params.learning_rate
+            self.nonlinearity=params.nonlinearity
+            self.initialization = params.initialization
+            self.L1_regularization = params.L1_reg
+            self.L2_regularization = params.L2_reg
 
+    def get_params(self):
+        return ParamsNeuralNet(size_observation=self.size_observation, size_action=self.size_action,
+                               initialization=self.initialization, algorithm=self.algorithm,
+                               nonlinearity=self.nonlinearity, learning_rate=self.learning_rate,
+                               L1_reg=self.L1_regularization, L2_reg=self.L2_regularization)
     @abstractmethod
     def feedforward(self, observation):
         """
@@ -157,6 +208,15 @@ class NeuralNet(ABC):
         return tf.nn.sigmoid(NeuralNet.dense_linear(x, layer))
 
     @staticmethod
+    def dense_relu(x, layer):
+        return tf.nn.relu(NeuralNet.dense_linear(x, layer))
+
+
+    @staticmethod
+    def dense_tanh(x, layer):
+        return tf.nn.tanh(NeuralNet.dense_linear(x, layer))
+
+    @staticmethod
     def winner_take_all(a):
         a = a.numpy()
         b = np.zeros_like(a)
@@ -168,16 +228,38 @@ class ElmanGoalNet(NeuralNet):
     def __init__(self, size_hidden=15, algorithm=SGD, learning_rate=0.1,
                  size_observation=len(tce.TeaCoffeeData.observations_list),
                  size_goal1=len(tce.TeaCoffeeData.goals1_list), size_goal2=len(tce.TeaCoffeeData.goals2_list),
-                 size_action=len(tce.TeaCoffeeData.actions_list), initialization=NORMAL, last_action_inputs=False):
+                 size_action=len(tce.TeaCoffeeData.actions_list), initialization=NORMAL,
+                 L1_reg = 0., L2_reg = 0.,
+                 last_action_inputs=False,
+                 nonlinearity=SIGMOID, params=None):
         super().__init__(size_observation, size_action, initialization=initialization,
-                         algorithm=algorithm, learning_rate=learning_rate)
-        self.algorithm = algorithm
-        self.size_hidden = size_hidden
-        self.size_goal1 = size_goal1
-        self.size_goal2 = size_goal2
-
-        # Whether to feed the last action as another input
-        self.last_action_inputs = last_action_inputs
+                         algorithm=algorithm, learning_rate=learning_rate, params=params)
+        if params is None:
+            self.algorithm = algorithm
+            self.size_hidden = size_hidden
+            self.size_goal1 = size_goal1
+            self.size_goal2 = size_goal2
+            self.nonlinearity=nonlinearity
+            self.initialization=initialization
+            # Whether to feed the last action as another input
+            self.last_action_inputs = last_action_inputs
+            self.learning_rate = learning_rate
+            self.L1_regularization = L1_reg
+            self.L2_regularization = L2_reg
+        else:
+            self.size_action = params.size_action
+            self.size_observation = params.size_observation
+            self.algorithm = params.algorithm
+            self.size_hidden = params.size_hidden
+            self.size_goal1 = params.size_goal1
+            self.size_goal2 = params.size_goal2
+            self.nonlinearity = params.nonlinearity
+            self.initialization = params.initialization
+            # Whether to feed the last action as another input
+            self.last_action_inputs = params.last_action_inputs
+            self.learning_rate = params.learning_rate
+            self.L1_regularization = params.L1_reg
+            self.L2_regularization = params.L2_reg
 
         self.goal1 = self.goal2 = self.action = self.context = self.action_softmax =\
             self.goal1_softmax = self.goal2_softmax = None
@@ -199,6 +281,20 @@ class ElmanGoalNet(NeuralNet):
             self.goal1_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, self.size_goal1]))
             self.goal2_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, self.size_goal2]))
             self.action_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, self.size_action]))
+        elif initialization == XAVIER or HE:
+            init_const = 1 if initialization == XAVIER else 2
+            # higher and lowre bound hidden layer
+            hbh = init_const/np.sqrt(self.size_hidden + self.size_observation + self.size_action + self.size_goal1 + self.size_goal2)
+            lbh = -hbh
+            self.hidden_layer = Layer(np.random.uniform(lbh, hbh,
+                                                        size=[self.size_hidden + self.size_observation +
+                                                                     self.size_action + self.size_goal1 + self.size_goal2,
+                                                                     self.size_hidden]))
+            hbo = init_const/np.sqrt(self.size_hidden)
+            lbo = -hbo
+            self.goal1_layer = Layer(np.random.uniform(lbo, hbo, size=[self.size_hidden, self.size_goal1]))
+            self.goal2_layer = Layer(np.random.uniform(lbo, hbo, size=[self.size_hidden, self.size_goal2]))
+            self.action_layer = Layer(np.random.uniform(lbo, hbo, size=[self.size_hidden, self.size_action]))
         else:
             raise ValueError("Initialization should be normal or uniform")
 
@@ -207,8 +303,7 @@ class ElmanGoalNet(NeuralNet):
                             self.goal1_layer.w, self.goal1_layer.b,
                             self.goal2_layer.w, self.goal2_layer.b]
 
-        self.learning_rate = learning_rate
-        self.L2_regularization = 0.0001
+
         self.h_action_softmax = []
         self.h_goal1_softmax = []
         self.h_goal2_softmax = []
@@ -227,6 +322,14 @@ class ElmanGoalNet(NeuralNet):
         else:
             raise ValueError("Algorithm must be SGD, RMSPROP, or ADAM. Nothing else implemented ATM.")
 
+    def get_params(self):
+        return ParamsGoalNet(size_observation=self.size_observation, size_action=self.size_action,
+                             size_hidden=self.size_hidden, initialization=self.initialization,
+                             algorithm=self.algorithm, learning_rate=self.learning_rate,
+                             L1_reg=self.L1_regularization, L2_reg=self.L2_regularization,
+                             size_goal1=self.size_goal1, size_goal2=self.size_goal2,
+                             last_action_inputs=self.last_action_inputs)
+
     def feedforward(self, observation):
         network_input = tf.concat([self.context, observation], 1)
         if not self.last_action_inputs: # cancel out actions
@@ -236,7 +339,19 @@ class ElmanGoalNet(NeuralNet):
                 # Not sure if thatś necessary? In theory the winner take all has no gradient anyway.
                 inputs = tf.stop_gradient(inputs)
                 network_input = tf.concat([network_input, inputs], 1)
-        hidden_activation = self.dense_sigmoid(network_input, self.hidden_layer)
+
+        # Backwards compatibility
+        if not hasattr(self, 'nonlinearity'):
+            self.nonlinearity = SIGMOID
+
+        if self.nonlinearity == SIGMOID:
+            hidden_activation = self.dense_sigmoid(network_input, self.hidden_layer)
+        elif self.nonlinearity == RELU:
+            hidden_activation = self.dense_relu(network_input, self.hidden_layer)
+        elif self.nonlinearity == TANH:
+            hidden_activation = self.dense_tanh(network_input, self.hidden_layer)
+        else:
+            raise(NotImplementedError("Nonlinearity " + self.nonlinearity + " not implemented"))
 
         # Three separate softmaxes for the action and the goal
         self.action_softmax = self.dense_linear(hidden_activation, self.action_layer)
@@ -254,11 +369,16 @@ class ElmanGoalNet(NeuralNet):
         # The actual chosen action and goal
         self.save_history()
 
-    def new_episode(self):
+    def new_episode(self, initial_context=ZEROS):
         # Reinitialize the entire state of the network (anything that could affect the next episode.)
         self.clear_history()
         self.action = np.zeros((1, self.size_action), dtype=np.float32)
-        self.context = np.zeros((1, self.size_hidden), dtype=np.float32)
+        if initial_context == ZEROS:
+            self.context = np.zeros((1, self.size_hidden), dtype=np.float32)
+        elif initial_context == UNIFORM:
+            self.context = np.float32(np.random.uniform(0.01, 0.99, (1, self.size_hidden)))
+        else:
+            raise ValueError("Initial context value not implemented")
         if self.size_goal1 > 0:
             self.goal1 = np.zeros((1, self.size_goal1), dtype=np.float32)
         if self.size_goal2 > 0:

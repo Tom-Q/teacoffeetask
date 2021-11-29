@@ -8,6 +8,7 @@ import tensorflow as tf
 from timeit import default_timer as timer
 import matplotlib.pyplot as plt
 import analysis
+import copy
 
 SAVE_FOLDER='models'
 
@@ -135,9 +136,9 @@ def flatten_onelevel(list):
     return [item for sublist in list for item in sublist]
 
 
-
 def datestr():
     return '_' + datetime.today().strftime('%Y%m%d')
+
 
 # Single use progress bar
 class ProgressBar(object):
@@ -182,11 +183,29 @@ class ProgressBar(object):
                 print()
             self.update_counter += 1
 
-def save_rdm(rdm, name, labels, title):
+def save_rdm(rdm, name, labels, title, fontsize=0.6):
     np.savetxt(name+"_rdm_mat.txt", rdm, delimiter="\t", fmt='%.2e')
-    analysis.plot_rdm(rdm, labels, title + " spearman rho matrix", figsize=30, fontsize=0.6)
+    analysis.plot_rdm(rdm, labels, title + " spearman rho matrix", figsize=30, fontsize=fontsize)
     plt.savefig(name+'_rdm.png', dpi=300, bbox_inches='tight')
     plt.clf()
+
+
+# Changes both rows and columns according to the new order
+def reorder_matrix(matrix, new_order):
+    copy_mat = copy.deepcopy(matrix)
+    for i, j in enumerate(new_order):
+        copy_mat[i, :] = matrix[j, :]
+    copy_mat2 = copy.deepcopy(copy_mat)
+    for i, j in enumerate(new_order):
+        copy_mat2[:, i] = copy_mat[:, j]
+    return copy_mat2
+
+def reorder_list(list, new_order):
+    copy_list = copy.deepcopy(list)
+    for i, j in enumerate(new_order):
+        copy_list[i] = list[j]
+    return copy_list
+
 
 def weight_regularization_calculator(weight_matrix, index_in, index_out, reg_const, reg_type="step",
                                      reg_increase="linear"):

@@ -45,32 +45,25 @@ def _sequence_to_text(seq):
                 mid_goal_counter) + ' - '
             mid_goal_counter = 1
         action_line += str(idx + 1) + ':' + target.action_str + ' - '
-    line = top_goal_line + ';\n ' + mid_goal_line + ';\n ' + action_line
+    #line = top_goal_line + ';\n ' + mid_goal_line + ';\n ' + action_line
+    line = action_line
     return line
 
-
-def _print_sequences_stats(sequences):
+VERBOSE = False
+def get_sequences_stats(sequences, include_goals=True):
+    num_is_a_target = 0
     unique_output_sequences = []
-    #counters = []
-    #seqids=[]
     for output_sequence in sequences:
         unique = True
         for i, sequence in enumerate(unique_output_sequences):
             if sequence.equals(output_sequence):
                 unique = False
                 sequence.clones.append(output_sequence)
-                #counters[i]+=1
-                #seqids[i].append(output_sequence.id)
         if unique:
             unique_output_sequences.append(output_sequence)
             output_sequence.clones = []
-            #counters.append(1)
-            #seqids.append([output_sequence.id])
 
     # Sort sequences and counters and seqids, starting with most frequent:
-    #zipped = zip(counters, unique_output_sequences)
-    #unique_output_sequences = [x for _, x in sorted(zipped, reverse=True, key=lambda pair: pair[0])]
-    #counters = sorted(counters, reverse=True)
     unique_output_sequences = sorted(unique_output_sequences, reverse=True,
                                      key=lambda unique_seq: len(unique_seq.clones))
 
@@ -81,43 +74,77 @@ def _print_sequences_stats(sequences):
         # Check if it's one of the target sequences
         is_target = False
         for target_sequence in task.sequences_list:
-            if unique_output_sequences[i].equals(target_sequence):
+            if unique_output_sequences[i].equals(target_sequence, include_goals=include_goals):
                 line += "TARGET: "+target_sequence.name
                 is_target = True
+                num_is_a_target += 1+len(seq.clones)
                 break
         if not is_target:
             line += "NOT A TARGET"
         line += ", " + str(1 + len(seq.clones)) + " " + str([seq.id] + [clone.id for clone in seq.clones]) + " " + ":\n"
         line += _sequence_to_text(seq)
-        print(line)
-    print(" \n")
+        if VERBOSE:
+            print(line)
+    if VERBOSE:
+        print(" \n")
+    return num_is_a_target
 
-
-def _print_stats_per_sequence(sequence_ids, outputs_per_sequence):
+def stats_per_sequence(sequence_ids, outputs_per_sequence, goals=True):
+    total_num = 0
+    total_correct_seq = 0
+    total_subseq_error = 0
+    total_is_a_target = 0
     for i, id in enumerate(sequence_ids):
         target_sequence = task.sequences_list[id]
         # Print sequence name and number + correct sequence:
-        print("Sequence {0} ({1})\n{2}".format(id, task.sequences_list[i].name, _sequence_to_text(target_sequence)))
-        print("Erroneous sequences (actions):")
+        if VERBOSE:
+            print("Sequence {0} ({1})\n{2}".format(id, task.sequences_list[i].name, _sequence_to_text(target_sequence)))
         # For each instance, check whether it is 100% correct
         num_correct = 0
+        num_replaced = num_omitted = num_added = num_repeated = num_more_frequent = 0
         for output_sequence in outputs_per_sequence[i]:
             # Check whether the outputs match the targets.
             correct = False
-            if target_sequence.equals(output_sequence): #_sequence_equals(output_sequence, target_sequence.get_actions_one_hot()):
+            if target_sequence.equals(output_sequence, include_goals=goals):
                 correct = True
             else:
                 for alt_solution in task.sequences_list[id].alt_solutions:
-                    if target_sequence.equals(alt_solution): #_sequence_equals(output_sequence, alt_solution.get_actions_one_hot()):
+                    if alt_solution.equals(output_sequence, include_goals=goals):
                         correct = True
                         break
-            if correct:
-                num_correct += 1
-        print("{0}/{1} correct".format(num_correct, len(outputs_per_sequence[i])))
-        _print_sequences_stats(outputs_per_sequence[i])
+            #if correct:
+            #    num_correct += 1
+            #else: # incorrect
+            #    replaced, omitted, added, repeated, more_frequent = target_sequence.subsequence_analysis(output_sequence)
+            #    num_replaced += replaced
+            #    num_omitted += omitted
+            #    num_added += added
+            #    num_repeated += repeated
+            #    num_more_frequent += more_frequent
+        total_seqs = len(outputs_per_sequence[i])
+        #if VERBOSE:
+        #    print(("{0}/{1} correct.\n" +
+        #          "\tInter-subsequence errors: {2}\n"+
+        #          "\tSubsequence errors: {3}\n"+
+        #          "\tOmissions: {4}\n"+
+        #          "\tAdditions: {5}\n"+
+        #          "\tRepetitions: {6}\n"+
+        #          "\tMore frequent: {7}\n").format(num_correct, total_seqs, total_seqs - num_correct - num_replaced,
+        #                                           num_replaced, num_omitted, num_added, num_repeated, num_more_frequent))
+        #total_correct_seq += num_correct
+        #total_subseq_error += num_replaced
+        #total_num += total_seqs
 
+        if VERBOSE:
+            print("Erroneous sequences (actions):")
+        total_is_a_target += get_sequences_stats(outputs_per_sequence[i], goals)
+    #total_fullseq_errors = total_is_a_target - total_correct_seq
+    #total_error = total_num - total_correct_seq
+    #total_action_errors = total_error - total_subseq_error
+    #print("Overall totals: {0}/{1} correct. {2} errors, of which:\n Action errors:{3}\n Subsequence errors: {4}\n Full sequence errors {5}\n".format(
+    #    total_correct_seq, total_num, total_num - total_correct_seq, total_action_errors, total_subseq_error - total_fullseq_errors, total_fullseq_errors
+    #))
 
-# TODO: put that in the model. I'm only putting it here cause I can't be bothered to add this to the already trained model.
 def compute_last_step_loss(model, target, include_regularization=False):
     loss = 0
     loss += tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, model.h_action_softmax[-1])
@@ -129,9 +156,11 @@ def compute_last_step_loss(model, target, include_regularization=False):
         loss += model.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in model.all_weights])
     return loss.numpy()[0]
 
+
 def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_noise=0., num_tests=10, goals=False,
                        initialization="uniform", verbose=False,
-                       noise_per_step=True, disruption_per_step=False):
+                       noise_per_step=True, disruption_per_step=False,
+                       single_step_noise=None):
     # This runs a hundred version of the model with different random initializations
     env = environment.GoalEnv()
     outputs_per_sequence = []
@@ -157,7 +186,10 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
         print("testing sequence: "+str(seqid))
         outputs_per_noise_step = []
         num_runs = sequence.length if (noise_per_step or disruption_per_step) else 1
+
         for noise_step in range(num_runs):
+            if single_step_noise is not None:
+                noise_step = single_step_noise
             outputs = []
             for i in range(num_tests):
                 # Initialize the sequence.
@@ -178,8 +210,8 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                             model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
                             model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
                     elif initialization == 'seminormal':
-                        model.context = np.random.normal(0.01, 0.1, (1, model.size_hidden)).astype(dtype=np.float32)
-                        model.context[model.context < 0.01] = 0.  # it's impossible for a sigmoid activation to be <0
+                        model.context = np.random.normal(0.0, 0.1, (1, model.size_hidden)).astype(dtype=np.float32)
+                        model.context[model.context < 0.0] = 0.  # it's impossible for a sigmoid activation to be <0
                         model.action = np.zeros_like(sequence.targets[0].action_one_hot)
                         if goals:
                             model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
@@ -191,10 +223,11 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                     for j in range(max_length):
                         # Add noise to context layer
                         if j == noise_step:
-                            if noise_per_step:
+                            if noise_per_step or single_step_noise:
                                 model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
-                                model.goal1 += np.float32(np.random.normal(0., goal1_noise, size=(1, model.size_goal1)))
-                                model.goal2 += np.float32(np.random.normal(0., goal2_noise, size=(1, model.size_goal2)))
+                                if goals:
+                                    model.goal1 += np.float32(np.random.normal(0., goal1_noise, size=(1, model.size_goal1)))
+                                    model.goal2 += np.float32(np.random.normal(0., goal2_noise, size=(1, model.size_goal2)))
                             if disruption_per_step:
                                 # Change the state
                                 env.state = disrupt_state(env.state, initial_state=sequence.initial_state, #mode=REINITIALIZE)
@@ -203,7 +236,8 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                         model.feedforward(observation)
 
                         if j < len(sequence.targets):  # after that it's not defined.
-                            loss = compute_last_step_loss(model, sequence.targets[j], include_regularization=False)
+                            target = sequence.targets[j] if goals else sequence.targets_nogoals[j]
+                            loss = compute_last_step_loss(model, target, include_regularization=False)
                             output_sequence.losses.append(loss)
                         else:
                             output_sequence.losses.append(None)  # loss is undefined
@@ -278,7 +312,7 @@ def disrupt_state(state, initial_state, mode=HOLD_RANDOM_OBJECT):
     elif mode == REINITIALIZE:
         return initial_state
 
-def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
+def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False, goals=True, mds_sequences=None, mds_range=None):
     sequence_ids = range(len(test_data))
 
     ######################################################################################
@@ -289,41 +323,117 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
     for seq_outputs in test_data:
         outputs_no_noise_step_distinction.append(utils.flatten_onelevel(seq_outputs))
 
-    _print_stats_per_sequence(sequence_ids, outputs_no_noise_step_distinction)
+    stats_per_sequence(sequence_ids, outputs_no_noise_step_distinction, goals=goals)
     outputs_sequences_flat = utils.flatten_onelevel(outputs_no_noise_step_distinction)
-    activations = [seq.activations for seq in outputs_sequences_flat]
-    activations_flat = utils.flatten_onelevel(activations)  # all this list wrangling is ugly as hell
+
+    # Get some statistics at the sequence level:
+    #activations = [seq.activations for seq in outputs_sequences_flat]
+    #activations_flat = utils.flatten_onelevel(activations)  # all this list wrangling is ugly as hell
 
     ##################################################################################################
     # Analysis 3: Noise. How long after the noise did the first error occur? Was that step a switch? #
     ##################################################################################################
     if do_error_analysis:
-        # Need to store actions per error state as well as per sequence - done
-        # Need to detect at what step the first error is made
+        steps_noise_to_error = 0
+        num_errors = 0
+        error_on_noise = 0
+        error_on_transition = 0
+
+        num_replaced = 0
+        num_omitted = 0
+        num_added = 0
+        num_repeated = 0
+        num_more_frequent = 0
+        num_is_a_target = 0
+
+        total_trials = 0
+        total_correct_seq = 0
+
         for i, seq in enumerate(test_data):
             target_sequence = task.sequences_list[i]
-            all_targets = [target_sequence.get_actions_one_hot()]
-            for alt_solution in target_sequence.alt_solutions:
-                all_targets.append(alt_solution.get_actions_one_hot())
             for noise_step, trials in enumerate(seq):
                 first_error = [0] * target_sequence.length
                 for trial in trials:
+                    all_targets = [target_sequence] + target_sequence.alt_solutions
+                    #for alt_solution in target_sequence.alt_solutions:
+                    #    all_targets.append(alt_solution.get_actions_one_hot())
                     trial.first_error = None  # This trial is error-free
                     for j, action in enumerate(trial.get_actions_one_hot()):
-                        error = 1
+                        error = True
                         # It's only an error if it's an error for every target...
-                        # I guess this misses situations in which the two sequences are tangled together. UGH!!
-                        for target in all_targets:
-                            if np.array_equal(action, target[j]):
-                                error *= 0
+                        # BUT this misses situations in which the two sequences are somehow tangled together. UGH!!
+                        # Solution: when a target no longer matches, remove it.
+                        invalid = []
+                        for k, target in enumerate(all_targets):
+                            if np.array_equal(action, target.get_actions_one_hot()[j]):
+                                error = False
+                            else:
+                                invalid.append(k)
+
                         if error:
                             first_error[j] += 1
                             trial.first_error = j  # Add a first_error attribute to the sequence.
+                            # stats on average distance between noise and error.
+                            steps_noise_to_error += trial.first_error - noise_step
+                            num_errors += 1
+                            # Is the error precisely on the noise step?
+                            if trial.first_error == noise_step:
+                                error_on_noise += 1
+                            # Is the error on a transition step
+                            if all_targets[0].first_error_on_transition(trial):
+                                error_on_transition += 1
+
+                            replaced, omitted, added, repeated, more_frequent, is_a_target = all_targets[0].subsequence_analysis(
+                                trial)
+                            num_replaced += replaced
+                            num_omitted += omitted
+                            num_added += added
+                            num_repeated += repeated
+                            num_more_frequent += more_frequent
+                            num_is_a_target += is_a_target
+
+                        #if VERBOSE:
+                        #    print(("{0}/{1} correct.\n" +
+                        #           "\tInter-subsequence errors: {2}\n" +
+                        #           "\tSubsequence errors: {3}\n" +
+                        #           "\tOmissions: {4}\n" +
+                        #           "\tAdditions: {5}\n" +
+                        #           "\tRepetitions: {6}\n" +
+                        #           "\tMore frequent: {7}\n").format(num_correct, total_seqs,
+                        #                                            total_seqs - num_correct - num_replaced,
+                        #                                            num_replaced, num_omitted, num_added, num_repeated,
+                        #                                            num_more_frequent))
+                        #total_correct_seq += num_correct
+                        #total_subseq_error += num_replaced
+                        #total_num += total_seqs
+
+
+                    #remove the no longer valid alternatives.
+                        for inv in reversed(invalid):
+                            all_targets.pop(inv)
+                        if error:  # If we found an error we can terminate here
                             break
+                    if trial.first_error is None:
+                        total_correct_seq += 1
+                    total_trials += 1
 
                 # Need to color the step at which noise is introduced.
-                print("Target sequence " + str(i) + " (" + target_sequence.name + ") noise at step " + str(noise_step) + ": errors = " + str(first_error))
+                if VERBOSE:
+                    print("Target sequence " + str(i) + " (" + target_sequence.name + ") noise at step " + str(noise_step) + ": errors = " + str(first_error))
+        total_fullseq_errors = num_is_a_target
+        total_error = total_trials - total_correct_seq
+        total_subseq_error = num_replaced
+        total_action_errors = total_error - total_subseq_error
+        print(
+            "Overall totals: {0}/{1} correct. {2} errors, of which:\n Action errors:{3}\n Subsequence errors: {4}\n Full sequence errors {5}\n".format(
+                total_correct_seq, total_trials, total_trials - total_correct_seq, total_action_errors,
+                                              total_subseq_error - total_fullseq_errors,
+                total_fullseq_errors
+            ))
 
+        print("Overall stats:\n errors on noise step: {0}\n errors on transition: {1}\n average steps noise->error: {2}\n (num errors={3}\n)".format(
+            error_on_noise, error_on_transition, steps_noise_to_error/num_errors if num_errors>0 else 0, num_errors
+        ))
 
     ####################
     # Analysis 4: Loss #
@@ -343,6 +453,9 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
 
     prior_to_noise_loss_total = 0
     counter_prior_to_noise = 0
+
+    noise_plus1_loss_total = 0
+    counter_noise_plus1 = 0
     for sequence in outputs_sequences_flat:
         for i, loss in enumerate(sequence.losses):
             if loss is not None:
@@ -362,17 +475,25 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
         if sequence.noise_step is not None and sequence.noise_step < sequence.length:
             noise_loss_total += sequence.losses[sequence.noise_step]
             counter_noise += 1
+            if sequence.noise_step + 1 < sequence.length:
+                loss = sequence.losses[sequence.noise_step+1]
+                if loss is not None: # loss can be None if the sequence terminates early
+                    noise_plus1_loss_total += loss #sequence.losses[sequence.noise_step+1]
+                    counter_noise_plus1 += 1
     loss_avg = loss_total/counter_total
-    loss_first_error_avg = first_error_loss_total / counter_first_error
-    loss_noise_avg = noise_loss_total / counter_noise
-    loss_prior_error_avg = prior_to_error_loss_total / counter_prior_to_error
-    loss_prior_noise_avg = prior_to_noise_loss_total / counter_prior_to_noise
-    print("average loss={0}, loss on first error={1}, loss on noise={2}, loss_good_seq={3}, loss_before_noise={4}".format(loss_avg,
+    loss_first_error_avg = first_error_loss_total / counter_first_error if counter_first_error != 0 else None
+    loss_noise_avg = noise_loss_total / counter_noise if counter_noise != 0 else None
+    loss_noise_plus1_avg = noise_plus1_loss_total / counter_noise_plus1 if counter_noise_plus1 != 0 else None
+    loss_prior_error_avg = prior_to_error_loss_total / counter_prior_to_error if counter_prior_to_error != 0 else None
+    loss_prior_noise_avg = prior_to_noise_loss_total / counter_prior_to_noise if counter_prior_to_noise != 0 else None
+    print("LOSS:\n average loss={0}\n loss on first error={1}\n loss on noise={2} (+1: {3})\n loss_good_seq={4}\n loss_before_noise={5}".format(
+                                                                                loss_avg,
                                                                                 loss_first_error_avg,
                                                                                 loss_noise_avg,
+                                                                                loss_noise_plus1_avg,
                                                                                 loss_prior_error_avg,
                                                                                 loss_prior_noise_avg))
-
+    return None, None
     ###################################
     # Analysis 5: RDM, MDS, and T-SNE #
     ###################################
@@ -399,14 +520,20 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False):
         mdsy_idx = 0
         colors = mcolors.CSS4_COLORS
         for i, seq in enumerate(outputs_sequences_flat):
-            labels = []
-            for j in range(seq.length):
-                labels.append("seq "+ str(i) + ": " + str(j+1))
-            analysis.plot_mds_points(mdsy[mdsy_idx:mdsy_idx + seq.length], range(seq.length), labels=labels, style=list(colors.values())[(i)%len(colors)])
-            mdsy_idx += seq.length
-        plt.title("MDS - ")
+            length = seq.length
+            if mds_range is not None and length > mds_range:
+                length = mds_range
+            if i in mds_sequences:
+                labels = []
+                for j in range(length):
+                    labels.append("seq "+ str(i) + ": " + str(j+1))
+                analysis.plot_mds_points(mdsy[mdsy_idx:mdsy_idx + length], range(length), labels=None,#labels,
+                                         style=list(colors.values())[(i)%len(colors)])
+                mdsy_idx += length
+        plt.title("MDS")
         plt.show()
         plt.clf()
+    #return None, None
 
     #T-SNE:
     print("Generating t-SNE...")
@@ -546,7 +673,9 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
     plt.savefig(filename)
 
 
-def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_reg=0.00001, noise=0., sequences=None):
+def train(model=None, goals=False, num_iterations=50000,
+          learning_rate=0.01, L2_reg=0.00001, noise=0., sequences=None,
+          context_initialization=nn.ZEROS):
     if sequences is None:
         sequences = [0]
     env = environment.GoalEnv()
@@ -558,8 +687,9 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
                                     algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform",
                                     last_action_inputs=True)
         else:
-            model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19, size_goal1=len(sequences), size_goal2=0,
-                                    algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
+            # Not sure why I had "len sequences" for goal1??
+            model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19, size_goal1=0, #len(sequences),
+                                    size_goal2=0, algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
 
     model.L2_regularization = L2_reg
 
@@ -573,14 +703,33 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
         seqid = np.random.choice(sequences)
         sequence = task.sequences_list[seqid]
         env.reinitialize(sequence.initial_state)
-        #if np.random.random() > 0.5:
-        #    env.state.current.set_field("o_sequence"+str(seqid+1), 1)
 
         # run the network
         with tf.GradientTape() as tape:
             model.new_episode()
             # Initialize context with random/uniform values.
-            model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
+            if model.nonlinearity not in [nn.SIGMOID, nn.TANH, nn.RELU]:
+                raise(NotImplementedError("Only sigmoid, tanh, and ReLu activation functions are supported"))
+            if context_initialization == nn.UNIFORM:
+                if model.nonlinearity == nn.SIGMOID:
+                    model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
+                elif model.nonlinearity == nn.TANH:
+                    model.context = np.random.uniform(-0.99, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
+                elif model.nonlinearity == nn.RELU:
+                    # 1.0 is an arbitrary limit, but we can't be uniform over infty
+                    model.context = np.random.uniform(0.0, 1., (1, model.size_hidden)).astype(dtype=np.float32)
+            elif context_initialization == nn.NORMAL:
+                if model.nonlinearity == nn.SIGMOID or model.nonlinearity == nn.RELU:
+                    raise(Exception("Normal initialization incompatible with SIGMOID or RELU nonlinearity"))
+                model.context = np.random.normal(0.01, 0.1, (1, model.size_hidden)).astype(dtype=np.float32)
+            elif context_initialization == nn.SEMINORMAL:
+                if model.nonlinearity == nn.TANH:
+                    raise(Exception("seminormal initialization incompatible with tanh nonlinearity"))
+                model.context = np.random.normal(0.0, 0.1, (1, model.size_hidden)).astype(dtype=np.float32)
+                model.context[model.context < 0.01] = 0.  # it's impossible for a sigmoid activation to be <0
+            elif context_initialization == nn.ZEROS:
+                model.context = np.zeros((1, model.size_hidden)).astype(dtype=np.float32)
+
             # Set up the prior actions and goals to what they OUGHT to be
             model.action = np.zeros_like(sequence.targets[0].action_one_hot)
             if goals:
@@ -612,9 +761,15 @@ def train(model=None, goals=False, num_iterations=50000, learning_rate=0.01, L2_
                 goals2 = np.array(model.h_goal2_wta).reshape((-1, environment.GoalEnvData.num_goals2))
                 target_goals2 = sequence.get_goals2_one_hot()
                 ratio_goals2 = scripts.ratio_correct(goals2, target_goals2)
+                targets = sequence.targets
 
+            else: # No goals: set target goals to None
+                targets = copy.deepcopy(sequence.targets)
+                for target in targets:
+                    target.goal1_str = None
+                    target.goal2_str = None
             # Train model, record loss.
-            loss = model.train(tape, sequence.targets, goals)
+            loss = model.train(tape, targets)
 
 
         # Monitor progress using rolling averages.

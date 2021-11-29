@@ -546,63 +546,66 @@ def run_model2_deleteblanks(from_file=False):
 
 def delete_blanks(rdm):
     # List of indexes to delete. basically the pattern is : data - blank - data - blank - data - data - blank - etc.
-    # Could code that but I feel writing down the whole sequence is actually less bug prone.
-    to_delete = []
-    i=j=1
-    # Delete according to the pattern 1, 3, 5, 7, 9, 12, 14, 16, 18, 20, 23, 25 etc.
-    while i < 11*4+11*4:
-        to_delete.append(i)
-        j+=1
-        if j != 5:
-            i += 2
-        else:
-            i += 3
-            j = 0
+    # Initially coded that, but I think writing the whole sequence is actually less bug prone.
+    to_delete = [1,  3,  5,  7,  9,  # beverage task
+                 12, 14, 16, 18, 20,
+                 23, 25, 27, 29, 31,
+                 34, 36, 38, 40, 42,
+                 45, 47, 49, 51, 53,  # math task
+                 56, 58, 60, 62, 64,
+                 67, 69, 71, 73, 75,
+                 78, 80, 82, 84, 86]
     rdm = np.delete(rdm, to_delete, 0)
     rdm = np.delete(rdm, to_delete, 1)
     return rdm
 
-def average_arithmetic_sequences(rdm):
-    # reverse order
-
+def average_arithmetic_sequences(rdm, distinguish_operators=True):
     # There's 4 beverage sequences in between, with total length 4 * 6
-    len_ari = 11*17*4
-    len_bev = 11*4
-    len_mix = 11*17*4
+    ari_seqs_per_cat = 17  # number of sequences e.g. in the ++ category, i.e. 1 + 2 + 3 = 6.
+    ari_cats = 4  # number of arithmetic categories: ++,+-, -+, --
+    bev_seqs = 4  # number of beverage sequences: tea water first, etc.
+    len_nomix_seq = 11  # number of steps in a non-mixed sequence (including blanks!)
+    len_mixed_seq = 12  #
 
-    # Mixed sequences. This needs to happen 4 times not just one
-    # seq 4
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + 3 * len_mix + 12 * 17 * 3, 12, 17)  # --
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + 3 * len_mix + 12 * 17 * 2, 12, 17)  # -+
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + 3 * len_mix + 12 * 17, 12, 17)  # +-
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + 3 * len_mix, 12, 17)  # ++
+    # These are the lengths BEFORE all these averages and other corrections are applied; on the RAW rdm
+    len_ari = len_nomix_seq * ari_cats * ari_seqs_per_cat  #
+    len_bev = len_nomix_seq * bev_seqs  # 44 (=24+ 20 blank)
 
-    # seq 3
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + 2 * len_mix + 12 * 17 * 3, 12, 17)  # --
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + 2 * len_mix + 12 * 17 * 2, 12, 17)  # -+
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + 2 * len_mix + 12 * 17, 12, 17)  # +-
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + 2 * len_mix, 12, 17)  # ++
+    # must start from the end of the RDM, otherwise the indexes will change all the time.
+    if distinguish_operators:
+        # Mixed sequences.
+        for i in range(3, -1, -1):   # 3,2,1, 0: corresponding to the beverage sequences starting from the end
+            for j in range(3, -1, -1): # corresponding to the arithmetic sequences starting from the end
+                rdm = average_onetype_ari_sequence(rdm,
+                                                   len_bev + len_ari +  # the non-mixed seqs
+                                                   len_mixed_seq * ari_cats * ari_seqs_per_cat * i +  # total length of fully processed mixed sequences for previous beverages
+                                                   len_mixed_seq * ari_seqs_per_cat * j,  # total length of fully processed mixed sequences for the current beverage
+                                                   len_mixed_seq,
+                                                   ari_seqs_per_cat)
 
-    # seq 2
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + len_mix + 12 * 17 * 3, 12, 17)  # --
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + len_mix + 12 * 17 * 2, 12, 17)  # -+
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + len_mix + 12 * 17, 12, 17)  # +-
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + len_mix, 12, 17)  # ++
+        # Num only sequences: indexes 0 to 12x17x4
+        # Clean up all sequences one by one, by averaging arithmetic sequence distances
+        rdm = average_onetype_ari_sequence(rdm, len_bev + 11 * 17 * 3, 11, 17) # --
+        rdm = average_onetype_ari_sequence(rdm, len_bev + 11 * 17 * 2, 11, 17) # -+
+        rdm = average_onetype_ari_sequence(rdm, len_bev + 11 * 17, 11, 17) # +-
+        rdm = average_onetype_ari_sequence(rdm, len_bev, 11, 17) # ++
 
-    # seq 1
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + 12 * 17 * 3, 12, 17)  # --
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + 12 * 17 * 2, 12, 17)  # -+
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev + 12 * 17, 12, 17)  # +-
-    rdm = average_onetype_ari_sequence(rdm, len_ari + len_bev, 12, 17)  # ++
+    else: # average all sequences in the same way.
+        for i in range(3, -1, -1):
+            rdm = average_onetype_ari_sequence(rdm,
+                                               len_bev + len_ari +  # the non-mixed seqs
+                                               len_mixed_seq * ari_cats * ari_seqs_per_cat * i,  # total length of fully processed mixed sequences for previous beverages
+                                               len_mixed_seq,
+                                               ari_seqs_per_cat * ari_cats)
 
-    # Num only sequences: indexes 0 to 12x17x4
-    # Clean up all sequences one by one, by averaging arithmetic sequence distances
-    rdm = average_onetype_ari_sequence(rdm, len_bev + 11 * 17 * 3, 11, 17) # --
-    rdm = average_onetype_ari_sequence(rdm, len_bev + 11 * 17 * 2, 11, 17) # -+
-    rdm = average_onetype_ari_sequence(rdm, len_bev + 11 * 17, 11, 17) # +-
-    rdm = average_onetype_ari_sequence(rdm, len_bev, 11, 17) # ++
-
+        # Num only sequences: indexes 0 to 12x17x4
+        # Clean up all sequences one by one, by averaging arithmetic sequence distances
+        rdm = average_onetype_ari_sequence(rdm, len_bev + 11 * 17 * 3, 11, 17) # --
+        rdm = average_onetype_ari_sequence(rdm, len_bev + 11 * 17 * 2, 11, 17) # -+
+        rdm = average_onetype_ari_sequence(rdm, len_bev + 11 * 17, 11, 17) # +-
+        rdm = average_onetype_ari_sequence(rdm, len_bev, 11, 17) # ++
     return rdm
+
 
 # This cleans up the massive RDM by averaging the rows and columns corresponding to a single category
 # (e.g. all the "++" sequences).
@@ -610,8 +613,10 @@ def average_arithmetic_sequences(rdm):
 def average_onetype_ari_sequence(rdm, idx0, seq_size, num_seqs):
     """
     @param rdm: The RDM
-    @param categories_indexes: list of list of list of indexes.
-    @return: an RDM that has been clearned up
+    @param idx0: index of the first element of the first sequence to clean up
+    @param seq_size: length of the sequence
+    @param num_seqs: number of consecutive sequences
+    @return: an RDM that has been cleaned up
     """
     # Add up columns
     for i in range(1, num_seqs):
@@ -619,7 +624,7 @@ def average_onetype_ari_sequence(rdm, idx0, seq_size, num_seqs):
     # Add up rows
     for i in range(1, num_seqs):
         rdm[:, idx0:idx0+seq_size] += rdm[:, idx0+i*seq_size: idx0+(i+1)*seq_size]
-    # Delete the excess rows and columns
+    # Delete the excess rows and columns. All but 1 sequence.
     rdm = np.delete(rdm, range(idx0+seq_size, idx0+num_seqs*seq_size), 0)
     rdm = np.delete(rdm, range(idx0+seq_size, idx0+num_seqs*seq_size), 1)
     # Do the averaging on rows and columns

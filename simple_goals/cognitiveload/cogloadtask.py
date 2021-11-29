@@ -9,21 +9,32 @@ import matplotlib.pyplot as plt
 
 # This controls whether I produce fast RDMs (technically incorrect but very quick to do) or slow
 # RDMs (technically correct but takes 90 minutes)
-FAST_RDM=1
+FAST_RDM = True
+# Whether the generated RDMs separates arithmetic sequences as ++, +-, -+, etc. or not.
+COLLAPSE_ARITHMETIC_SEQS = True
 
 # Whether to train on ARI, BEV, or BOTH
 ONLY_ARI = 0
 ONLY_BEV = 1
 BOTH = 2
 
+output_symbols = ['-9', '-8', '-7', '-6', '-5', '-4', '-3', '-2', '-1',
+           '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+           '10', '11', '12', '13', '14', '15', '16','17', '18', '19',
+           "tea", "coffee", "water", "stir", "sugar", "cream", "serve_tea", "serve_coffee"]
+
+input_symbols = ['-9', '-8', '-7', '-6', '-5', '-4', '-3', '-2', '-1',
+                 '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                 '+', '-', '=',
+                 "init", "tea", "coffee", "water", "stir", "sugar", "cream"]
 
 symbols = ['-9', '-8', '-7', '-6', '-5', '-4', '-3', '-2', '-1',
            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-           '10', '11', '12', '13', '14', '15', '16','17', '18', '19',
+           '10', '11', '12', '13', '14', '15', '16', '17', '18', '19',
            '+', '-', '=',
            "init", "tea", "coffee", "water", "stir", "sugar", "cream", "serve_tea", "serve_coffee"]
 
-goal_symbols = ["math", "tea", "coffee"]
+goal_symbols = ["math", "beverage"]#, "tea", "coffee"]
 
 beverage_seqs = [
     ["init", "tea", "water", "stir", "sugar", "stir", "serve_tea"],
@@ -108,6 +119,11 @@ for b in beverage_seqs:
     for a in label_seqs_ari:
         label_seqs_all.append([b[1], a[0], b[2], a[1], b[3], a[2], b[4], a[3], b[5], a[4], b[6], a[5]])
 
+label_seqs_ari_noblanks_collapsed = [['num1', '+/-', 'num2', '+/-', 'num3', '=']]
+label_seqs_all_collapsed = []
+for b in beverage_seqs:
+    for a in label_seqs_ari_noblanks_collapsed:
+        label_seqs_all_collapsed.append([b[1], a[0], b[2], a[1], b[3], a[2], b[4], a[3], b[5], a[4], b[6], a[5]])
 
 
 # Model 2: we're training only one network. This network is trained to perform all 3 tasks.
@@ -126,6 +142,8 @@ label_seqs_ari_noblanks = [['num1', '+', 'num2', '+', 'num3', '='],
                     ['num1', '+','num2','-', 'num3', '='],
                     ['num1', '-', 'num2', '+',  'num3',  '='],
                     ['num1',  '-',  'num2', '-',  'num3',  '=']]
+
+
 label_seqs_bev_noblanks = [
     ["tea", "water", "stir", "sugar", "stir", "serve_tea"],
     ["tea", "sugar", "stir", "water", "stir", "serve_tea"],
@@ -141,11 +159,12 @@ class Target(object):
         self.goal1_one_hot = goal1
         self.goal2_one_hot = None
 
-goal_target_bev = [
+# 2 goals option
+goal_target_bev = [["beverage"]*6]* 4
+"""[
     ["tea"]*6,
     ["tea"]*6,
     ["coffee"]*6,
     ["coffee"]*6
-]
-
+]"""
 goal_target_ari = ["math"]*6

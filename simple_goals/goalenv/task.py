@@ -61,29 +61,126 @@ class Target(object):
 
 
 class BehaviorSequence(object):
-    def __init__(self, initial_state, targets=None, name="no-name"):
-        self.additional_info = None
+    def __init__(self, initial_state, targets=None, name="no-name", frequency=None):
+        self.additional_info = None #placeholder for any analysis I wanna add to this
         self.targets = targets
+        self.targets_nogoals = []
         self._initial_state = copy.deepcopy(initial_state)  # just as a safety...
+        self.frequency = frequency  # used only for subsequences
         if targets is not None:
             self._actions_list = [t.action_one_hot for t in self.targets]
             self._goals1_list = [t.goal1_one_hot for t in self.targets]
             self._goals2_list = [t.goal2_one_hot for t in self.targets]
             self.length = len(self._actions_list)
+            # A copy of targets without goals
+            for target in targets:
+                nogoal_target = copy.deepcopy(target)
+                nogoal_target.goal1_str = None
+                nogoal_target.goal2_str = None
+                self.targets_nogoals.append(nogoal_target)
         else:
             self.length = 0
         self.alt_solutions = []
         self.name = name
 
-    def equals(self, behavior_sequence):
+    def equals(self, behavior_sequence, include_goals=True):
         if len(self.targets) != len(behavior_sequence.targets):
             return False
+
         for i in range(len(self.targets)):
-            if self.targets[i].action_str != behavior_sequence.targets[i].action_str or\
-               self.targets[i].goal1_str != behavior_sequence.targets[i].goal1_str or\
-               self.targets[i].goal2_str != behavior_sequence.targets[i].goal2_str:
+            if self.targets[i].action_str != behavior_sequence.targets[i].action_str:
                 return False
+        # We consider sequences equals even if the goals differ.
+        #    if include_goals and (self.targets[i].goal1_str != behavior_sequence.targets[i].goal1_str or
+        #       self.targets[i].goal2_str != behavior_sequence.targets[i].goal2_str):
+        #        return False
         return True
+
+    def first_error_on_transition(self, behavior_sequence):
+        # Check if errors occurred on a transition, meaning when the goal changed in the behavior sequence
+        for i in range(len(self.targets)):
+            if self.targets[i].action_str != behavior_sequence.targets[i].action_str:
+                if i == 0 or self.targets[i-1].goal2_str != self.targets[i].goal2_str:
+                    return True
+                else:
+                    return False
+        return False
+
+    def subsequence_analysis(self, behavior_sequence):
+        omitted = added = repeated = more_frequent = False
+        replaced, original, replacement, index = self._subsequence_replaced(behavior_sequence)
+        if replaced:
+            # a sequence is omitted if the replacement matches the next subsequence
+            # identify next subsequence
+            next_subsequence = self.identify_subseq(index + len(original.targets))
+            # verify that the next subsequence and the replacement are identical
+            omitted = next_subsequence is not None and next_subsequence.equals(replacement)
+            if not omitted:
+                next_subsequence = behavior_sequence.identify_subseq(index + len(replacement.targets))
+                if next_subsequence is not None:
+                    added = original.equals(next_subsequence)
+                    if added:
+                        prev_subsequence = self.identify_subseq(index - len(original.targets))
+                        if prev_subsequence is not None:
+                            repeated = prev_subsequence.equals(replacement)
+            more_frequent = original.frequency < replacement.frequency
+
+        is_a_target = False
+        for sequence in sequences_list:
+            if sequence.equals(behavior_sequence, include_goals=False):
+                is_a_target = True
+        return replaced, omitted, added, repeated, more_frequent, is_a_target
+
+    def _subsequence_replaced(self, behavior_sequence):
+        # Check for any complete subsequence swaps. So we have a target sequence (self), an actual sequence (behavior_sequence)
+        # and a whole range of potential subsequences that might have gotten swapped with. We're going to look for the first error,
+        # And then check if that error corresponds to any other subsequence. This can also be an omission or a repeat.
+        first_error_idx = None
+        for i in range(len(self.targets)):
+            if self.targets[i].action_str != behavior_sequence.targets[i].action_str:
+                first_error_idx = i
+                break
+        if first_error_idx is None:
+            return False, None, None, None
+
+        # Decompose the sequence according to goals. So we look for goal transitions. One exception, 2 sugars.
+        # We tackle that separately.
+        prev_target_goal = None
+        prev_goal_idx = None
+        for i in range(0, first_error_idx + 1):
+            if self.targets[i].goal2_str != prev_target_goal:
+                prev_goal_idx = i
+                prev_target_goal = self.targets[i].goal2_str
+        if prev_target_goal == "g_2_add_sugar" and first_error_idx - prev_goal_idx >= 4:
+            prev_goal_idx += 4
+
+        for subsequence in subsequences:
+            identical = True
+            for j, target in enumerate(subsequence.targets):
+                if target.action_str != behavior_sequence.targets[prev_goal_idx+j].action_str:
+                    identical = False
+                    break
+            if identical:
+                target_ss = self.identify_subseq(prev_goal_idx)
+                if target_ss is None:
+                    raise Exception("Couldn't identify the target subsequence - this shouldn't be possible.")
+                replacement_ss = subsequence
+                return True, target_ss, replacement_ss, prev_goal_idx
+        return False, None, None, None
+
+    def identify_subseq(self, idx):
+        for subsequence in subsequences:
+            if len(self.targets[idx:]) < len(subsequence.targets):
+                continue  # can't be this one, there's too few actions left.
+            identical = True
+            for i in range(len(subsequence.targets)):
+                if subsequence.targets[i].action_str != self.targets[idx+i].action_str:
+                    identical = False
+                    break
+            if identical:
+                return subsequence
+        return None
+
 
     @property
     def initial_state(self):
@@ -100,14 +197,17 @@ class BehaviorSequence(object):
         self._goals1_list = copy.deepcopy(list_goals1)
         self._goals2_list = copy.deepcopy(list_goals2)
 
-        if len(list_actions) != len(list_goals1) or len(list_actions)!= len(list_goals2):
+        if len(list_actions) != len(list_goals1) or len(list_actions) != len(list_goals2):
             raise(ValueError("All target lists must have the same length"))
 
         self.targets = []
+        self.targets_nogoals = []
         for i in range(len(list_actions)):
             self.targets.append(Target(utils.onehot_to_str(list_actions[i], env.GoalEnvData.actions_list),
                                        utils.onehot_to_str(list_goals1[i], env.GoalEnvData.goals1_list),
                                        utils.onehot_to_str(list_goals2[i], env.GoalEnvData.goals2_list)))
+            self.targets_nogoals.append(Target(utils.onehot_to_str(list_actions[i], env.GoalEnvData.actions_list),
+                                               None, None))
 
         self.length = len(self._actions_list)
 
@@ -144,6 +244,130 @@ def _make_targets(list_topgoals, list_midgoals, list_actions):
     return [Target(goal1=topgoal, goal2=midgoal, action=action)
             for topgoal, midgoal, action in zip(list_topgoals, list_midgoals, list_actions)]
 
+
+####################
+#   SUBSEQUENCES   #
+####################
+
+# add grounds
+actions_grounds = ["a_fixate_cupboard", "a_open", "a_fixate_coffee_jar", "a_take", "a_open", "a_fixate_mug",
+                   "a_add_to_mug", "a_fixate_coffee_jar", "a_close", "a_fixate_cupboard", "a_put_down"]
+topgoals_grounds = [None] * len(actions_grounds)
+midgoals_grounds = ["g_2_add_grounds"]  * len(actions_grounds)
+targets_grounds = _make_targets(topgoals_grounds, midgoals_grounds, actions_grounds)
+subsequence_grounds = BehaviorSequence(None, targets_grounds, name="ss_add_grounds", frequency=13)
+
+# infuse tea
+actions_teabag = ["a_fixate_cupboard", "a_open", "a_fixate_teabags", "a_take", "a_fixate_mug", "a_add_to_mug"]
+topgoals_teabag = [None] * len(actions_teabag)
+midgoals_teabag = ["g_2_infuse_tea"]  * len(actions_teabag)
+targets_teabag = _make_targets(topgoals_teabag, midgoals_teabag, actions_teabag)
+subsequence_teabag = BehaviorSequence(None, targets_teabag, name="ss_infuse_tea", frequency=8)
+
+# clean up 1
+actions_cleanup1 = ["a_close"]
+topgoals_cleanup1 = [None] * len(actions_cleanup1)
+midgoals_cleanup1 = ["g_2_clean_up"] * len(actions_cleanup1)
+targets_cleanup1 = _make_targets(topgoals_cleanup1, midgoals_cleanup1, actions_cleanup1)
+subsequence_cleanup1 = BehaviorSequence(None, targets_cleanup1, name="ss_cleanup1", frequency=21)
+
+# clean up 2
+actions_cleanup2 = ["a_fixate_cupboard", "a_close"]
+topgoals_cleanup2 = [None] * len(actions_cleanup2)
+midgoals_cleanup2 = ["g_2_clean_up"] * len(actions_cleanup2)
+targets_cleanup2 = _make_targets(topgoals_cleanup2, midgoals_cleanup2, actions_cleanup2)
+subsequence_cleanup2 = BehaviorSequence(None, targets_cleanup2, name="ss_cleanup2", frequency=21)
+
+# milk1
+actions_milk1 = ["a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close"]
+topgoals_milk1 = [None] * len(actions_milk1)
+midgoals_milk1 = ["g_2_clean_up"] * len(actions_milk1)
+targets_milk1 = _make_targets(topgoals_milk1, midgoals_milk1, actions_milk1)
+subsequence_milk1 = BehaviorSequence(None, targets_milk1, name="ss_milk1", frequency=10)
+
+# milk2
+actions_milk2 = ["a_fixate_fridge", "a_open", "a_fixate_milk", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close"]
+topgoals_milk2 = [None] * len(actions_milk2)
+midgoals_milk2 = ["g_2_clean_up"] * len(actions_milk2)
+targets_milk2 = _make_targets(topgoals_milk2, midgoals_milk2, actions_milk2)
+subsequence_milk2 = BehaviorSequence(None, targets_milk2, name="ss_milk2", frequency=10)
+
+# cream 1
+actions_cream1 = ["a_fixate_fridge", "a_open"]
+topgoals_cream1 = [None] * len(actions_cream1)
+midgoals_cream1 = ["g_2_add_cream"] * len(actions_cream1)
+targets_cream1 = _make_targets(topgoals_cream1, midgoals_cream1, actions_cream1)
+subsequence_cream1 = BehaviorSequence(None, targets_cream1, name="ss_cream1", frequency=10)
+
+# cream 2
+actions_cream2 = ["a_fixate_fridge", "a_open", "a_fixate_cream", "a_take", "a_fixate_mug", "a_add_to_mug",
+    "a_fixate_fridge", "a_put_down", "a_close"]
+topgoals_cream2 = [None] * len(actions_cream2)
+midgoals_cream2 = ["g_2_add_cream"] * len(actions_cream2)
+targets_cream2 = _make_targets(topgoals_cream2, midgoals_cream2, actions_cream2)
+subsequence_cream2 = BehaviorSequence(None, targets_cream2, name="ss_cream2", frequency=10)
+
+# sugar
+actions_sugar = ["a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug"]
+topgoals_sugar = [None] * len(actions_sugar)
+midgoals_sugar = ["g_2_add_sugar"] * len(actions_sugar)
+targets_sugar = _make_targets(topgoals_sugar, midgoals_sugar, actions_sugar)
+subsequence_sugar = BehaviorSequence(None, targets_sugar, name="ss_sugar", frequency=22)
+
+# stir
+actions_stir = ["a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down"]
+topgoals_stir = [None] * len(actions_stir)
+midgoals_stir = ["g_2_stir"] * len(actions_stir)
+targets_stir = _make_targets(topgoals_stir, midgoals_stir, actions_stir)
+subsequence_stir = BehaviorSequence(None, targets_stir, name="ss_stir", frequency=52)
+
+# Make special sequences that combine subsequence + stir
+# sugar + stir
+"""
+actions_sugarstir = ["a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down"]
+topgoals_sugarstir = [None] * len(actions_sugarstir)
+midgoals_sugarstir = ["g_2_add_sugar"] * len(actions_sugar) + ["g_2_stir"] * len(actions_stir)
+targets_sugarstir = _make_targets(topgoals_sugarstir, midgoals_sugarstir, actions_sugarstir)
+subsequence_sugarstir = BehaviorSequence(None, targets_sugarstir, name="ss_sugarstir", frequency=XX)
+
+# 2sugar + stir
+actions_2sugarstir = ["a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_sugar_box", "a_take", "a_fixate_mug", "a_add_to_mug", "a_fixate_spoon", "a_take", "a_fixate_mug", "a_stir", "a_fixate_table", "a_put_down"]
+topgoals_2sugarstir = [None] * len(actions_2sugarstir)
+midgoals_2sugarstir = ["g_2_add_sugar"] * len(actions_sugar) * 2 + ["g_2_stir"] * len(actions_stir)
+targets_2sugarstir = _make_targets(topgoals_2sugarstir, midgoals_2sugarstir, actions_2sugarstir)
+subsequence_2sugarstir = BehaviorSequence(None, targets_2sugarstir, name="ss_2sugarstir", frequency=XX)
+"""
+
+# drink tea
+actions_drinktea = ["a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_good_tea"]
+topgoals_drinktea = [None] * len(actions_drinktea)
+midgoals_drinktea = ["g_2_drink_tea"] * len(actions_drinktea)
+targets_drinktea = _make_targets(topgoals_drinktea, midgoals_drinktea, actions_drinktea)
+subsequence_drinktea = BehaviorSequence(None, targets_drinktea, name="ss_drinktea", frequency=8)
+
+# drink coffee
+actions_drinkcoffee = ["a_fixate_mug", "a_take", "a_sip", "a_fixate_table", "a_put_down", "a_say_good_coffee"]
+topgoals_drinkcoffee = [None] * len(actions_drinkcoffee)
+midgoals_drinkcoffee = ["g_2_drink_coffee"] * len(actions_drinkcoffee)
+targets_drinkcoffee = _make_targets(topgoals_drinkcoffee, midgoals_drinkcoffee, actions_drinkcoffee)
+subsequence_drinkcoffee = BehaviorSequence(None, targets_drinkcoffee, name="ss_drinkcoffee", frequency=13)
+
+subsequences = [
+    subsequence_cream1,
+    subsequence_cream2,
+    subsequence_milk1,
+    subsequence_milk2,
+    subsequence_stir,
+    subsequence_sugar,
+    subsequence_cleanup1,
+    subsequence_cleanup2,
+    subsequence_drinkcoffee,
+    subsequence_drinktea,
+    subsequence_grounds,
+    subsequence_teabag
+]
 
 #                                            ####################                                                      #
 # -------------------------------------------- COFFEE SEQUENCES -------------------------------------------------------#
