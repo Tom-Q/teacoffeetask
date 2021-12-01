@@ -109,6 +109,9 @@ mod3.FAST_RDM = True
 #hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00002)
 #mod3.run_model3_multiple(from_file="model3_test_gradient_2goals00002", num_networks=2, name="model3_test_gradient_2goals00002_test2", hrp=hrp)
 
+# model3_ADAMRELU are best normal ones.
+# "model3_ADAMRELU_gradient" is a first try for gradient ones. Didn't work.
+# "model3_ADAMRELU_gradient0_0001" is a second try for gradient ones.
 # Best perf so far: ADAM, RELU, HE, 0.0003, 300,000  (1, 1, .99, .83, .97, .99, .99, .97, .76, 1.0.
 # With no reg: (1., .93, .99, .99, .95, .)
 hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.0001)
@@ -120,31 +123,32 @@ nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
                             size_observation=None,
                             size_hidden=100,
                             L1_reg=0, L2_reg=0.0001)
-
-print("\n\n\nLEARNING RATE = 0.002, 100 HIDDEN UNITS, HRP STR = 0.00001")
-
-hrp.reg_strength = 0.00003
-mod3.run_model3_multiple(num_networks=5, name="model3_ADAMRELU_gradient",
+mod3.run_model3_multiple(num_networks=2, from_file=None, #"model3_ADAMRELU_gradient0_0001",
+                         name="model3_ADAMRELU_gradient0_0001",
                          hrp=hrp,
                          nnparams=nnparams,
                          iterations=150000,
                          early_stopping_from=100000)
+sys.exit()
+
+#3 and 6 need extra training.
+updated_models = []
+for i in range(20):
+    print(i)
+    model = utils.load_object("model3_ADAMRELU_gradient", i)
+    hidden_activation, accuracy_totals, accuracy_fullseqs = mod3.test_network_ari(model)
+    print(accuracy_fullseqs)
+
 
 print("\n\n\nLEARNING RATE = 0.002, 100 HIDDEN UNITS, HRP STR = 0.000001")
 hrp.reg_strength = 0.00001
-mod3.run_model3_multiple(num_networks=5, name="model3_ADAMRELU_gradient",
+mod3.run_model3_multiple(num_networks=20, from_file="model3_ADAMRELU_gradient",
+                         name="model3_ADAMRELU_gradient",
                          hrp=hrp,
                          nnparams=nnparams,
                          iterations=150000,
                          early_stopping_from=100000)
 
-print("\n\n\nLEARNING RATE = 0.002, 100 HIDDEN UNITS, HRP STR = 0.0001")
-hrp.reg_strength = 0.0001
-mod3.run_model3_multiple(num_networks=5, name="model3_ADAMRELU_gradient",
-                         hrp=hrp,
-                         nnparams=nnparams,
-                         iterations=150000,
-                         early_stopping_from=100000)
 
 sys.exit()
 

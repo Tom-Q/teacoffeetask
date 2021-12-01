@@ -73,8 +73,10 @@ def generate_rdm_all_gradient(nnet, name, rdm_type=analysis.SPEARMAN, save_files
         hidden_left = []
         hidden_right = []
         for vector in hidden:
-            hidden_left.append(vector[:len(vector)//2])
-            hidden_right.append(vector[len(vector)//2:])
+            #hidden_left.append(vector[:len(vector)//2])
+            #hidden_right.append(vector[len(vector)//2:])
+            hidden_left.append(vector[:10])
+            hidden_right.append(vector[90:])
 
         # Now cut the hidden layer in two.
         rdmatrix_left = analysis.rdm_spearman(hidden_left)
@@ -201,9 +203,14 @@ def train_all(nnet, num_training_steps = 1000000, hrp=None, early_stopping_from 
             loss = loss.numpy()[0]
             avg_loss = 0.999 * avg_loss + 0.001 * loss
             if i % 10000 == 0 or i > (num_training_steps - 20):
-                hidden_activation, accuracy_totals, accuracy_fullseqs = test_network_all(nnet)
-                print('{0}, avgloss={1}'.format(i, avg_loss))
-                if early_stopping_from is not None and i >= early_stopping_from and accuracy_fullseqs == .25:
+                _, accuracy_both, _ = test_network_all(nnet)
+                _, accuracy_ari, _ = test_network_ari(nnet)
+                _, accuracy_bev, _ = test_network_bev(nnet)
+                print('{0}, avgloss={1}, accuracies={2}, {3}, {4}'.format(i, avg_loss, accuracy_both, accuracy_ari, accuracy_bev))
+                if early_stopping_from is not None and i >= early_stopping_from and \
+                    np.all(accuracy_both == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and\
+                    np.all(accuracy_ari == [1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and \
+                    np.all(accuracy_bev == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1.]):
                     break  # We stop early cause we're already optimal.
             if i % 50000 == 0:
                 hidden_activation, accuracy_totals, accuracy_fullseqs = test_network_all(nnet)
@@ -266,6 +273,11 @@ def run_model3_multiple(nnparams, from_file=None, num_networks=1, name="model3",
                 sum_rdm_right += rdmright
         average_rdm_left = sum_rdm_left/num_networks
         average_rdm_right = sum_rdm_right/num_networks
+
+        # reorder labels
+        new_order = new_order_combined(48, 48)
+        labels = utils.reorder_list(labels, new_order)
+
         utils.save_rdm(average_rdm_left, name+"left", labels,  title="RDM training combined: left (goals)", fontsize=0.6 if not task.COLLAPSE_ARITHMETIC_SEQS else 1.)
         utils.save_rdm(average_rdm_right, name+"right", labels,  title="RDM training combined: right (actions)", fontsize=0.6 if not task.COLLAPSE_ARITHMETIC_SEQS else 1.)
         analysis.make_mds(average_rdm_left, name+"left", labels=labels, title="MDS training combined: left (goals)", pattern=pattern)
