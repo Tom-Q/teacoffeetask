@@ -135,23 +135,19 @@ class BehaviorSequence(object):
         # Check for any complete subsequence swaps. So we have a target sequence (self), an actual sequence (behavior_sequence)
         # and a whole range of potential subsequences that might have gotten swapped with. We're going to look for the first error,
         # And then check if that error corresponds to any other subsequence. This can also be an omission or a repeat.
-        first_error_idx = None
-        for i in range(len(self.targets)):
-            if self.targets[i].action_str != behavior_sequence.targets[i].action_str:
-                first_error_idx = i
-                break
-        if first_error_idx is None:
-            return False, None, None, None
+        if not hasattr(behavior_sequence, 'first_error') or\
+                (hasattr(behavior_sequence, 'first_error') and behavior_sequence.first_error is None):
+            raise Exception("This should not happen. first error should have been set by this point.")
 
         # Decompose the sequence according to goals. So we look for goal transitions. One exception, 2 sugars.
         # We tackle that separately.
         prev_target_goal = None
         prev_goal_idx = None
-        for i in range(0, first_error_idx + 1):
+        for i in range(0, behavior_sequence.first_error + 1):
             if self.targets[i].goal2_str != prev_target_goal:
                 prev_goal_idx = i
                 prev_target_goal = self.targets[i].goal2_str
-        if prev_target_goal == "g_2_add_sugar" and first_error_idx - prev_goal_idx >= 4:
+        if prev_target_goal == "g_2_add_sugar" and behavior_sequence.first_error - prev_goal_idx >= 4:
             prev_goal_idx += 4
 
         for subsequence in subsequences:

@@ -49,6 +49,7 @@ def _sequence_to_text(seq):
     line = action_line
     return line
 
+
 VERBOSE = False
 def get_sequences_stats(sequences, include_goals=True):
     num_is_a_target = 0
@@ -88,6 +89,7 @@ def get_sequences_stats(sequences, include_goals=True):
     if VERBOSE:
         print(" \n")
     return num_is_a_target
+
 
 def stats_per_sequence(sequence_ids, outputs_per_sequence, goals=True):
     total_num = 0
@@ -145,6 +147,7 @@ def stats_per_sequence(sequence_ids, outputs_per_sequence, goals=True):
     #    total_correct_seq, total_num, total_num - total_correct_seq, total_action_errors, total_subseq_error - total_fullseq_errors, total_fullseq_errors
     #))
 
+
 def compute_last_step_loss(model, target, include_regularization=False):
     loss = 0
     loss += tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, model.h_action_softmax[-1])
@@ -177,13 +180,10 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
             max_length = sequence.length
     max_length += 10  # add a bit of a margin for additions
 
-    # Set up model learning rate and L2 regularization to compute loss.
-    model.learning_rate = 0.
-    model.L2_regularization = 0.
-
     seq_counter = 0
     for seqid, sequence in enumerate(sequences):
-        print("testing sequence: "+str(seqid))
+        if verbose:
+            print("testing sequence: "+str(seqid))
         outputs_per_noise_step = []
         num_runs = sequence.length if (noise_per_step or disruption_per_step) else 1
 
@@ -270,6 +270,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
         outputs_per_sequence.append(outputs_per_noise_step)
     return outputs_per_sequence
 
+
 HOLD_RANDOM_OBJECT = 1
 REINITIALIZE = 2
 def disrupt_state(state, initial_state, mode=HOLD_RANDOM_OBJECT):
@@ -312,11 +313,12 @@ def disrupt_state(state, initial_state, mode=HOLD_RANDOM_OBJECT):
     elif mode == REINITIALIZE:
         return initial_state
 
-def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False, goals=True, mds_sequences=None, mds_range=None):
+
+def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, mds_range=None):
     sequence_ids = range(len(test_data))
 
     ######################################################################################
-    # Analysis 2: for each sequence, how many were right/wrong and print wrong sequences #
+    # Analysis 1: for each sequence, how many were right/wrong and print wrong sequences #
     ######################################################################################
     #Flatten the last level of outputs per sequence
     outputs_no_noise_step_distinction = []
@@ -326,117 +328,99 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False, goals=Tr
     stats_per_sequence(sequence_ids, outputs_no_noise_step_distinction, goals=goals)
     outputs_sequences_flat = utils.flatten_onelevel(outputs_no_noise_step_distinction)
 
-    # Get some statistics at the sequence level:
-    #activations = [seq.activations for seq in outputs_sequences_flat]
-    #activations_flat = utils.flatten_onelevel(activations)  # all this list wrangling is ugly as hell
-
     ##################################################################################################
-    # Analysis 3: Noise. How long after the noise did the first error occur? Was that step a switch? #
+    # Analysis 2: Noise. How long after the noise did the first error occur? Was that step a switch? #
     ##################################################################################################
-    if do_error_analysis:
-        steps_noise_to_error = 0
-        num_errors = 0
-        error_on_noise = 0
-        error_on_transition = 0
+    steps_noise_to_error = 0
+    num_errors = 0
+    error_on_noise = 0
+    error_on_transition = 0
 
-        num_replaced = 0
-        num_omitted = 0
-        num_added = 0
-        num_repeated = 0
-        num_more_frequent = 0
-        num_is_a_target = 0
+    num_replaced = 0
+    num_omitted = 0
+    num_added = 0
+    num_repeated = 0
+    num_more_frequent = 0
+    num_is_a_target = 0
 
-        total_trials = 0
-        total_correct_seq = 0
+    total_trials = 0
+    total_correct_seq = 0
 
-        for i, seq in enumerate(test_data):
-            target_sequence = task.sequences_list[i]
-            for noise_step, trials in enumerate(seq):
-                first_error = [0] * target_sequence.length
-                for trial in trials:
-                    all_targets = [target_sequence] + target_sequence.alt_solutions
-                    #for alt_solution in target_sequence.alt_solutions:
-                    #    all_targets.append(alt_solution.get_actions_one_hot())
-                    trial.first_error = None  # This trial is error-free
-                    for j, action in enumerate(trial.get_actions_one_hot()):
-                        error = True
-                        # It's only an error if it's an error for every target...
-                        # BUT this misses situations in which the two sequences are somehow tangled together. UGH!!
-                        # Solution: when a target no longer matches, remove it.
-                        invalid = []
-                        for k, target in enumerate(all_targets):
-                            if np.array_equal(action, target.get_actions_one_hot()[j]):
-                                error = False
-                            else:
-                                invalid.append(k)
+    for i, seq in enumerate(test_data):
+        target_sequence = task.sequences_list[i]
+        for noise_step, trials in enumerate(seq):
+            first_error = [0] * target_sequence.length
+            for trial in trials:
+                all_targets = [target_sequence] + target_sequence.alt_solutions
+                trial.first_error = None  # This trial is error-free
+                for j, action in enumerate(trial.get_actions_one_hot()):
+                    error = True
+                    # It's only an error if it's an error for every target...
+                    # BUT this misses situations in which the two sequences are somehow tangled together.
+                    # Solution: as soon as a target sequence no longer matches, remove it from the list of targets.
+                    invalid = []
+                    for k, target in enumerate(all_targets):
+                        if np.array_equal(action, target.get_actions_one_hot()[j]):
+                            error = False
+                        else:
+                            invalid.append(k)
 
-                        if error:
-                            first_error[j] += 1
-                            trial.first_error = j  # Add a first_error attribute to the sequence.
-                            # stats on average distance between noise and error.
-                            steps_noise_to_error += trial.first_error - noise_step
-                            num_errors += 1
-                            # Is the error precisely on the noise step?
-                            if trial.first_error == noise_step:
-                                error_on_noise += 1
-                            # Is the error on a transition step
-                            if all_targets[0].first_error_on_transition(trial):
-                                error_on_transition += 1
+                    if error:
+                        first_error[j] += 1
+                        trial.first_error = j  # Add a first_error attribute to the sequence.
+                        # stats on average distance between noise and error.
+                        steps_noise_to_error += trial.first_error - noise_step
+                        num_errors += 1
+                        # Is the error precisely on the noise step?
+                        if trial.first_error == noise_step:
+                            error_on_noise += 1
+                        # Is the error on a transition step?
+                        if all_targets[0].first_error_on_transition(trial):
+                            error_on_transition += 1
 
-                            replaced, omitted, added, repeated, more_frequent, is_a_target = all_targets[0].subsequence_analysis(
-                                trial)
-                            num_replaced += replaced
-                            num_omitted += omitted
-                            num_added += added
-                            num_repeated += repeated
-                            num_more_frequent += more_frequent
-                            num_is_a_target += is_a_target
+                        # This stuff doesn't actually work. Forget it. Only useful bit is "num_replaced"
+                        replaced, omitted, added, repeated, more_frequent, is_a_target = all_targets[0].subsequence_analysis(
+                            trial)
+                        num_replaced += replaced
+                        num_omitted += omitted
+                        num_added += added
+                        num_repeated += repeated
+                        num_more_frequent += more_frequent
+                        num_is_a_target += is_a_target
 
-                        #if VERBOSE:
-                        #    print(("{0}/{1} correct.\n" +
-                        #           "\tInter-subsequence errors: {2}\n" +
-                        #           "\tSubsequence errors: {3}\n" +
-                        #           "\tOmissions: {4}\n" +
-                        #           "\tAdditions: {5}\n" +
-                        #           "\tRepetitions: {6}\n" +
-                        #           "\tMore frequent: {7}\n").format(num_correct, total_seqs,
-                        #                                            total_seqs - num_correct - num_replaced,
-                        #                                            num_replaced, num_omitted, num_added, num_repeated,
-                        #                                            num_more_frequent))
-                        #total_correct_seq += num_correct
-                        #total_subseq_error += num_replaced
-                        #total_num += total_seqs
+                    # remove the no longer valid alternatives.
+                    for inv in reversed(invalid):
+                        all_targets.pop(inv)
+                    if error:  # If we found an error we can terminate here
+                        break
+                if trial.first_error is None:
+                    total_correct_seq += 1
+                total_trials += 1
 
-
-                    #remove the no longer valid alternatives.
-                        for inv in reversed(invalid):
-                            all_targets.pop(inv)
-                        if error:  # If we found an error we can terminate here
-                            break
-                    if trial.first_error is None:
-                        total_correct_seq += 1
-                    total_trials += 1
-
-                # Need to color the step at which noise is introduced.
-                if VERBOSE:
-                    print("Target sequence " + str(i) + " (" + target_sequence.name + ") noise at step " + str(noise_step) + ": errors = " + str(first_error))
-        total_fullseq_errors = num_is_a_target
-        total_error = total_trials - total_correct_seq
-        total_subseq_error = num_replaced
-        total_action_errors = total_error - total_subseq_error
-        print(
-            "Overall totals: {0}/{1} correct. {2} errors, of which:\n Action errors:{3}\n Subsequence errors: {4}\n Full sequence errors {5}\n".format(
-                total_correct_seq, total_trials, total_trials - total_correct_seq, total_action_errors,
-                                              total_subseq_error - total_fullseq_errors,
-                total_fullseq_errors
-            ))
-
-        print("Overall stats:\n errors on noise step: {0}\n errors on transition: {1}\n average steps noise->error: {2}\n (num errors={3}\n)".format(
-            error_on_noise, error_on_transition, steps_noise_to_error/num_errors if num_errors>0 else 0, num_errors
+            # Need to color the step at which noise is introduced.
+            #if VERBOSE:
+            #    print("Target sequence " + str(i) + " (" + target_sequence.name + ") noise at step " + str(noise_step) + ": errors = " + str(first_error))
+    total_fullseq_errors = num_is_a_target
+    total_error = total_trials - total_correct_seq
+    total_subseq_error = num_replaced
+    total_action_errors = total_error - total_subseq_error
+    # There's still a bug in the error counts.
+    print(
+        "Overall totals: {0}/{1} correct. {2} errors, of which:\n Action errors:{3}\n Subsequence errors: {4}\n Full sequence errors {5}\n".format(
+            total_correct_seq,
+            total_trials,
+            total_trials - total_correct_seq,
+            total_action_errors, # action errors.
+            total_subseq_error - total_fullseq_errors, # Are all full sequence errors ALSO subsequence errors?
+            total_fullseq_errors
         ))
 
+    print("Overall stats:\n errors on noise step: {0}\n errors on transition: {1}\n average steps noise->error: {2}\n (num errors={3}\n)".format(
+        error_on_noise, error_on_transition, steps_noise_to_error/num_errors if num_errors>0 else 0, num_errors
+    ))
+
     ####################
-    # Analysis 4: Loss #
+    # Analysis 3: Loss #
     ####################
     # Compute average loss, and average loss at first error and on subsequent points
     counter_total = 0
@@ -493,9 +477,11 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False, goals=Tr
                                                                                 loss_noise_plus1_avg,
                                                                                 loss_prior_error_avg,
                                                                                 loss_prior_noise_avg))
-    return None, None
+    if not do_rdm:
+        return None, test_data, num_errors
+
     ###################################
-    # Analysis 5: RDM, MDS, and T-SNE #
+    # Analysis 4: RDM, MDS, and T-SNE #
     ###################################
     # 1. RDM - from EVERY SEQUENCE
     # 1.a. Make a list of every sequence step. That means flattening everything into a list of steps.
@@ -533,7 +519,6 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False, goals=Tr
         plt.title("MDS")
         plt.show()
         plt.clf()
-    #return None, None
 
     #T-SNE:
     print("Generating t-SNE...")
@@ -550,7 +535,8 @@ def analyse_test_data(test_data, do_rdm=False, do_error_analysis=False, goals=Tr
     #df_subset['tsne-2d-two'] = tsne_results[:, 1]
     #x = tsne_results[:, 0]
     #y = tsne_results[:, 1]
-    return tsne_results, test_data # Test data is enriched during analysis (first error step)
+    return tsne_results, test_data, num_errors  # Test data is enriched during analysis (first error step)
+
 
 def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=False,
               tsne_errors=False, tsne_sequence=[], tsne_sequence_interval=[], filename="tsne", annotate=False):
@@ -673,25 +659,37 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
     plt.savefig(filename)
 
 
-def train(model=None, goals=False, num_iterations=50000,
-          learning_rate=0.01, L2_reg=0.00001, noise=0., sequences=None,
+# used to identify perfect accuracy to stop the training
+def stop_condition(model, noise=0., goal1_noise=0., goal2_noise=0., goals=True, num_tests=1,
+                   sequence_ids=range(21), noise_per_step=False,
+                   disruption_per_step=False, initialization=nn.SEMINORMAL, do_rdm=False):
+    test_data = generate_test_data(model, noise=noise,
+                                   goal1_noise=goal1_noise, goal2_noise=goal2_noise,
+                                   goals=goals, num_tests=num_tests,
+                                   sequence_ids=sequence_ids,
+                                   noise_per_step=noise_per_step,
+                                   disruption_per_step=disruption_per_step,
+                                   initialization=initialization)
+    tsne_results, test_data, total_errors = analyse_test_data(test_data, do_rdm=do_rdm, goals=goals)
+    return total_errors == 0
+
+
+def train(stop_params, model, goals=False,
+          noise=0., sequences=None,
           context_initialization=nn.ZEROS):
+    # Example models:
+    #        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+    #                                size_goal1=len(environment.GoalEnvData.goals1_list),
+    #                                size_goal2=len(environment.GoalEnvData.goals2_list),
+    #                                algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform",
+    #        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+    #                                size_goal1=0,
+    #                                size_goal2=0,
+    #                                algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
+
     if sequences is None:
         sequences = [0]
     env = environment.GoalEnv()
-    if model is None:
-        if goals:
-            model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-                                    size_goal1=len(environment.GoalEnvData.goals1_list),
-                                    size_goal2=len(environment.GoalEnvData.goals2_list),
-                                    algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform",
-                                    last_action_inputs=True)
-        else:
-            # Not sure why I had "len sequences" for goal1??
-            model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19, size_goal1=0, #len(sequences),
-                                    size_goal2=0, algorithm=nn.RMSPROP, learning_rate=learning_rate, initialization="uniform")
-
-    model.L2_regularization = L2_reg
 
     rng_avg_loss = 0.
     rng_avg_actions = 0.
@@ -699,7 +697,8 @@ def train(model=None, goals=False, num_iterations=50000,
     rng_avg_goals1 = 0.
     rng_avg_goals2 = 0.
 
-    for iteration in range(num_iterations):
+    iteration = 0
+    while not stop_params.isTimeToStop(model, iteration):
         seqid = np.random.choice(sequences)
         sequence = task.sequences_list[seqid]
         env.reinitialize(sequence.initial_state)
@@ -771,7 +770,6 @@ def train(model=None, goals=False, num_iterations=50000,
             # Train model, record loss.
             loss = model.train(tape, targets)
 
-
         # Monitor progress using rolling averages.
         full_sequence = int(ratio_actions == 1)
         speed = 2. / (iteration + 2) if iteration < 1000 else 0.001  # enables more useful evaluations for early trials
@@ -782,10 +780,11 @@ def train(model=None, goals=False, num_iterations=50000,
             rng_avg_goals1 = utils.rolling_avg(rng_avg_goals1, ratio_goals1, speed)  # whole action sequence correct ?
             rng_avg_goals2 = utils.rolling_avg(rng_avg_goals2, ratio_goals2, speed)
         # Display on the console at regular intervals
-        if (iteration < 1000 and iteration in [3 ** n for n in range(50)]) or iteration % 1000 == 0 \
-                or iteration + 1 == num_iterations:
+        if (iteration < 1000 and iteration in [3 ** n for n in range(50)]) or iteration % 1000 == 0:
             print("{0}: avg loss={1}, \tactions={2}, \tfull_sequence={3}".format(
                     iteration, rng_avg_loss, rng_avg_actions, rng_avg_fullseq, rng_avg_goals1, rng_avg_goals2))
+
+        iteration += 1
     return model
 
 

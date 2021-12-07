@@ -75,8 +75,8 @@ def generate_rdm_all_gradient(nnet, name, rdm_type=analysis.SPEARMAN, save_files
         for vector in hidden:
             #hidden_left.append(vector[:len(vector)//2])
             #hidden_right.append(vector[len(vector)//2:])
-            hidden_left.append(vector[:10])
-            hidden_right.append(vector[90:])
+            hidden_left.append(vector[:25])
+            hidden_right.append(vector[25:])
 
         # Now cut the hidden layer in two.
         rdmatrix_left = analysis.rdm_spearman(hidden_left)
@@ -99,29 +99,16 @@ def generate_rdm_all_gradient(nnet, name, rdm_type=analysis.SPEARMAN, save_files
                  utils.flatten_onelevel(task.label_seqs_ari_noblanks) + \
                  utils.flatten_onelevel(task.label_seqs_all if not task.COLLAPSE_ARITHMETIC_SEQS else task.label_seqs_all_collapsed)
     else:
+        #labels = utils.flatten_onelevel(task.label_seqs_bev_noblanks) + \
+        #         utils.flatten_onelevel(task.label_seqs_ari_noblanks) + \
+        #         utils.flatten_onelevel(task.label_seqs_all if not task.COLLAPSE_ARITHMETIC_SEQS else task.label_seqs_all_collapsed)
         labels = utils.flatten_onelevel(task.label_seqs_bev) +\
                  utils.flatten_onelevel(task.label_seqs_ari) +\
                  utils.flatten_onelevel(task.label_seqs_all if not task.COLLAPSE_ARITHMETIC_SEQS else task.label_seqs_all_collapsed)
 
     # Reorder the combined states
-    #test_matrix = np.asarray([[0, 1, 2, 3],
-    #                     [4, 5, 6, 7],
-    #                     [8, 9, 10, 11],
-    #                     [12, 13, 14, 15]])
-    #new_order = new_order_combined(0, 4)
-    #print(new_order)
-    #test_matrix = utils.reorder_matrix(test_matrix, new_order)
-    #print(test_matrix)
-    # Expectation:
-    # 0, 2, 1, 3
-    # 4, 6, 5, 7
-    # 8, 10, 9, 11
-    # 12, 14, 13, 15
-
     new_order = new_order_combined(48, 48)
-    #print(new_order)
-    #print(new_order_combined(50, 48))
-    #print(range(len(labels)))
+    #new_order = new_order_combined()
 
     labels = utils.reorder_list(labels, new_order)
     rdmatrix_left = utils.reorder_matrix(rdmatrix_left, new_order)
@@ -172,10 +159,10 @@ def apply_extra_loss(network, hrp):
                                                    hrp.reg_strength, reg_type="output_left", reg_increase=hrp.reg_increase)
     return extra_loss
 
-def train_all(nnet, num_training_steps = 1000000, hrp=None, early_stopping_from = None):
+def train_all(stopping_params, nnet, hrp=None):
     i=0
     avg_loss = 0.
-    while i < num_training_steps:
+    while not stopping_params.isTimeToStop(nnet, i):
         # Pick a random arithmetic seq:
         # and a random beverage seq
         seq_ari_id = random.randint(0, len(task.arithmetic_seqs)-1)
@@ -202,28 +189,30 @@ def train_all(nnet, num_training_steps = 1000000, hrp=None, early_stopping_from 
             loss = nnet.train(tape, targets, apply_extra_loss(nnet, hrp))
             loss = loss.numpy()[0]
             avg_loss = 0.999 * avg_loss + 0.001 * loss
-            if i % 10000 == 0 or i > (num_training_steps - 20):
+            if i % 10000 == 0:
                 _, accuracy_both, _ = test_network_all(nnet)
                 _, accuracy_ari, _ = test_network_ari(nnet)
                 _, accuracy_bev, _ = test_network_bev(nnet)
                 print('{0}, avgloss={1}, accuracies={2}, {3}, {4}'.format(i, avg_loss, accuracy_both, accuracy_ari, accuracy_bev))
-                if early_stopping_from is not None and i >= early_stopping_from and \
-                    np.all(accuracy_both == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and\
-                    np.all(accuracy_ari == [1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and \
-                    np.all(accuracy_bev == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1.]):
-                    break  # We stop early cause we're already optimal.
             if i % 50000 == 0:
                 hidden_activation, accuracy_totals, accuracy_fullseqs = test_network_all(nnet)
                 print(i)
                 print(accuracy_totals)
                 print(accuracy_fullseqs)
-            #if i % 1000 == 0 and mode == task.BOTH:
-            #        print("{0}, {1} --> {2}".format(i, seq_ari, np.argmax(nnet.action) - 9))
             i += 1
     nnet.new_episode() # just clear up the network history to avoid any bad surprises
 
-def run_model3_multiple(nnparams, from_file=None, num_networks=1, name="model3", hrp=None,
-                        iterations=200000, early_stopping_from=None):
+def stop_condition(nnet):
+    _, accuracy_both, _ = test_network_all(nnet)
+    _, accuracy_ari, _ = test_network_ari(nnet)
+    _, accuracy_bev, _ = test_network_bev(nnet)
+    if np.all(accuracy_both == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and \
+       np.all(accuracy_ari == [1., 1., 1., 1., 1., 1.]) and \
+       np.all(accuracy_bev == [.5, 1., .5, 1., 1., 1.]):
+        return True
+
+
+def run_model3_multiple(stopping_params, nnparams, from_file=None, num_networks=1, name="model3", hrp=None):
     if from_file is not None:
         networks = utils.load_objects(from_file, num_networks)
     else:
@@ -233,7 +222,7 @@ def run_model3_multiple(nnparams, from_file=None, num_networks=1, name="model3",
             nnparams.size_action=len(task.output_symbols)
             nnparams.size_observation=len(task.input_symbols)
             nnet = nn.ElmanGoalNet(params=nnparams)
-            train_all(nnet, num_training_steps=iterations, hrp=hrp, early_stopping_from=early_stopping_from)
+            train_all(stopping_params, nnet, hrp=hrp)
             utils.save_object(name, nnet)
             networks.append(nnet)
             # Print some stuff
@@ -264,7 +253,7 @@ def run_model3_multiple(nnparams, from_file=None, num_networks=1, name="model3",
         sum_rdm_left = sum_rdm_right = None
         labels = None
         for net in networks:
-            rdmleft, rdmright, labels = generate_rdm_all_gradient(net, name=name, from_file=False)
+            rdmleft, rdmright, labels = generate_rdm_all_gradient(net, name=name, from_file=False, delete_blank_states=True)
             if sum_rdm_left is None:
                 sum_rdm_left = rdmleft
                 sum_rdm_right = rdmright
@@ -273,10 +262,6 @@ def run_model3_multiple(nnparams, from_file=None, num_networks=1, name="model3",
                 sum_rdm_right += rdmright
         average_rdm_left = sum_rdm_left/num_networks
         average_rdm_right = sum_rdm_right/num_networks
-
-        # reorder labels
-        new_order = new_order_combined(48, 48)
-        labels = utils.reorder_list(labels, new_order)
 
         utils.save_rdm(average_rdm_left, name+"left", labels,  title="RDM training combined: left (goals)", fontsize=0.6 if not task.COLLAPSE_ARITHMETIC_SEQS else 1.)
         utils.save_rdm(average_rdm_right, name+"right", labels,  title="RDM training combined: right (actions)", fontsize=0.6 if not task.COLLAPSE_ARITHMETIC_SEQS else 1.)

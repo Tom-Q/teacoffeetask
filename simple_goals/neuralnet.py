@@ -99,6 +99,33 @@ SIGMOID="sigmoid"
 TANH="tanh"
 
 
+# convenience function for stopping parameters since I'll be using this in many places.
+# Checks if it's time to stop training a network
+class ParamsStopping(object):
+    def __init__(self, max_iterations, min_iterations = None, check_frequency=None, stop_condition=None,
+                 **stop_condition_kwargs):
+        self.max_iterations = max_iterations
+        self.min_iterations = min_iterations
+        self.check_frequency = check_frequency
+        self.stop_condition = stop_condition
+        self.stop_condition_kwargs = stop_condition_kwargs
+
+    def isTimeToStop(self, model, iteration):
+        if iteration > self.max_iterations:
+            return True
+        elif self.min_iterations is not None and iteration < self.min_iterations:
+            return False
+        elif self.check_frequency is None:
+            return False
+        elif iteration % self.check_frequency == 0:
+            if self.stop_condition is None:
+                raise ValueError("if check_frequency is not None then a stop condition must be provided")
+            # Typically this will check whether the model has achieved perfect accuracy
+            return self.stop_condition(model, **self.stop_condition_kwargs)
+        else:
+            return False
+
+
 # Convenience classes for encapsulating neural net parameters. It seems this only adds complexity to the NN classes but
 # it is useful e.g. when I want to train multiple neural nets while changing only one or two parameters.
 # Also useful for storing a set of default parameters. Also neat for creating multiple nets from the same set of params

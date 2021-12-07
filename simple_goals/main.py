@@ -5,32 +5,32 @@ import neuralnet as nn
 from cognitiveload import cogloadtask
 
 # TODO: try with random initial state. Try with more units
-"""
-import time
-from pnas import pnas2018
-for i in range(0):
-    model = nn.ElmanGoalNet(size_hidden=50, size_observation=9, size_action=8, size_goal1=0, size_goal2=0,
-                            #algorithm=nn.SGD, initialization="normal", learning_rate=0.1)
-                            algorithm=nn.ADAM, nonlinearity=nn.TANH, initialization=nn.XAVIER, learning_rate=0.01, L2_reg=0.00001)
-    model, _ = pnas2018.train(model, noise=0.0, initial_context=pnas2018.ZEROS, iterations=1500)
-    utils.save_object("pnasldttest_0_0_noiseafter_sgd50", model)
+# import time
+# from pnas import pnas2018
+# for i in range(20):
+#     model = nn.ElmanGoalNet(size_hidden=100, size_observation=9, size_action=8, size_goal1=0, size_goal2=0,
+#                             #algorithm=nn.SGD, initialization="normal", learning_rate=0.1)
+#                             algorithm=nn.ADAM, nonlinearity=nn.RELU, initialization=nn.HE, learning_rate=0.01, L2_reg=0.00)
+#     model, _ = pnas2018.train(model, noise=0.0, initial_context=pnas2018.ZEROS, iterations=1000)
+#     utils.save_object("pnasoverfittest100_1000", model)
 #pnas2018.make_rdm_multiple_ldt("pnasldttest_0_0_noiseafter_sgd50", noise_during=0.0, noise_after=0.10, num_networks=10,
 #                               num_samples=50, initial_context=pnas2018.ZEROS, log_scale=False)
-pnas2018.make_rdm_multiple("pnasldttest_0_0_noiseafter_sgd50", num_networks=10, with_goals=False, title="-", save_files=True)
+#pnas2018.make_rdm_multiple("pnasoverfittest100_1000", num_networks=20, with_goals=False, title="-", save_files=True)
 
-sys.exit()
-"""
+#sys.exit()
+
+
 if False:
-    from goalenv import goalenv2020
-    for i in range(0):
+    from goalenv import goalenv2020, environment
+    for i in range(10):
         #model = utils.load_object("bigmodel3")
         model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-                                size_goal1=0,#len(environment.GoalEnvData.goals1_list),
-                                size_goal2=0,#len(environment.GoalEnvData.goals2_list),
-                                algorithm=nn.RMSPROP, learning_rate=0.001, initialization="uniform",
+                                size_goal1=len(environment.GoalEnvData.goals1_list),
+                                size_goal2=len(environment.GoalEnvData.goals2_list),
+                                algorithm=nn.ADAM, learning_rate=0.001, initialization=nn.HE,
                                 last_action_inputs=True)
-        model = goalenv2020.train(model=model, goals=False, num_iterations=200000, learning_rate=0.001, L2_reg=0.00001, noise=0.05, sequences=range(21))
-        utils.save_object("bigmodel1_nogoals", model)
+        model = goalenv2020.train(model=model, goals=True, num_iterations=100000, learning_rate=0.001, L2_reg=0.00001, noise=0.05, sequences=range(21))
+        utils.save_object("bigmodel1_goals", model)
     #sys.exit()
 
     for i in range(6, 10):
@@ -53,7 +53,7 @@ if False:
 if False:
     from goalenv import goalenv2020
     from goalenv import environment
-    for i in range(5):
+    for i in range(10):
         model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
                                 size_goal1=len(environment.GoalEnvData.goals1_list),
                                 size_goal2=len(environment.GoalEnvData.goals2_list),
@@ -61,30 +61,12 @@ if False:
                                 initialization=nn.HE,
                                 nonlinearity=nn.RELU,
                                 last_action_inputs=True)
-        model = goalenv2020.train(model=model, goals=True, num_iterations=50000,
-                                  learning_rate=0.001, L2_reg=0.00001, noise=0.05,
-                                  sequences=range(21), context_initialization=nn.SEMINORMAL)
+
+        stopping = nn.ParamsStopping(max_iterations=75000, min_iterations=0, check_frequency=5000,
+                                     stop_condition=goalenv2020.stop_condition)
+        model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
+                                  noise=0.05, sequences=range(21), context_initialization=nn.SEMINORMAL)
         utils.save_object("bigmodel1_yesgoals_relu_adam", model)
-
-    for i in range(0):
-        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-                                size_goal1=len(environment.GoalEnvData.goals1_list),
-                                size_goal2=len(environment.GoalEnvData.goals2_list),
-                                algorithm=nn.RMSPROP, learning_rate=0.001,
-                                initialization=nn.XAVIER,
-                                nonlinearity=nn.TANH,
-                                last_action_inputs=True)
-        model = goalenv2020.train(model=model, goals=True, num_iterations=75000,
-                                  learning_rate=0.001, L2_reg=0.00001, noise=0.05,
-                                  sequences=range(21), context_initialization=nn.NORMAL)
-        utils.save_object("bigmodel1_yesgoals_tanh_rmsprop", model)
-
-    sys.exit(0)
-    for i in range(0, 1):
-        model = utils.load_object("bigmodel1_yesgoals_tanh_rmsprop", i)
-        #sys.exit()
-        #test_data = utils.load_object("test_data_tsne")
-        #test_data = goalenv2020.generate_test_data(model, noise=0.5, one_run_per_step=True, goal1_noise=0., goal2_noise=0., goals=True, num_tests=3, sequence_ids=range(21))
         test_data = goalenv2020.generate_test_data(model, noise=0.,
                                                    goal1_noise=0., goal2_noise=0.,
                                                    goals=True, num_tests=1,
@@ -96,7 +78,7 @@ if False:
         #utils.save_object("test_data_tsne_bigmodel1_yesgoals", test_data)
 
         #test_data = utils.load_object("test_data_tsne_bigmodel1_yesgoals")
-        tsne_results, test_data = goalenv2020.analyse_test_data(test_data, do_error_analysis=True, do_rdm=False, goals=True)  #, mds_sequences=[2, 5, 11], mds_range=15)
+        tsne_results, test_data, _ = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=True)  #, mds_sequences=[2, 5, 11], mds_range=15)
         #utils.save_object("tsne_bigmodel1_yesgoals", tsne_results)
         #utils.save_object("tsnetest_bigmodel1_yesgoals", test_data)
         #goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=True,
@@ -123,12 +105,13 @@ nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
                             size_observation=None,
                             size_hidden=100,
                             L1_reg=0, L2_reg=0.0001)
-mod3.run_model3_multiple(num_networks=2, from_file=None, #"model3_ADAMRELU_gradient0_0001",
-                         name="model3_ADAMRELU_gradient0_0001",
+stopping = nn.ParamsStopping(max_iterations=100000, min_iterations=50000, check_frequency=1000,
+                             stop_condition=mod3.stop_condition)
+mod3.run_model3_multiple(stopping_params=stopping,
+                         num_networks=3, #from_file="model3_nodummy"
+                         name="model3_withdummy_50000_goals",
                          hrp=hrp,
-                         nnparams=nnparams,
-                         iterations=150000,
-                         early_stopping_from=100000)
+                         nnparams=nnparams)
 sys.exit()
 
 #3 and 6 need extra training.
