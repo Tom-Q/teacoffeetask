@@ -50,10 +50,11 @@ if False:
 # - "bigmodel1_yesgoals_2nd_batch": 1 network (same)
 # - "bigmodel1_yesgoals_relu": 4 networks, HE initialization, seminormal context initialization. UNSURE, RETRAIN
 # - "bigmodel1_yesgoals_relu": 4 networks, HE initialization, normal context initialization
-if False:
+if True:
     from goalenv import goalenv2020
     from goalenv import environment
-    for i in range(10):
+    for i in range(1):
+
         model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
                                 size_goal1=len(environment.GoalEnvData.goals1_list),
                                 size_goal2=len(environment.GoalEnvData.goals2_list),
@@ -62,12 +63,14 @@ if False:
                                 nonlinearity=nn.RELU,
                                 last_action_inputs=True)
 
-        stopping = nn.ParamsStopping(max_iterations=75000, min_iterations=0, check_frequency=5000,
+        stopping = nn.ParamsStopping(max_iterations=75000, min_iterations=10, check_frequency=5000,
                                      stop_condition=goalenv2020.stop_condition)
-        model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
-                                  noise=0.05, sequences=range(21), context_initialization=nn.SEMINORMAL)
-        utils.save_object("bigmodel1_yesgoals_relu_adam", model)
-        test_data = goalenv2020.generate_test_data(model, noise=0.,
+        #model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
+        #                          noise=0.05, sequences=range(21), context_initialization=nn.SEMINORMAL)
+        #utils.save_object("bigmodel1_yesgoals_relu_adam", model)
+        model = utils.load_object("bigmodel1_yesgoals_relu_adam")
+
+        test_data = goalenv2020.generate_test_data(model, noise=1.5,
                                                    goal1_noise=0., goal2_noise=0.,
                                                    goals=True, num_tests=1,
                                                    sequence_ids= range(21),
@@ -75,16 +78,15 @@ if False:
                                                    disruption_per_step=False,
                                                    initialization=nn.SEMINORMAL)
         
-        #utils.save_object("test_data_tsne_bigmodel1_yesgoals", test_data)
-
-        #test_data = utils.load_object("test_data_tsne_bigmodel1_yesgoals")
+        #utils.save_object("test_data_error_test", test_data)
+        #test_data = utils.load_object("test_data_error_test")
         tsne_results, test_data, _ = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=True)  #, mds_sequences=[2, 5, 11], mds_range=15)
         #utils.save_object("tsne_bigmodel1_yesgoals", tsne_results)
         #utils.save_object("tsnetest_bigmodel1_yesgoals", test_data)
         #goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=True,
         #          tsne_errors=True, tsne_sequence=[2, 5, 11], tsne_sequence_interval=[2, 14], filename="tsne", annotate=False)
         #utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
-#sys.exit()
+sys.exit()
 
 import cognitiveload.model3 as mod3
 mod3.FAST_RDM = True
@@ -106,12 +108,23 @@ nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
                             size_hidden=100,
                             L1_reg=0, L2_reg=0.0001)
 stopping = nn.ParamsStopping(max_iterations=100000, min_iterations=50000, check_frequency=1000,
+                             stop_condition=mod3.stop_condition, blanks=True)
+mod3.run_model3_multiple(stopping_params=stopping,
+                         num_networks=20, #from_file="model3_nodummy"
+                         name="model3_withoutdummy_50000_goals",
+                         hrp=hrp,
+                         nnparams=nnparams,
+                         blanks=False)
+print('with blanks now')
+
+stopping = nn.ParamsStopping(max_iterations=100000, min_iterations=50000, check_frequency=1000,
                              stop_condition=mod3.stop_condition)
 mod3.run_model3_multiple(stopping_params=stopping,
-                         num_networks=3, #from_file="model3_nodummy"
+                         num_networks=20, #from_file="model3_nodummy"
                          name="model3_withdummy_50000_goals",
                          hrp=hrp,
-                         nnparams=nnparams)
+                         nnparams=nnparams,
+                         blanks=True)
 sys.exit()
 
 #3 and 6 need extra training.

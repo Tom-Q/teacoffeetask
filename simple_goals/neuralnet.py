@@ -110,8 +110,8 @@ class ParamsStopping(object):
         self.stop_condition = stop_condition
         self.stop_condition_kwargs = stop_condition_kwargs
 
-    def isTimeToStop(self, model, iteration):
-        if iteration > self.max_iterations:
+    def is_time_to_stop(self, model, iteration):
+        if iteration >= self.max_iterations:
             return True
         elif self.min_iterations is not None and iteration < self.min_iterations:
             return False

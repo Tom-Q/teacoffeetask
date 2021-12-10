@@ -415,8 +415,8 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
             total_fullseq_errors
         ))
 
-    print("Overall stats:\n errors on noise step: {0}\n errors on transition: {1}\n average steps noise->error: {2}\n (num errors={3}\n)".format(
-        error_on_noise, error_on_transition, steps_noise_to_error/num_errors if num_errors>0 else 0, num_errors
+    print("Overall stats:\n errors on noise step: {0}\n errors on transition: {1}\n average steps noise->error: {2}\n".format(
+        error_on_noise, error_on_transition, steps_noise_to_error/num_errors if num_errors>0 else -1
     ))
 
     ####################
@@ -432,23 +432,21 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
     noise_loss_total = 0
     counter_noise = 0
 
-    prior_to_error_loss_total = 0
-    counter_prior_to_error = 0
-
     prior_to_noise_loss_total = 0
     counter_prior_to_noise = 0
 
-    noise_plus1_loss_total = 0
-    counter_noise_plus1 = 0
+    loss_after_noise_no_error = np.zeros(55)
+    loss_after_noise_error = np.zeros(55)
+    loss_before_error = np.zeros(55)
+    counter_loss_before_error = np.zeros(55)
+    counter_loss_after_noise_no_error = np.zeros(55)
+    counter_loss_after_noise_error = np.zeros(55)
+
     for sequence in outputs_sequences_flat:
         for i, loss in enumerate(sequence.losses):
             if loss is not None:
-                #sequence.losses[i] = sequence.losses[i].numpy()[0]
                 loss_total += sequence.losses[i]
                 counter_total += 1
-                if sequence.first_error is not None and i < sequence.first_error:
-                    prior_to_error_loss_total += sequence.losses[i]
-                    counter_prior_to_error+=1
                 if sequence.noise_step is not None and i < sequence.noise_step:
                     prior_to_noise_loss_total += sequence.losses[i]
                     counter_prior_to_noise+=1
@@ -459,24 +457,53 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
         if sequence.noise_step is not None and sequence.noise_step < sequence.length:
             noise_loss_total += sequence.losses[sequence.noise_step]
             counter_noise += 1
-            if sequence.noise_step + 1 < sequence.length:
-                loss = sequence.losses[sequence.noise_step+1]
-                if loss is not None: # loss can be None if the sequence terminates early
-                    noise_plus1_loss_total += loss #sequence.losses[sequence.noise_step+1]
-                    counter_noise_plus1 += 1
+
+            if sequence.first_error is None: # No error occurred.
+                # Record loss between noise and error
+                i = 0
+                while sequence.noise_step + i < sequence.length:
+                    loss = sequence.losses[sequence.noise_step+i]
+                    loss_after_noise_no_error[i] += loss
+                    counter_loss_after_noise_no_error[i] += 1
+                    i += 1
+            elif sequence.first_error is not None: # an error occurred.
+                i = 0
+                while sequence.noise_step + i < sequence.length and sequence.noise_step + i <= sequence.first_error:
+                    loss = sequence.losses[sequence.noise_step+i]
+                    loss_after_noise_error[i] += loss
+                    counter_loss_after_noise_error[i] += 1
+                    i += 1
+                # Also record loss between error and noise (going backwards)
+                i = sequence.error_step
+                j = 0
+                while i >= sequence.error_step:
+                    loss = sequence.losses[sequence.noise_step+i]
+                    loss_before_error[j] += loss
+                    counter_loss_before_error[j] += 1
+                    i -= 1
+                    j += 1
+    # Compute avgs
+    loss_after_noise_error = np.divide(loss_after_noise_error, counter_loss_after_noise_error, out=np.zeros_like(loss_after_noise_error),
+                                  where=counter_loss_after_noise_error!=0)
+    loss_after_noise_no_error = np.divide(loss_after_noise_no_error, counter_loss_after_noise_no_error,
+                                     out=np.zeros_like(loss_after_noise_no_error),
+                                     where=counter_loss_after_noise_no_error!=0)
+    loss_before_error = np.divide(loss_before_error, counter_loss_before_error,
+                                  out=np.zeros_like(loss_before_error),
+                                  where=counter_loss_before_error!=0)
+
     loss_avg = loss_total/counter_total
     loss_first_error_avg = first_error_loss_total / counter_first_error if counter_first_error != 0 else None
-    loss_noise_avg = noise_loss_total / counter_noise if counter_noise != 0 else None
-    loss_noise_plus1_avg = noise_plus1_loss_total / counter_noise_plus1 if counter_noise_plus1 != 0 else None
-    loss_prior_error_avg = prior_to_error_loss_total / counter_prior_to_error if counter_prior_to_error != 0 else None
     loss_prior_noise_avg = prior_to_noise_loss_total / counter_prior_to_noise if counter_prior_to_noise != 0 else None
-    print("LOSS:\n average loss={0}\n loss on first error={1}\n loss on noise={2} (+1: {3})\n loss_good_seq={4}\n loss_before_noise={5}".format(
-                                                                                loss_avg,
-                                                                                loss_first_error_avg,
-                                                                                loss_noise_avg,
-                                                                                loss_noise_plus1_avg,
-                                                                                loss_prior_error_avg,
-                                                                                loss_prior_noise_avg))
+    np.set_printoptions(formatter={'float': lambda x: "{0:0.2f}".format(x)})
+    print("Loss avg prior to noise: " + str(loss_prior_noise_avg))
+    print("Loss on and after noise (no error):" + str(loss_after_noise_no_error))
+    print("Loss on and after noise (error):" + str(loss_after_noise_error))
+    print("Loss prior to and on error:" + str(loss_before_error))
+    #print("LOSS:\n average loss={0:.2f}\n loss on first error={1:.2f}\n loss on noise={2:.2f} (+1: {3:.2f})\n loss_good_seq={4}\n loss_before_noise={5}".format(
+    #                                                                            loss_avg,
+    #                                                                            loss_first_error_avg,
+    #                                                                            loss_prior_noise_avg))
     if not do_rdm:
         return None, test_data, num_errors
 
@@ -660,7 +687,7 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
 
 
 # used to identify perfect accuracy to stop the training
-def stop_condition(model, noise=0., goal1_noise=0., goal2_noise=0., goals=True, num_tests=1,
+def stop_condition(model, noise=0., goal1_noise=0., goal2_noise=0., goals=True, num_tests=10,
                    sequence_ids=range(21), noise_per_step=False,
                    disruption_per_step=False, initialization=nn.SEMINORMAL, do_rdm=False):
     test_data = generate_test_data(model, noise=noise,
@@ -698,7 +725,7 @@ def train(stop_params, model, goals=False,
     rng_avg_goals2 = 0.
 
     iteration = 0
-    while not stop_params.isTimeToStop(model, iteration):
+    while not stop_params.is_time_to_stop(model, iteration):
         seqid = np.random.choice(sequences)
         sequence = task.sequences_list[seqid]
         env.reinitialize(sequence.initial_state)
