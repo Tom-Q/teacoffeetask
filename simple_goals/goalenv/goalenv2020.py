@@ -474,10 +474,10 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
                     counter_loss_after_noise_error[i] += 1
                     i += 1
                 # Also record loss between error and noise (going backwards)
-                i = sequence.error_step
+                i = sequence.first_error
                 j = 0
-                while i >= sequence.error_step:
-                    loss = sequence.losses[sequence.noise_step+i]
+                while i >= sequence.noise_step:
+                    loss = sequence.losses[i]
                     loss_before_error[j] += loss
                     counter_loss_before_error[j] += 1
                     i -= 1

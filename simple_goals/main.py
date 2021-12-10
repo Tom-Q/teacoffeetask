@@ -73,7 +73,7 @@ if True:
         test_data = goalenv2020.generate_test_data(model, noise=1.5,
                                                    goal1_noise=0., goal2_noise=0.,
                                                    goals=True, num_tests=1,
-                                                   sequence_ids= range(21),
+                                                   sequence_ids= range(1),
                                                    noise_per_step=True,
                                                    disruption_per_step=False,
                                                    initialization=nn.SEMINORMAL)
