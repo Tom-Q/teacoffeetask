@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import MDS
 from sklearn import discriminant_analysis as sklda
 import utils
+#import rsatoolbox
 
 import seaborn as sns
 import warnings

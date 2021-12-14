@@ -200,11 +200,6 @@ def train_all(stopping_params, nnet, hrp=None, blanks=True):
                 _, accuracy_ari, _ = test_network_ari(nnet, blanks)
                 _, accuracy_bev, _ = test_network_bev(nnet, blanks)
                 print('{0}, avgloss={1}, accuracies={2}, {3}, {4}'.format(i, avg_loss, accuracy_both, accuracy_ari, accuracy_bev))
-            if i % 50000 == 0:
-                hidden_activation, accuracy_totals, accuracy_fullseqs = test_network_all(nnet)
-                print(i)
-                print(accuracy_totals)
-                print(accuracy_fullseqs)
             i += 1
     print("Training complete after " + str(i) + " iterations")
     nnet.new_episode()  # just clear up the network history to avoid any bad surprises
@@ -214,10 +209,14 @@ def stop_condition(nnet, blanks):
     _, accuracy_both, _ = test_network_all(nnet)
     _, accuracy_ari, _ = test_network_ari(nnet, blanks)
     _, accuracy_bev, _ = test_network_bev(nnet, blanks)
-    if np.all(accuracy_both == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and \
-       np.all(accuracy_ari == [1., 1., 1., 1., 1., 1.]) and \
-       np.all(accuracy_bev == [.5, 1., .5, 1., 1., 1.]):
-        return True
+    if not blanks:
+        return np.all(accuracy_both == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and \
+           np.all(accuracy_ari == [1., 1., 1., 1., 1., 1.]) and \
+           np.all(accuracy_bev == [.5, 1., .5, 1., 1., 1.])
+    elif blanks:
+        return np.all(accuracy_both == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and \
+        np.all(accuracy_ari == [1., 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and \
+        np.all(accuracy_bev == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1.])
 
 
 def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,

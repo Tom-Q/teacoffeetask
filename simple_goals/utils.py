@@ -277,3 +277,15 @@ def test_weight_regularization(regtype):
     print(matrix)
     print(weight_regularization_calculator(matrix, [0, 3], [0, 2], 1, regtype))
 
+
+def write_lists_to_csv(file_name, listoflists, labels=None):
+    with open(file_name, 'a') as the_file:
+        # Writes data in csv format
+        if labels is not None:
+            listoflists = [labels] + listoflists
+        for datarow in listoflists:
+            for element in datarow:
+                the_file.write(str(element) + ';')
+            the_file.write('\n')
+
+

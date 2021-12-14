@@ -163,6 +163,10 @@ def compute_last_step_loss(model, target, include_regularization=False):
 def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_noise=0., num_tests=10, goals=False,
                        initialization="uniform", verbose=False,
                        noise_per_step=True, disruption_per_step=False,
+                       noise_per_step_to_input=False,
+                       lesion_goal1_units=False,
+                       lesion_goal2_units=False,
+                       lesion_action_units=False,
                        single_step_noise=None):
     # This runs a hundred version of the model with different random initializations
     env = environment.GoalEnv()
@@ -221,6 +225,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                     output_sequence.activations = []
                     output_sequence.losses = []
                     for j in range(max_length):
+                        observation = env.observe()
                         # Add noise to context layer
                         if j == noise_step:
                             if noise_per_step or single_step_noise:
@@ -228,11 +233,19 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                                 if goals:
                                     model.goal1 += np.float32(np.random.normal(0., goal1_noise, size=(1, model.size_goal1)))
                                     model.goal2 += np.float32(np.random.normal(0., goal2_noise, size=(1, model.size_goal2)))
+                            if noise_per_step_to_input:
+                                observation += np.float32(np.random.normal(0., noise, size=(1, model.size_observation)))
                             if disruption_per_step:
                                 # Change the state
                                 env.state = disrupt_state(env.state, initial_state=sequence.initial_state, #mode=REINITIALIZE)
                                                           mode=HOLD_RANDOM_OBJECT)
-                        observation = env.observe()
+                            if lesion_goal1_units:
+                                model.goal1 *= 0.
+                            if lesion_goal2_units:
+                                model.goal2 *= 0.
+                            if lesion_action_units:
+                                model.action *= 0.
+
                         model.feedforward(observation)
 
                         if j < len(sequence.targets):  # after that it's not defined.
@@ -313,6 +326,14 @@ def disrupt_state(state, initial_state, mode=HOLD_RANDOM_OBJECT):
     elif mode == REINITIALIZE:
         return initial_state
 
+
+error_testing_labels = ["total sequences", "correct", "incorrect",
+                       "action errors", "subseq errors", "fullseq errors",
+                       "steps noise->error",
+                       "loss avg before noise"] + \
+                       ["loss on and after noise (no error)"] + [str(i) for i in range(1, 55)] + \
+                       ["loss on and after noise (error)"] + [str(i) for i in range(1, 55)] + \
+                       ["loss error->noise (reverse time)"] + [str(i) for i in range(1, 55)]
 
 def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, mds_range=None):
     sequence_ids = range(len(test_data))
@@ -500,12 +521,24 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
     print("Loss on and after noise (no error):" + str(loss_after_noise_no_error))
     print("Loss on and after noise (error):" + str(loss_after_noise_error))
     print("Loss prior to and on error:" + str(loss_before_error))
+
+    # Return results
+    error_testing_results = [total_trials, total_correct_seq, total_trials - total_correct_seq,  # errors
+            total_action_errors, # action errors.
+            total_subseq_error - total_fullseq_errors, # subsequence errors
+            total_fullseq_errors, # full sequence errors
+            steps_noise_to_error/num_errors if num_errors>0 else -1,  # average step to noise->error
+            loss_prior_noise_avg] + \
+            loss_after_noise_no_error.tolist() +\
+            loss_after_noise_error.tolist() +\
+            loss_before_error.tolist()
+
     #print("LOSS:\n average loss={0:.2f}\n loss on first error={1:.2f}\n loss on noise={2:.2f} (+1: {3:.2f})\n loss_good_seq={4}\n loss_before_noise={5}".format(
     #                                                                            loss_avg,
     #                                                                            loss_first_error_avg,
     #                                                                            loss_prior_noise_avg))
     if not do_rdm:
-        return None, test_data, num_errors
+        return None, test_data, num_errors, error_testing_results
 
     ###################################
     # Analysis 4: RDM, MDS, and T-SNE #
