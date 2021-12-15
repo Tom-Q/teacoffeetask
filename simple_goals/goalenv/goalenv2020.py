@@ -730,7 +730,7 @@ def stop_condition(model, noise=0., goal1_noise=0., goal2_noise=0., goals=True, 
                                    noise_per_step=noise_per_step,
                                    disruption_per_step=disruption_per_step,
                                    initialization=initialization)
-    tsne_results, test_data, total_errors = analyse_test_data(test_data, do_rdm=do_rdm, goals=goals)
+    tsne_results, test_data, total_errors, _ = analyse_test_data(test_data, do_rdm=do_rdm, goals=goals)
     return total_errors == 0
 
 
