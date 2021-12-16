@@ -161,7 +161,7 @@ class NeuralNet(ABC):
             self.size_observation = size_observation
             self.size_action = size_action
             self.learning_rate = learning_rate
-            self.nonlinearity=nonlinearity
+            self.nonlinearity = nonlinearity
             self.initialization = initialization
             self.L1_regularization = L1_regularization
             self.L2_regularization = L2_regularization
@@ -170,7 +170,7 @@ class NeuralNet(ABC):
             self.size_observation = params.size_observation
             self.size_action = params.size_action
             self.learning_rate = params.learning_rate
-            self.nonlinearity=params.nonlinearity
+            self.nonlinearity = params.nonlinearity
             self.initialization = params.initialization
             self.L1_regularization = params.L1_reg
             self.L2_regularization = params.L2_reg
@@ -266,8 +266,8 @@ class ElmanGoalNet(NeuralNet):
             self.size_hidden = size_hidden
             self.size_goal1 = size_goal1
             self.size_goal2 = size_goal2
-            self.nonlinearity=nonlinearity
-            self.initialization=initialization
+            self.nonlinearity = nonlinearity
+            self.initialization = initialization
             # Whether to feed the last action as another input
             self.last_action_inputs = last_action_inputs
             self.learning_rate = learning_rate

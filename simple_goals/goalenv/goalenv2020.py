@@ -189,11 +189,15 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
         if verbose:
             print("testing sequence: "+str(seqid))
         outputs_per_noise_step = []
-        num_runs = sequence.length if (noise_per_step or disruption_per_step) else 1
+        num_runs = sequence.length if (noise_per_step or disruption_per_step or noise_per_step_to_input) else 1
 
-        for noise_step in range(num_runs):
+        for run in range(num_runs):
             if single_step_noise is not None:
                 noise_step = single_step_noise
+            elif noise_per_step or disruption_per_step or noise_per_step_to_input:
+                noise_step = run
+            else:
+                noise_step = 0
             outputs = []
             for i in range(num_tests):
                 # Initialize the sequence.
@@ -239,12 +243,12 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                                 # Change the state
                                 env.state = disrupt_state(env.state, initial_state=sequence.initial_state, #mode=REINITIALIZE)
                                                           mode=HOLD_RANDOM_OBJECT)
-                            if lesion_goal1_units:
-                                model.goal1 *= 0.
-                            if lesion_goal2_units:
-                                model.goal2 *= 0.
-                            if lesion_action_units:
-                                model.action *= 0.
+                        if lesion_goal1_units:
+                            model.goal1 *= 0.
+                        if lesion_goal2_units:
+                            model.goal2 *= 0.
+                        if lesion_action_units:
+                            model.action *= 0.
 
                         model.feedforward(observation)
 

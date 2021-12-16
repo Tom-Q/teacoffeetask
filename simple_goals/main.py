@@ -53,46 +53,102 @@ if False:
 if True:
     from goalenv import goalenv2020
     from goalenv import environment
+
     error_data_list = []
-    #for noise in [0.05, 0.5, 1., 1.5, 2.0, 3.0, 5.0]:
-    #print("\n\n\n" + str(noise))
-    for i in range(10):
-        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-                                size_goal1=len(environment.GoalEnvData.goals1_list),
-                                size_goal2=len(environment.GoalEnvData.goals2_list),
-                                algorithm=nn.ADAM, learning_rate=0.001,
-                                L2_reg=0.0001,
-                                initialization=nn.HE,
-                                nonlinearity=nn.RELU,
-                                last_action_inputs=True)
+    print("ONLY GOALS")
+    for model_type in ["goals"]:
+        print(model_type)
+        if model_type == "goals":
+            goals = True
+            model_files = "bigmodel1_yesgoals_relu_adam_nonoise"
+        elif model_type == "no_goals":
+            goals = False
+            model_files = "bigmodel1_nogoals_relu_adam_nonoise"
+        else:
+            raise ValueError()
+        for lesion in [1, 2, 3, 4, 5, 6]:
+            for noise in [0.0]:
+                print("\n\n\n" + str(noise))
+                for i in range(10):
+                    print(i)
 
-        stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=3010, check_frequency=1000,
-                                     stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
-        model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
-                                  noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL)
-        utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise", model)
-        """
-        model = utils.load_object("bigmodel1_nogoals_relu_adam_nonoise")
+                    model = utils.load_object(model_files, i)  # "bigmodel1_nogoals_relu_adam_nonoise", i)
 
-        test_data = goalenv2020.generate_test_data(model, noise=noise,
-                                                   goal1_noise=0., goal2_noise=0.,
-                                                   goals=False, num_tests=1,
-                                                   sequence_ids= range(21),
-                                                   noise_per_step=True,
-                                                   disruption_per_step=False,
-                                                   initialization=nn.SEMINORMAL)
+                    lesion_goal1 = lesion_goal2 = lesion_actions = False
+                    if lesion == 1: lesion_goal1 = True
+                    elif lesion == 2: lesion_goal2 = True
+                    elif lesion == 3: lesion_actions = True
+                    elif lesion == 4: lesion_goal1 = lesion_goal2 = True
+                    elif lesion == 5: lesion_goal1 = lesion_goal2 = lesion_actions = True
+                    elif lesion == 6: lesion_goal2 = lesion_actions = True
+                    test_data = goalenv2020.generate_test_data(model, noise=noise,  goal1_noise=0., goal2_noise=0.,
+                                                               goals=goals, num_tests=10, sequence_ids=range(21),
+                                                               noise_per_step=False, noise_per_step_to_input=False,
+                                                               disruption_per_step=False, initialization=nn.SEMINORMAL,
+                                                               lesion_goal1_units=lesion_goal1,
+                                                               lesion_goal2_units=lesion_goal2,
+                                                               lesion_action_units=lesion_actions)
 
-        #utils.save_object("test_data_error_test", test_data)
-        #test_data = utils.load_object("test_data_error_test")
-        tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=False)  #, mds_sequences=[2, 5, 11], mds_range=15)
-        error_data_list.append(error_data)
-        #utils.save_object("tsne_bigmodel1_yesgoals", tsne_results)
-        #utils.save_object("tsnetest_bigmodel1_yesgoals", test_data)
-        #goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=True,
-        #          tsne_errors=True, tsne_sequence=[2, 5, 11], tsne_sequence_interval=[2, 14], filename="tsne", annotate=False)
-        #utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
-utils.write_lists_to_csv("my_error_results.csv", error_data_list, labels=goalenv2020.error_testing_labels)
-        """
+                    tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=False)
+                    error_data_list.append(error_data)
+
+    utils.write_lists_to_csv("error_results_lesion.csv", error_data_list, labels=goalenv2020.error_testing_labels)
+
+    from goalenv import goalenv2020
+    from goalenv import environment
+    error_data_list = []
+    for model_type in ["goals", "no_goals"]:
+        print(model_type)
+        if model_type == "goals":
+            goals = True
+            model_files = "bigmodel1_yesgoals_relu_adam_nonoise"
+        elif model_type == "no_goals":
+            goals = False
+            model_files = "bigmodel1_nogoals_relu_adam_nonoise"
+        else:
+            raise ValueError()
+        for noise in [0.1, 0.5, 1.0, 1.5, 2.0, 3.0]:
+            print("\n\n\n" + str(noise))
+            for i in range(10):
+                print(i)
+                """model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+                                        size_goal1=len(environment.GoalEnvData.goals1_list),
+                                        size_goal2=len(environment.GoalEnvData.goals2_list),
+                                        algorithm=nn.ADAM, learning_rate=0.001,
+                                        L2_reg=0.0001,
+                                        initialization=nn.HE,
+                                        nonlinearity=nn.RELU,
+                                        last_action_inputs=True)
+        
+                stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=3010, check_frequency=1000,
+                                             stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
+                model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
+                                          noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL)
+                utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise", model)
+                """
+                model = utils.load_object(model_files, i)  #"bigmodel1_nogoals_relu_adam_nonoise", i)
+
+                test_data = goalenv2020.generate_test_data(model, noise=noise,
+                                                           goal1_noise=0., goal2_noise=0.,
+                                                           goals=goals, num_tests=1,
+                                                           sequence_ids= range(21),
+                                                           noise_per_step=False,
+                                                           noise_per_step_to_input=True,
+                                                           disruption_per_step=False,
+                                                           initialization=nn.SEMINORMAL)
+
+                #utils.save_object("test_data_error_test", test_data)
+                #test_data = utils.load_object("test_data_error_test")
+                tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=False)  #, mds_sequences=[2, 5, 11], mds_range=15)
+                error_data_list.append(error_data)
+                #utils.save_object("tsne_bigmodel1_yesgoals", tsne_results)
+                #utils.save_object("tsnetest_bigmodel1_yesgoals", test_data)
+                #goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=True,
+                #          tsne_errors=True, tsne_sequence=[2, 5, 11], tsne_sequence_interval=[2, 14], filename="tsne", annotate=False)
+                #utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
+
+utils.write_lists_to_csv("error_results_input_noise.csv", error_data_list, labels=goalenv2020.error_testing_labels)
+
 sys.exit()
 
 import cognitiveload.model3 as mod3
@@ -113,23 +169,23 @@ nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
                             size_action=None,  # these will get filled automatically
                             size_observation=None,  #
                             size_hidden=100,
-                            L1_reg=0, L2_reg=0.0001)
+                            L1_reg=0, L2_reg=0.00001)
 
 stopping = nn.ParamsStopping(max_iterations=150001, min_iterations=10000, check_frequency=1000,
                              stop_condition=mod3.stop_condition, blanks=False)
 mod3.run_model3_multiple(stopping_params=stopping,
-                         num_networks=20, #from_file="model3_nodummy"
-                         name="model3_withoutdummy_150000_goals",
+                         num_networks=3, #from_file="model3_nodummy"
+                         name="test",#"model3_withoutdummy_150000_goals",
                          hrp=hrp,
                          nnparams=nnparams,
                          blanks=False)
-
+sys.exit()
 print('with blanks now')
 
 stopping = nn.ParamsStopping(max_iterations=150001, min_iterations=10000, check_frequency=1000,
                              stop_condition=mod3.stop_condition, blanks=True)
 mod3.run_model3_multiple(stopping_params=stopping,
-                         num_networks=20, #from_file="model3_nodummy"
+                         num_networks=5, #from_file="model3_nodummy"
                          name="model3_withdummy_150000_goals",
                          hrp=hrp,
                          nnparams=nnparams,

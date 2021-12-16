@@ -210,13 +210,13 @@ def stop_condition(nnet, blanks):
     _, accuracy_ari, _ = test_network_ari(nnet, blanks)
     _, accuracy_bev, _ = test_network_bev(nnet, blanks)
     if not blanks:
-        return np.all(accuracy_both == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and \
-           np.all(accuracy_ari == [1., 1., 1., 1., 1., 1.]) and \
-           np.all(accuracy_bev == [.5, 1., .5, 1., 1., 1.])
+        return np.all(accuracy_both >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., .95]) and \
+           np.all(accuracy_ari >= [1., 1., 1., 1., 1., .95]) and \
+           np.all(accuracy_bev >= [.5, .5, 1., 1., 1., 1.])
     elif blanks:
-        return np.all(accuracy_both == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and \
-        np.all(accuracy_ari == [1., 1., 1., 1., 1., 1., 1., 1., 1., 1.]) and \
-        np.all(accuracy_bev == [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1.])
+        return np.all(accuracy_both >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., .95]) and \
+        np.all(accuracy_ari >= [1., 1., 1., 1., 1., 1., 1., 1., 1., 1., .95]) and \
+        np.all(accuracy_bev >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1.])
 
 
 def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
