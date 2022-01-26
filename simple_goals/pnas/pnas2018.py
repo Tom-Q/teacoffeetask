@@ -257,7 +257,7 @@ def make_rdm_noisy(name, num_networks, noise, num_runs_per_network=10, title="-"
 
 
 def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True, skips=[],
-                      rdm_type=analysis.SPEARMAN, noise=0.):
+                      rdm_type=analysis.SPEARMAN, noise=0., save_name=None):
     # Make one rdm for each network
     hidden_activations = []
     rdmatrices = []
@@ -296,14 +296,16 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
     avg_matrix = avg_matrix / num_networks
     name=name.replace('.', '_')+'_'+rdm_type
     if save_files:
-        np.savetxt(name+"_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
+        if save_name is None:
+            save_name = name
+        np.savetxt(save_name+"_rdm.txt", avg_matrix, delimiter="\t", fmt='%.2e')
     labels = []
     for i, sequence in enumerate(pnas2018task.seqs):
         for action in sequence[1:]:
             labels.append(str(i)+'_'+action)
     analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
     if save_files:
-        plt.savefig(name+'_rdm.jpeg')
+        plt.savefig(save_name+'_rdm')
     plt.clf()
 
     mdsy = analysis.mds(avg_matrix)
@@ -311,14 +313,14 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
         analysis.plot_mds_points(mdsy[6 * i:6 * i + 6], range(6), labels=labels[6 * i:6 * i + 6], style=style)
     plt.title(title)
     if save_files:
-        plt.savefig(name + '_mds')
+        plt.savefig(save_name + '_mds')
     plt.clf()
     return avg_matrix, hidden_activations
 
 
 def make_rdm_multiple_ldt(name, num_networks, with_goals=False, title="-", save_files=True, skips=[],
                           rdm_type=analysis.SPEARMAN, noise_during=0., noise_after=0., num_samples=2,
-                          initial_context=ZEROS, log_scale=False):
+                          initial_context=ZEROS, log_scale=False, save_name=None):
     # Make one rdm for each network
     #hidden_activations = []
     rdmatrices = []
@@ -358,14 +360,16 @@ def make_rdm_multiple_ldt(name, num_networks, with_goals=False, title="-", save_
         avg_matrix = np.where(avg_matrix != 0,  np.log10(avg_matrix), 0)
     name=name.replace('.', '_')+'_'+rdm_type
     if save_files:
-        np.savetxt(name+"_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
+        if save_name is None:
+            save_name = name
+        np.savetxt(save_name+"_rdm_mat.txt", avg_matrix, delimiter="\t", fmt='%.2e')
     labels = []
     for i, sequence in enumerate(pnas2018task.seqs):
         for action in sequence[1:]:
             labels.append(str(i)+'_'+action)
     analysis.plot_rdm(avg_matrix, labels, title + " LD-t matrix" + " (log scale)" if log_scale else "")
     if save_files:
-        plt.savefig(name+'_rdm.jpeg')
+        plt.savefig(save_name+'_rdm.jpeg')
     plt.clf()
 
     mdsy = analysis.mds(avg_matrix)

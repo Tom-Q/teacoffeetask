@@ -4,6 +4,42 @@ import sys
 import neuralnet as nn
 from cognitiveload import cogloadtask
 
+import analysis
+from pnas import pnas2018
+
+"""
+#for i in range(25):
+#    print(i)
+#    model, _ = pnas2018.train(iterations=5000, learning_rate=0.1, size_hidden=100)
+#    utils.save_object("rdm_measure_test100", model)
+
+rdms=[]
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=100, rdm_type=analysis.SPEARMAN, save_name="spearman_1")[0])
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=100, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_1")[0])
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=100, rdm_type=analysis.MAHALANOBIS, save_name="mahalanobis_1")[0])
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=100, noise_after=.1, num_samples=20, save_name="LDt_1_01"))
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=100, noise_after=.5, num_samples=20, save_name="LDt_1_05"))
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=100, noise_after=1., num_samples=20, save_name="LDt_1_1"))
+
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=25, rdm_type=analysis.SPEARMAN, save_name="spearman_2")[0])
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=25, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_2")[0])
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=25, rdm_type=analysis.MAHALANOBIS, save_name="mahalanobis_2")[0])
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=25, noise_after=.1, num_samples=20, save_name="LDt_2_01"))
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=25, noise_after=.5, num_samples=20, save_name="LDt_2_05"))
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=25, noise_after=1., num_samples=20, save_name="LDt_2_1"))
+10
+
+rdm = analysis.rdm_of_rdms(rdms, type=analysis.PEARSON)
+analysis.save_rdm(rdm, filename="rdm_of_rdms", labels=["spearman_1", "euclidian_1", "mahalanobis_1",
+                                                       "LDt_1_01", "LDt_1_05", "LDt_1_1",
+                                                       "spearman_2", "euclidian_2", "mahalanobis_2",
+                                                       "LDt_2_01", "LDt_2_05", "LDt_2_1"])
+sys.exit()
+"""
+#analysis.bargraph_with_without_goalunits("myfile4.png")
+#analysis.barplot_figure_errors("myfile2.png")
+#analysis.barplot_figure_ablations("myfile3.png")
+#sys.exit()
 # TODO: try with random initial state. Try with more units
 # import time
 # from pnas import pnas2018
@@ -53,7 +89,7 @@ if False:
 if True:
     from goalenv import goalenv2020
     from goalenv import environment
-
+    """
     error_data_list = []
     print("ONLY GOALS")
     for model_type in ["goals"]:
@@ -66,7 +102,7 @@ if True:
             model_files = "bigmodel1_nogoals_relu_adam_nonoise"
         else:
             raise ValueError()
-        for lesion in [1, 2, 3, 4, 5, 6]:
+        for lesion in [7, 8, 9]:#[1, 2, 3, 4, 5, 6]:
             for noise in [0.0]:
                 print("\n\n\n" + str(noise))
                 for i in range(10):
@@ -74,28 +110,52 @@ if True:
 
                     model = utils.load_object(model_files, i)  # "bigmodel1_nogoals_relu_adam_nonoise", i)
 
-                    lesion_goal1 = lesion_goal2 = lesion_actions = False
+                    lesion_goal1 = lesion_goal2 = lesion_actions = lesion_observation = False
                     if lesion == 1: lesion_goal1 = True
                     elif lesion == 2: lesion_goal2 = True
                     elif lesion == 3: lesion_actions = True
                     elif lesion == 4: lesion_goal1 = lesion_goal2 = True
                     elif lesion == 5: lesion_goal1 = lesion_goal2 = lesion_actions = True
                     elif lesion == 6: lesion_goal2 = lesion_actions = True
+                    elif lesion == 7: lesion_observation = True
+                    elif lesion == 8: lesion_goal1 = lesion_actions = True
+                    elif lesion == 9: lesion_observation = lesion_actions = True
                     test_data = goalenv2020.generate_test_data(model, noise=noise,  goal1_noise=0., goal2_noise=0.,
                                                                goals=goals, num_tests=10, sequence_ids=range(21),
                                                                noise_per_step=False, noise_per_step_to_input=False,
                                                                disruption_per_step=False, initialization=nn.SEMINORMAL,
                                                                lesion_goal1_units=lesion_goal1,
                                                                lesion_goal2_units=lesion_goal2,
-                                                               lesion_action_units=lesion_actions)
+                                                               lesion_action_units=lesion_actions,
+                                                               lesion_observation_units=lesion_observation)
 
                     tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=False)
                     error_data_list.append(error_data)
 
     utils.write_lists_to_csv("error_results_lesion.csv", error_data_list, labels=goalenv2020.error_testing_labels)
+    sys.exit()
+    """
+    """
+    error_data_list = []
 
-    from goalenv import goalenv2020
-    from goalenv import environment
+    model = utils.load_object("bigmodel1_yesgoals_relu_adam_nonoise")
+
+    test_data = goalenv2020.generate_test_data(model, noise=1.,
+                                               goal1_noise=0., goal2_noise=0.,
+                                               goals=True, num_tests=100,
+                                               sequence_ids=range(21),
+                                               noise_per_step=True,
+                                               noise_per_step_to_input=False,
+                                               disruption_per_step=False,
+                                               initialization=nn.SEMINORMAL)
+    print("generated")
+    utils.save_object("test_data_error_test", test_data)
+    test_data = utils.load_object("test_data_error_test")
+    goalenv2020.VERBOSE=True
+    tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=False)
+
+    sys.exit()
+    """
     error_data_list = []
     for model_type in ["goals", "no_goals"]:
         print(model_type)
@@ -107,11 +167,11 @@ if True:
             model_files = "bigmodel1_nogoals_relu_adam_nonoise"
         else:
             raise ValueError()
-        for noise in [0.1, 0.5, 1.0, 1.5, 2.0, 3.0]:
+        for noise in [1.0, 2.0, 3.0]:
             print("\n\n\n" + str(noise))
             for i in range(10):
                 print(i)
-                """model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+                model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
                                         size_goal1=len(environment.GoalEnvData.goals1_list),
                                         size_goal2=len(environment.GoalEnvData.goals2_list),
                                         algorithm=nn.ADAM, learning_rate=0.001,
@@ -120,178 +180,352 @@ if True:
                                         nonlinearity=nn.RELU,
                                         last_action_inputs=True)
         
-                stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=3010, check_frequency=1000,
-                                             stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
-                model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
-                                          noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL)
-                utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise", model)
-                """
+                #stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=3010, check_frequency=1000,
+                #                             stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
+                #model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
+                #                          noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL)
+                #utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise", model)
+
                 model = utils.load_object(model_files, i)  #"bigmodel1_nogoals_relu_adam_nonoise", i)
 
                 test_data = goalenv2020.generate_test_data(model, noise=noise,
                                                            goal1_noise=0., goal2_noise=0.,
-                                                           goals=goals, num_tests=1,
-                                                           sequence_ids= range(21),
-                                                           noise_per_step=False,
-                                                           noise_per_step_to_input=True,
-                                                           disruption_per_step=False,
-                                                           initialization=nn.SEMINORMAL)
+                                                           goals=goals, num_tests=3,
+                                                           sequence_ids = range(21),
+                                                           noise_per_step = True,
+                                                           noise_per_step_to_input = False,
+                                                           disruption_per_step = False,
+                                                           initialization = nn.SEMINORMAL)
 
-                #utils.save_object("test_data_error_test", test_data)
-                #test_data = utils.load_object("test_data_error_test")
-                tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=False)  #, mds_sequences=[2, 5, 11], mds_range=15)
+                utils.save_object("test_data_error_test"+model_type+str(noise)+str(i), test_data)
+                test_data = utils.load_object("test_data_error_test"+model_type+str(noise)+str(i))
+                tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=True)  #, mds_sequences=[2, 5, 11], mds_range=15)
                 error_data_list.append(error_data)
-                #utils.save_object("tsne_bigmodel1_yesgoals", tsne_results)
+
+                #utils.save_objeNo Goact("tsne_bigmodel1_yesgoals", tsne_results)
                 #utils.save_object("tsnetest_bigmodel1_yesgoals", test_data)
                 #goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=True,
                 #          tsne_errors=True, tsne_sequence=[2, 5, 11], tsne_sequence_interval=[2, 14], filename="tsne", annotate=False)
                 #utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
 
-utils.write_lists_to_csv("error_results_input_noise.csv", error_data_list, labels=goalenv2020.error_testing_labels)
+    utils.write_lists_to_csv("loss_actions_goals.csv", error_data_list, labels=goalenv2020.error_testing_labels)
 
-sys.exit()
+    sys.exit()
 
-import cognitiveload.model3 as mod3
-mod3.FAST_RDM = True
-#hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00002)
-#mod3.run_model3_multiple(from_file="model3_test_gradient_2goals00002", num_networks=2, name="model3_test_gradient_2goals00002_test2", hrp=hrp)
+if True:
+    import cognitiveload.model3 as mod3
+    mod3.FAST_RDM = True
+    #hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00002)
+    #mod3.run_model3_multiple(from_file="model3_test_gradient_2goals00002", num_networks=2, name="model3_test_gradient_2goals00002_test2", hrp=hrp)
 
-# model3_ADAMRELU are best normal ones.
-# "model3_ADAMRELU_gradient" is a first try for gradient ones. Didn't work.
-# "model3_ADAMRELU_gradient0_0001" is a second try for gradient ones.
-# Best perf so far: ADAM, RELU, HE, 0.0003, 300,000  (1, 1, .99, .83, .97, .99, .99, .97, .76, 1.0.
-# With no reg: (1., .93, .99, .99, .95, .)
-hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00001)
-nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
-                            nonlinearity=nn.RELU,
-                            initialization=nn.HE,
-                            learning_rate=0.002,
-                            size_action=None,  # these will get filled automatically
-                            size_observation=None,  #
-                            size_hidden=100,
-                            L1_reg=0, L2_reg=0.00001)
+    # model3_ADAMRELU are best normal ones.
+    # "model3_ADAMRELU_gradient" is a first try for gradient ones. Didn't work.
+    # "model3_ADAMRELU_gradient0_0001" is a second try for gradient ones.
+    # Best perf so far: ADAM, RELU, HE, 0.0003, 300,000  (1, 1, .99, .83, .97, .99, .99, .97, .76, 1.0.
+    # With no reg: (1., .93, .99, .99, .95, .)
+    hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00001)
+    nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
+                                nonlinearity=nn.RELU,
+                                initialization=nn.HE,
+                                learning_rate=0.002,
+                                size_action=None,  # these will get filled automatically
+                                size_observation=None,  #
+                                size_hidden=100,
+                                L1_reg=0, L2_reg=0.00001)
 
-stopping = nn.ParamsStopping(max_iterations=150001, min_iterations=10000, check_frequency=1000,
-                             stop_condition=mod3.stop_condition, blanks=False)
-mod3.run_model3_multiple(stopping_params=stopping,
-                         num_networks=3, #from_file="model3_nodummy"
-                         name="test",#"model3_withoutdummy_150000_goals",
-                         hrp=hrp,
-                         nnparams=nnparams,
-                         blanks=False)
-sys.exit()
-print('with blanks now')
-
-stopping = nn.ParamsStopping(max_iterations=150001, min_iterations=10000, check_frequency=1000,
-                             stop_condition=mod3.stop_condition, blanks=True)
-mod3.run_model3_multiple(stopping_params=stopping,
-                         num_networks=5, #from_file="model3_nodummy"
-                         name="model3_withdummy_150000_goals",
-                         hrp=hrp,
-                         nnparams=nnparams,
-                         blanks=True)
-sys.exit()
-
-#3 and 6 need extra training.
-updated_models = []
-for i in range(20):
+    stopping = nn.ParamsStopping(max_iterations=150001, min_iterations=10000, check_frequency=1000,
+                                 stop_condition=mod3.stop_condition, blanks=True, min_accuracy=0.95)
+    i=0
     print(i)
-    model = utils.load_object("model3_ADAMRELU_gradient", i)
-    hidden_activation, accuracy_totals, accuracy_fullseqs = mod3.test_network_ari(model)
-    print(accuracy_fullseqs)
-
-
-print("\n\n\nLEARNING RATE = 0.002, 100 HIDDEN UNITS, HRP STR = 0.000001")
-hrp.reg_strength = 0.00001
-mod3.run_model3_multiple(num_networks=20, from_file="model3_ADAMRELU_gradient",
-                         name="model3_ADAMRELU_gradient",
-                         hrp=hrp,
-                         nnparams=nnparams,
-                         iterations=150000,
-                         early_stopping_from=100000)
-
-
-sys.exit()
-
-print("\n\n\nLEARNING RATE = 0.01 AGAIN, 100 HIDDEN UNITS")
-nnparams.learning_rate = 0.01
-for i in range(4):
-    mod3.run_model3_multiple(num_networks=1, name="test10",
+    hrp.reg_strength=0.0
+    nnparams.L2_reg = 0.0
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
                              hrp=hrp,
                              nnparams=nnparams,
-                             iterations=150000)
+                             blanks=True)
+    # 0. about 50,000 iterations. No left/right difference
 
-print("\n\n\nLEARNING RATE = 0.003 again, 100 HIDDEN UNITS")
-nnparams.learning_rate = 0.003
-for i in range(4):
-    mod3.run_model3_multiple(num_networks=1, name="test10",
+    i+=1
+    print(i)
+    hrp.reg_strength = 0.000001
+    nnparams.L2_reg = 0.0
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
                              hrp=hrp,
                              nnparams=nnparams,
-                             iterations=150000)
+                             blanks=True)
+    # 1. about 45,000 iterations, high variance in training time. No left/right difference
 
-print("\n\n\nLEARNING RATE = 0.0001, 50 HIDDEN UNITS")
-nnparams.learning_rate = 0.0001
-for i in range(10):
-    mod3.run_model3_multiple(num_networks=1, name="test3",
+    i+=1
+    print(i)
+    hrp.reg_strength = 0.00001
+    nnparams.L2_reg = 0.0
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
                              hrp=hrp,
                              nnparams=nnparams,
-                             iterations=500000)
+                             blanks=True)
+    # 2. 50,000 iterations agian. No left/right difference
 
-print("\n\n\nLEARNING RATE = 0.001, 100 HIDDEN UNITS")
-nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
-                            nonlinearity=nn.RELU,
-                            initialization=nn.HE,
-                            learning_rate=0.001,
-                            size_action=None,  # these will get filled automatically
-                            size_observation=None,
-                            size_hidden=100,
-                            L1_reg=0, L2_reg=0.000001)
-for i in range(10):
-    mod3.run_model3_multiple(num_networks=1, name="test4",
+    i+=1
+    print(i)
+    hrp.reg_strength = 0.0001
+    nnparams.L2_reg = 0.0
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
                              hrp=hrp,
                              nnparams=nnparams,
-                             iterations=500000)
+                             blanks=True)
+    # 3. about 100,000 iterations. Massive left/right difference.=
 
-print("\n\n\nLEARNING RATE = 0.0003, 100 HIDDEN UNITS")
-nnparams.learning_rate = 0.0003
-for i in range(10):
-    mod3.run_model3_multiple(num_networks=1, name="test5",
+    i+=1
+    print(i)
+    hrp.reg_strength = 0.001
+    nnparams.L2_reg = 0.0
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
                              hrp=hrp,
                              nnparams=nnparams,
-                             iterations=500000)
+                             blanks=True)
+    # 4. Accuracy about 15 to 20%, always hits max iteration (151001). Even more massive difference.
 
-print("\n\n\nLEARNING RATE = 0.0001, 100 HIDDEN UNITS")
-nnparams.learning_rate = 0.0001
-for i in range(10):
-    mod3.run_model3_multiple(num_networks=1, name="test6",
+    i+=1
+    print(i)
+    hrp.reg_strength=0.0
+    nnparams.L2_reg = 0.000001
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
                              hrp=hrp,
                              nnparams=nnparams,
-                             iterations=500000)
+                             blanks=True)
+    # 5. about 50000, no effect.  Combined number quite self-similar, maybe an idiosyncracy?
 
-print("\n\n\nLEARNING RATE = 0.001, 25 HIDDEN UNITS")
-nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
-                            nonlinearity=nn.RELU,
-                            initialization=nn.HE,
-                            learning_rate=0.001,
-                            size_action=None,  # these will get filled automatically
-                            size_observation=None,
-                            size_hidden=25,
-                            L1_reg=0, L2_reg=0.000001)
-for i in range(10):
-    mod3.run_model3_multiple(num_networks=1, name="test7",
+
+    i+=1
+    print(i)
+    hrp.reg_strength=0.0
+    nnparams.L2_reg = 0.00001
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
                              hrp=hrp,
                              nnparams=nnparams,
-                             iterations=500000)
+                             blanks=True)
+    # 6. 50000 again. Seems to have more contrast compared to 5. Combined numbers less self-simialr.
 
-print("\n\n\nLEARNING RATE = 0.0001, 25 HIDDEN UNITS")
-nnparams.learning_rate = 0.0001
-for i in range(10):
-    mod3.run_model3_multiple(num_networks=1, name="test8",
+
+    i+=1
+    print(i)
+    hrp.reg_strength=0.0
+    nnparams.L2_reg = 0.0001
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
                              hrp=hrp,
                              nnparams=nnparams,
-                             iterations=500000)
+                             blanks=True)
+    # 7.  50000 again. Feels like a mashup of 5 and 6. Impression = this doesn4t matter at this point
 
-sys.exit(0)
+    i+=1
+    print(i)
+    hrp.reg_strength=0.0
+    nnparams.L2_reg = 0.001
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
+                             hrp=hrp,
+                             nnparams=nnparams,
+                             blanks=True)
+    # 8. 50000 again. Nothing obvious
+
+
+    i+=1
+    print(i)
+    hrp.reg_strength=0.0
+    nnparams.L2_reg = 0.01
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
+                             hrp=hrp,
+                             nnparams=nnparams,
+                             blanks=True)
+    # 9. max iterations, accuracy about 75-90%. Looks high contrast again, ish.
+
+
+    i+=1
+    print(i)
+    hrp.reg_strength=0.000001
+    hrp.reg_increase="square"
+    nnparams.L2_reg = 0.0
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
+                             hrp=hrp,
+                             nnparams=nnparams,
+                             blanks=True)
+    # 10. about 90000 iterations. Clear effect, big differences.
+
+
+    i+=1
+    print(i)
+    hrp.reg_strength=0.00001
+    hrp.reg_increase="square"
+    nnparams.L2_reg = 0.0
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
+                             hrp=hrp,
+                             nnparams=nnparams,
+                             blanks=True)
+    # 11. about 150,000 iterations, some finish some dont
+
+    i+=1
+    print(i)
+    hrp.reg_strength=0.0001
+    hrp.reg_increase="square"
+    nnparams.L2_reg = 0.0
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
+                             hrp=hrp,
+                             nnparams=nnparams,
+                             blanks=True)
+    # 12. max iterations, accuracy about 35%
+
+    i+=1
+    print(i)
+    hrp.reg_strength=0.001
+    hrp.reg_increase="square"
+    nnparams.L2_reg = 0.0
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
+                             hrp=hrp,
+                             nnparams=nnparams,
+                             blanks=True)
+    # 13. max iterations, accuracy 5 to 30%
+
+
+    sys.exit()
+    print('with blanks now')
+
+    stopping = nn.ParamsStopping(max_iterations=150001, min_iterations=10000, check_frequency=1000,
+                                 stop_condition=mod3.stop_condition, blanks=True)
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3_nodummy"
+                             name="model3_withdummy_150000_goals",
+                             hrp=hrp,
+                             nnparams=nnparams,
+                             blanks=True)
+    sys.exit()
+
+    #3 and 6 need extra training.
+    updated_models = []
+    for i in range(20):
+        print(i)
+        model = utils.load_object("model3_ADAMRELU_gradient", i)
+        hidden_activation, accuracy_totals, accuracy_fullseqs = mod3.test_network_ari(model)
+        print(accuracy_fullseqs)
+
+
+    print("\n\n\nLEARNING RATE = 0.002, 100 HIDDEN UNITS, HRP STR = 0.000001")
+    hrp.reg_strength = 0.00001
+    mod3.run_model3_multiple(num_networks=20, from_file="model3_ADAMRELU_gradient",
+                             name="model3_ADAMRELU_gradient",
+                             hrp=hrp,
+                             nnparams=nnparams,
+                             iterations=150000,
+                             early_stopping_from=100000)
+
+
+    sys.exit()
+
+    print("\n\n\nLEARNING RATE = 0.01 AGAIN, 100 HIDDEN UNITS")
+    nnparams.learning_rate = 0.01
+    for i in range(4):
+        mod3.run_model3_multiple(num_networks=1, name="test10",
+                                 hrp=hrp,
+                                 nnparams=nnparams,
+                                 iterations=150000)
+
+    print("\n\n\nLEARNING RATE = 0.003 again, 100 HIDDEN UNITS")
+    nnparams.learning_rate = 0.003
+    for i in range(4):
+        mod3.run_model3_multiple(num_networks=1, name="test10",
+                                 hrp=hrp,
+                                 nnparams=nnparams,
+                                 iterations=150000)
+
+    print("\n\n\nLEARNING RATE = 0.0001, 50 HIDDEN UNITS")
+    nnparams.learning_rate = 0.0001
+    for i in range(10):
+        mod3.run_model3_multiple(num_networks=1, name="test3",
+                                 hrp=hrp,
+                                 nnparams=nnparams,
+                                 iterations=500000)
+
+    print("\n\n\nLEARNING RATE = 0.001, 100 HIDDEN UNITS")
+    nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
+                                nonlinearity=nn.RELU,
+                                initialization=nn.HE,
+                                learning_rate=0.001,
+                                size_action=None,  # these will get filled automatically
+                                size_observation=None,
+                                size_hidden=100,
+                                L1_reg=0, L2_reg=0.000001)
+    for i in range(10):
+        mod3.run_model3_multiple(num_networks=1, name="test4",
+                                 hrp=hrp,
+                                 nnparams=nnparams,
+                                 iterations=500000)
+
+    print("\n\n\nLEARNING RATE = 0.0003, 100 HIDDEN UNITS")
+    nnparams.learning_rate = 0.0003
+    for i in range(10):
+        mod3.run_model3_multiple(num_networks=1, name="test5",
+                                 hrp=hrp,
+                                 nnparams=nnparams,
+                                 iterations=500000)
+
+    print("\n\n\nLEARNING RATE = 0.0001, 100 HIDDEN UNITS")
+    nnparams.learning_rate = 0.0001
+    for i in range(10):
+        mod3.run_model3_multiple(num_networks=1, name="test6",
+                                 hrp=hrp,
+                                 nnparams=nnparams,
+                                 iterations=500000)
+
+    print("\n\n\nLEARNING RATE = 0.001, 25 HIDDEN UNITS")
+    nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
+                                nonlinearity=nn.RELU,
+                                initialization=nn.HE,
+                                learning_rate=0.001,
+                                size_action=None,  # these will get filled automatically
+                                size_observation=None,
+                                size_hidden=25,
+                                L1_reg=0, L2_reg=0.000001)
+    for i in range(10):
+        mod3.run_model3_multiple(num_networks=1, name="test7",
+                                 hrp=hrp,
+                                 nnparams=nnparams,
+                                 iterations=500000)
+
+    print("\n\n\nLEARNING RATE = 0.0001, 25 HIDDEN UNITS")
+    nnparams.learning_rate = 0.0001
+    for i in range(10):
+        mod3.run_model3_multiple(num_networks=1, name="test8",
+                                 hrp=hrp,
+                                 nnparams=nnparams,
+                                 iterations=500000)
+
+    sys.exit(0)
 """
 print("\n\nNOW DOING: 0.003")
 for i in range(3):
@@ -330,10 +564,7 @@ for i in range(3):
                              learning_rate=0.003,
                              iterations=300000)
 """
-#mod3.run_model3_multiple(num_networks=1, name="model3_test_gradient_2goals00005_relutest", hrp=hrp, learning_rate=0.001, iterations=100000)
-#mod3.run_model3_multiple(num_networks=1, name="model3_test_gradient_2goals00005_relutest", hrp=hrp, learning_rate=0.001, iterations=200000)
-#mod3.run_model3_multiple(from_file="model3_test_gradient_2goals00005", num_networks=5, name="model3_test_gradient_2goals00005_mdsfix", hrp=hrp)
-sys.exit(0)
+
 
 
 

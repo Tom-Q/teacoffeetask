@@ -149,15 +149,23 @@ def stats_per_sequence(sequence_ids, outputs_per_sequence, goals=True):
 
 
 def compute_last_step_loss(model, target, include_regularization=False):
-    loss = 0
-    loss += tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, model.h_action_softmax[-1])
+    # action loss
+    action_loss = tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, model.h_action_softmax[-1])
+    total_loss = action_loss
+    goal_loss = action_loss * 0. #just so it's
     if target.goal1_one_hot is not None:
-        loss += tf.nn.softmax_cross_entropy_with_logits(target.goal1_one_hot, model.h_goal1_softmax[-1])
+        goal1_loss = tf.nn.softmax_cross_entropy_with_logits(target.goal1_one_hot, model.h_goal1_softmax[-1])
+        total_loss += goal1_loss
+        goal_loss += goal1_loss
     if target.goal2_one_hot is not None:
-        loss += tf.nn.softmax_cross_entropy_with_logits(target.goal2_one_hot, model.h_goal2_softmax[-1])
+        goal2_loss = tf.nn.softmax_cross_entropy_with_logits(target.goal2_one_hot, model.h_goal2_softmax[-1])
+        total_loss += goal2_loss
+        goal_loss += goal2_loss
     if include_regularization:
-        loss += model.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in model.all_weights])
-    return loss.numpy()[0]
+        regularization_loss = model.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in model.all_weights])
+        total_loss += regularization_loss
+
+    return total_loss.numpy()[0], action_loss.numpy()[0], goal_loss.numpy()[0]
 
 
 def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_noise=0., num_tests=10, goals=False,
@@ -167,6 +175,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                        lesion_goal1_units=False,
                        lesion_goal2_units=False,
                        lesion_action_units=False,
+                       lesion_observation_units=False,
                        single_step_noise=None):
     # This runs a hundred version of the model with different random initializations
     env = environment.GoalEnv()
@@ -185,7 +194,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
     max_length += 10  # add a bit of a margin for additions
 
     seq_counter = 0
-    for seqid, sequence in enumerate(sequences):
+    for seqid, sequence in zip(sequence_ids, sequences):
         if verbose:
             print("testing sequence: "+str(seqid))
         outputs_per_noise_step = []
@@ -227,7 +236,9 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
 
                     output_sequence = task.BehaviorSequence(sequence.initial_state)
                     output_sequence.activations = []
-                    output_sequence.losses = []
+                    output_sequence.losses = [] #total losses
+                    output_sequence.losses_actions = []
+                    output_sequence.losses_goals = []
                     for j in range(max_length):
                         observation = env.observe()
                         # Add noise to context layer
@@ -249,13 +260,17 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                             model.goal2 *= 0.
                         if lesion_action_units:
                             model.action *= 0.
+                        if lesion_observation_units:
+                            observation *= 0.
 
                         model.feedforward(observation)
 
                         if j < len(sequence.targets):  # after that it's not defined.
                             target = sequence.targets[j] if goals else sequence.targets_nogoals[j]
-                            loss = compute_last_step_loss(model, target, include_regularization=False)
+                            loss, action_loss, goal_loss = compute_last_step_loss(model, target, include_regularization=False)
                             output_sequence.losses.append(loss)
+                            output_sequence.losses_actions.append(action_loss)
+                            output_sequence.losses_goals.append(goal_loss)
                         else:
                             output_sequence.losses.append(None)  # loss is undefined
 
@@ -336,7 +351,11 @@ error_testing_labels = ["total sequences", "correct", "incorrect",
                        "steps noise->error",
                        "loss avg before noise"] + \
                        ["loss on and after noise (no error)"] + [str(i) for i in range(1, 55)] + \
+                       ["loss on and after noise (no error ACTIONS)"] + [str(i) for i in range(1, 55)] + \
+                       ["loss on and after noise (no error GOALS)"] + [str(i) for i in range(1, 55)] + \
                        ["loss on and after noise (error)"] + [str(i) for i in range(1, 55)] + \
+                       ["loss on and after noise (error ACTIONS)"] + [str(i) for i in range(1, 55)] + \
+                       ["loss on and after noise (error GOALS)"] + [str(i) for i in range(1, 55)] + \
                        ["loss error->noise (reverse time)"] + [str(i) for i in range(1, 55)]
 
 def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, mds_range=None):
@@ -379,6 +398,11 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
                 all_targets = [target_sequence] + target_sequence.alt_solutions
                 trial.first_error = None  # This trial is error-free
                 for j, action in enumerate(trial.get_actions_one_hot()):
+                    # TODO: Remove this
+                    # Just for the sake of this one figure
+                    #if target_sequence.alt_solutions[0] not in all_targets:
+                    #    break
+
                     error = True
                     # It's only an error if it's an error for every target...
                     # BUT this misses situations in which the two sequences are somehow tangled together.
@@ -416,15 +440,17 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
                     # remove the no longer valid alternatives.
                     for inv in reversed(invalid):
                         all_targets.pop(inv)
+
                     if error:  # If we found an error we can terminate here
                         break
+
                 if trial.first_error is None:
                     total_correct_seq += 1
                 total_trials += 1
 
             # Need to color the step at which noise is introduced.
-            #if VERBOSE:
-            #    print("Target sequence " + str(i) + " (" + target_sequence.name + ") noise at step " + str(noise_step) + ": errors = " + str(first_error))
+            if VERBOSE:
+                print("Target sequence " + str(i) + " (" + target_sequence.name + ") noise at step " + str(noise_step) + ": errors = " + str(first_error))
     total_fullseq_errors = num_is_a_target
     total_error = total_trials - total_correct_seq
     total_subseq_error = num_replaced
@@ -461,7 +487,11 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
     counter_prior_to_noise = 0
 
     loss_after_noise_no_error = np.zeros(55)
+    loss_after_noise_no_error_goals = np.zeros(55)
+    loss_after_noise_no_error_actions = np.zeros(55)
     loss_after_noise_error = np.zeros(55)
+    loss_after_noise_error_goals = np.zeros(55)
+    loss_after_noise_error_actions = np.zeros(55)
     loss_before_error = np.zeros(55)
     counter_loss_before_error = np.zeros(55)
     counter_loss_after_noise_no_error = np.zeros(55)
@@ -475,10 +505,18 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
                 if sequence.noise_step is not None and i < sequence.noise_step:
                     prior_to_noise_loss_total += sequence.losses[i]
                     counter_prior_to_noise+=1
+
+        # ONLY DO THE ANALYSIS FOR CASES WHERE THE NOISE --> ERROR DURATION IS EXACTLY 5.
+        if sequence.first_error is None or (sequence.first_error is not None and sequence.first_error - sequence.noise_step != 5):
+            continue  # Next sequence
+        else:
+            print('yo')
+
         if sequence.first_error is not None:
             first_error_loss_total += sequence.losses[sequence.first_error]
             counter_first_error += 1
-        # noise step can be > sequence length when the sequence terminated early
+
+        # noise step can be > sequence length when the sequence terminated early.
         if sequence.noise_step is not None and sequence.noise_step < sequence.length:
             noise_loss_total += sequence.losses[sequence.noise_step]
             counter_noise += 1
@@ -487,15 +525,29 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
                 # Record loss between noise and error
                 i = 0
                 while sequence.noise_step + i < sequence.length:
-                    loss = sequence.losses[sequence.noise_step+i]
+                    id = sequence.noise_step+i
+                    loss = sequence.losses[id]
+                    loss_goals = sequence.losses_goals[id]
+                    loss_actions = sequence.losses_actions[id]
+
                     loss_after_noise_no_error[i] += loss
+                    loss_after_noise_no_error_goals[i] += loss_goals
+                    loss_after_noise_no_error_actions[i] += loss_actions
+
                     counter_loss_after_noise_no_error[i] += 1
                     i += 1
             elif sequence.first_error is not None: # an error occurred.
                 i = 0
                 while sequence.noise_step + i < sequence.length and sequence.noise_step + i <= sequence.first_error:
-                    loss = sequence.losses[sequence.noise_step+i]
+                    id = sequence.noise_step+i
+                    loss = sequence.losses[id]
+                    loss_goals = sequence.losses_goals[id]
+                    loss_actions = sequence.losses_actions[id]
+
                     loss_after_noise_error[i] += loss
+                    loss_after_noise_error_goals[i] += loss_goals
+                    loss_after_noise_error_actions[i] += loss_actions
+
                     counter_loss_after_noise_error[i] += 1
                     i += 1
                 # Also record loss between error and noise (going backwards)
@@ -513,6 +565,19 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
     loss_after_noise_no_error = np.divide(loss_after_noise_no_error, counter_loss_after_noise_no_error,
                                      out=np.zeros_like(loss_after_noise_no_error),
                                      where=counter_loss_after_noise_no_error!=0)
+
+    loss_after_noise_error_actions = np.divide(loss_after_noise_error_actions, counter_loss_after_noise_error, out=np.zeros_like(loss_after_noise_error_actions),
+                                  where=counter_loss_after_noise_error!=0)
+    loss_after_noise_no_error_actions = np.divide(loss_after_noise_no_error_actions, counter_loss_after_noise_no_error,
+                                     out=np.zeros_like(loss_after_noise_no_error_actions),
+                                     where=counter_loss_after_noise_no_error!=0)
+
+    loss_after_noise_error_goals = np.divide(loss_after_noise_error_goals, counter_loss_after_noise_error, out=np.zeros_like(loss_after_noise_error_goals),
+                                  where=counter_loss_after_noise_error!=0)
+    loss_after_noise_no_error_goals = np.divide(loss_after_noise_no_error_goals, counter_loss_after_noise_no_error,
+                                     out=np.zeros_like(loss_after_noise_no_error_goals),
+                                     where=counter_loss_after_noise_no_error!=0)
+
     loss_before_error = np.divide(loss_before_error, counter_loss_before_error,
                                   out=np.zeros_like(loss_before_error),
                                   where=counter_loss_before_error!=0)
@@ -534,7 +599,11 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
             steps_noise_to_error/num_errors if num_errors>0 else -1,  # average step to noise->error
             loss_prior_noise_avg] + \
             loss_after_noise_no_error.tolist() +\
+            loss_after_noise_no_error_actions.tolist() +\
+            loss_after_noise_no_error_goals.tolist() +\
             loss_after_noise_error.tolist() +\
+            loss_after_noise_error_actions.tolist() +\
+            loss_after_noise_error_goals.tolist() +\
             loss_before_error.tolist()
 
     #print("LOSS:\n average loss={0:.2f}\n loss on first error={1:.2f}\n loss on noise={2:.2f} (+1: {3:.2f})\n loss_good_seq={4}\n loss_before_noise={5}".format(

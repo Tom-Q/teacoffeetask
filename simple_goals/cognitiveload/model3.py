@@ -205,17 +205,17 @@ def train_all(stopping_params, nnet, hrp=None, blanks=True):
     nnet.new_episode()  # just clear up the network history to avoid any bad surprises
 
 
-def stop_condition(nnet, blanks):
+def stop_condition(nnet, blanks, min_accuracy=1.):
     _, accuracy_both, _ = test_network_all(nnet)
     _, accuracy_ari, _ = test_network_ari(nnet, blanks)
     _, accuracy_bev, _ = test_network_bev(nnet, blanks)
     if not blanks:
-        return np.all(accuracy_both >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., .95]) and \
-           np.all(accuracy_ari >= [1., 1., 1., 1., 1., .95]) and \
+        return np.all(accuracy_both >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
+           np.all(accuracy_ari >= [1., 1., 1., 1., 1., min_accuracy]) and \
            np.all(accuracy_bev >= [.5, .5, 1., 1., 1., 1.])
     elif blanks:
-        return np.all(accuracy_both >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., .95]) and \
-        np.all(accuracy_ari >= [1., 1., 1., 1., 1., 1., 1., 1., 1., 1., .95]) and \
+        return np.all(accuracy_both >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
+        np.all(accuracy_ari >= [1., 1., 1., 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
         np.all(accuracy_bev >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1.])
 
 

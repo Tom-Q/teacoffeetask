@@ -9,6 +9,7 @@ import utils
 import seaborn as sns
 import warnings
 
+PEARSON = "pearson"
 SPEARMAN="spearman"
 MAHALANOBIS = "mahalanobis"
 EUCLIDIAN = "euclidian"
@@ -80,15 +81,19 @@ def rdm_euclidian(vectors):
             matrix[i, j] = np.sqrt(np.sum((vec1-vec2)**2))
     return matrix
 
+import scipy.spatial as scispa
 def rdm_mahalanobis(vectors):
     vectors_mat = np.asarray(vectors)
-    covmat = np.cov(np.transpose(vectors_mat))
+    #mu = np.mean(vectors_mat)
+    covmat = np.cov(vectors_mat.T)
     invcovmat = np.linalg.inv(covmat)
     matrix = np.zeros((len(vectors), len(vectors)))
     for i, vec1 in enumerate(vectors):
         for j, vec2 in enumerate(vectors):
-            matrix[i, j] = np.matmul(np.transpose(vec1-vec2), np.matmul(invcovmat, (vec1-vec2)))
-    return matrix
+            matrix[i, j] = scispa.distance.mahalanobis(vec1, vec2, invcovmat)
+            # np.matmul(np.transpose(vec1-vec2), np.matmul(invcovmat, (vec1-vec2)))
+    return np.nan_to_num(matrix)
+
 
 def rdm_noisy_mahalanobis(vectors):
     """
@@ -147,17 +152,40 @@ def plot_rdm(matrix, labels, title, show_rdm=False, vmin=None, vmax=None, figsiz
     if show_rdm:
         plt.show()
 
-def compare_matrices(matrix1, matrix2):
+
+def save_rdm(rdm, labels, filename, title="", image=True, csv=True):
+    if csv:
+        np.savetxt(filename+'.txt', rdm, delimiter="\t", fmt='%.2e')
+    if image:
+        plot_rdm(rdm, labels, title, figsize=10, fontsize=0.6)
+        plt.savefig(filename+'.png', dpi=300, bbox_inches='tight')
+
+
+def compare_matrices_spearman(matrix1, matrix2):
     if matrix1.shape != matrix2.shape:
         raise ValueError("both matrices must be the same shape")
     return stats.spearmanr(matrix1.flatten(), matrix2.flatten())[0]
 
 
-def compare_matrices_person(matrix1, matrix2):
+def compare_matrices_pearson(matrix1, matrix2):
     if matrix1.shape != matrix2.shape:
         raise ValueError("both matrices must be the same shape")
     return stats.pearsonr(matrix1.flatten(), matrix2.flatten())[0]
 
+# Generate an RDM based on a list of RDMs
+def rdm_of_rdms(rdms, type=SPEARMAN):
+    numrdms = len(rdms)
+    rdm = np.zeros((numrdms, numrdms))
+    for i in range(numrdms):
+        for j in range(i, numrdms):
+            if type == SPEARMAN:
+                rdm[i, j] = 1. - compare_matrices_spearman(rdms[i], rdms[j])
+            elif type == PEARSON:
+                rdm[i, j] = 1. - compare_matrices_pearson(rdms[i], rdms[j])
+            else:
+                raise NotImplementedError("unknown RDM comparison type")
+            rdm[j, i] = rdm[i, j]
+    return rdm
 
 # Do activation distributions differences predict matrix differences
 def kolmogorov_smirnov(sample1, sample2):
@@ -219,3 +247,124 @@ def rdm_ldt(data, noise=0.):  # Our data is an mxnxk matrix. m = samples, n = st
         rdm[i, i] = 0.
 
     return rdm
+
+
+from matplotlib.ticker import FuncFormatter
+def barplot_figure_errors(filename):
+    # goals
+    means_action_errors = (7.13, 37.42, 62.66, 75.52, 80.81)
+    means_subseq_errors = (12.47, 22.73, 20.79, 17.64, 15.51)
+
+    # no goals
+    #means_action_errors = (6.25, 35.41, 59.96, 75.15, 81.25)
+    #means_subseq_errors = (8.57, 18.64, 19.22, 16.22, 14.44)
+
+
+    ind = [1, 2, 3, 4, 5]  # the x locations for the groups
+    width = 0.35
+    plt.clf()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.bar(ind, means_subseq_errors, width, color='cornflowerblue')
+    ax.bar(ind, means_action_errors, width, bottom=means_subseq_errors, color='orange')
+    ax.bar(ind, [100]*len(means_subseq_errors), width, bottom=[a+b for (a, b) in zip(means_action_errors, means_subseq_errors)], color='bisque')
+    ax.set_ylabel('Outcomes')
+    ax.set_xlabel('Noise magnitude')
+    #ax.set_title('Percentage of sequences displaying action or subsequence errors')
+    plt.xticks(ind, ('1', '2', '3', '4', '5'))
+    ax.set_yticks([0, 20, 40, 60, 80, 100])
+    formatter = FuncFormatter(lambda y, pos: "%d%%" % (y))
+    ax.yaxis.set_major_formatter(formatter)
+    ax.set_ylim([0, 100])
+    ax.legend(labels=['Subsequence error', 'Action error', 'Success'], loc="upper left")
+    plt.tight_layout()
+    #plt.show()
+    #plt.title(title)
+    plt.savefig(filename)
+    plt.clf()
+
+
+def barplot_figure_ablations(filename):
+    # Observation, Actions, Goal1, Goal2, Goal1 & 2,
+    means_action_errors = (67.48, 58.29, 18.10, 3.57, 5.10)
+    means_subseq_errors = (32.48, 22.57, 61.90, 57.10, 7.62)
+
+    # no goals
+    #means_action_errors = (6.25, 35.41, 59.96, 75.15, 81.25)
+    #means_subseq_errors = (8.57, 18.64, 19.22, 16.22, 14.44)
+
+
+    ind = [1, 2, 3, 4, 5]  # the x locations for the groups
+    width = 0.35
+    plt.clf()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.bar(ind, means_subseq_errors, width, color='orange')
+    ax.bar(ind, means_action_errors, width, bottom=means_subseq_errors, color='cornflowerblue')
+    ax.bar(ind, [100]*len(means_subseq_errors), width, bottom=[a+b for (a, b) in zip(means_action_errors, means_subseq_errors)], color='bisque')
+    ax.set_ylabel('Outcomes')
+    ax.set_xlabel('Units lesioned')
+    #ax.set_title('Percentage of sequences displaying action or subsequence errors')
+    plt.xticks(ind, ['Observations', 'Actions', 'Goals & subgoals', 'Subgoals only', 'Goals only'], rotation=20)
+    ax.set_yticks([0, 20, 40, 60, 80, 100])
+    formatter = FuncFormatter(lambda y, pos: "%d%%" % (y))
+    ax.yaxis.set_major_formatter(formatter)
+    ax.set_ylim([0, 100])
+    ax.legend(labels=['Subsequence error', 'Action error', 'Success'], loc="upper right")
+    plt.tight_layout()
+    #plt.show()
+    #plt.title(title)
+    plt.savefig(filename)
+    plt.clf()
+
+from matplotlib.patches import Patch
+def bargraph_with_without_goalunits(filename):
+    # no goals
+    means_action_errors_goals = (6.25, 35.41, 59.96, 75.15, 81.25)
+    means_subseq_errors_goals = (8.57, 18.64, 19.22, 16.22, 14.44)
+
+    # goals
+    means_action_errors_nogoals = (7.13, 37.42, 62.66, 75.52, 80.81)
+    means_subseq_errors_nogoals = (12.47, 22.73, 20.79, 17.64, 15.51)
+
+    ind = [1., 2., 3., 4., 5.]  # the x locations for the groups
+    width = 0.2
+    plt.clf()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    idxs_goals = [id-0.11 for id in ind]
+    plt.rcParams['hatch.color'] = 'white'  # using "edgecolor" causes a white edge to appear in between the different bars.
+    ax.bar(idxs_goals, means_subseq_errors_goals, width, color='orangered')
+    ax.bar(idxs_goals, means_action_errors_goals, width, bottom=means_subseq_errors_goals, color='orange')
+    ax.bar(idxs_goals, [100]*len(means_subseq_errors_goals), width, bottom=[a+b for (a, b) in zip(means_action_errors_goals, means_subseq_errors_goals)], color='bisque')
+
+    idxs_nogoals = [id+0.11 for id in ind]
+    ax.bar(idxs_nogoals, means_subseq_errors_nogoals, width, color='orangered', hatch='////')
+    ax.bar(idxs_nogoals, means_action_errors_nogoals, width, bottom=means_subseq_errors_nogoals, color='orange', hatch='////')
+    ax.bar(idxs_nogoals, [100] * len(means_subseq_errors_goals), width, bottom=[a + b for (a, b) in zip(means_action_errors_nogoals, means_subseq_errors_nogoals)], color='bisque', hatch='////')
+    ax.set_ylabel('Outcomes')
+    ax.set_xlabel('Noise magnitude')
+    #ax.set_title('Percentage of sequences displaying action or subsequence errors')
+    plt.xticks(ind, ('1', '2', '3', '4', '5'))
+    ax.set_yticks([0, 20, 40, 60, 80, 100])
+    formatter = FuncFormatter(lambda y, pos: "%d%%" % (y))
+    ax.yaxis.set_major_formatter(formatter)
+    ax.set_ylim([0, 100])
+    legend_elements = [Patch(facecolor='orangered', label='Subsequence error'),
+                       Patch(facecolor='orange', label='Action error'),
+                       Patch(facecolor='bisque', label='Correct'),
+                       #Patch(facecolor='white', edgecolor='grey', label='Goals'),
+                       Patch(facecolor='grey', edgecolor='white', hatch='////', label='Flat network')]
+
+    ax.legend(handles=legend_elements, loc='upper left')
+
+    #ax.legend(labels=['Subsequence error', 'Action error', 'Success'], loc="upper left")
+    plt.tight_layout()
+    #plt.show()
+    #plt.title(title)
+    plt.savefig(filename)
+    plt.clf()
+
+def noise_plot_matplotlib():
+    # prenoise, noise, noise+1, noise+2, noise+3, noise+4, error-4, error-3, error-2, error-1, error
+    noise1 = [4.72, 8.22, 8.93, 10.07, 10.82, 12.45, 14.43, 16.31, 16.05, 14.70, 16.40]

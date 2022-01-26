@@ -110,7 +110,7 @@ def hyperparameter_analysis(type=analysis.SPEARMAN, file="hyperparameter_test_rd
     spearman_mat = np.zeros((len(matrices), len(matrices)))
     for i, mat1 in enumerate(matrices):
         for j, mat2 in enumerate(matrices):
-            spearman_mat[i, j] = analysis.compare_matrices(mat1[1], mat2[1])
+            spearman_mat[i, j] = analysis.compare_matrices_spearman(mat1[1], mat2[1])
 
     # Also compare all hidden activations, generate massive matrix.
     activation_mat = np.zeros((len(matrices), len(matrices)))
@@ -213,7 +213,7 @@ def hyperparameter_individual_matrix_analysis(names):
     spearman_mat = np.zeros((len(matrices), len(matrices)))
     for i, mat1 in enumerate(matrices):
         for j, mat2 in enumerate(matrices):
-            spearman_mat[i, j] = analysis.compare_matrices(mat1[1], mat2[1])
+            spearman_mat[i, j] = analysis.compare_matrices_spearman(mat1[1], mat2[1])
 
     print(spearman_mat)
 
