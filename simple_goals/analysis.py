@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import MDS
 from sklearn import discriminant_analysis as sklda
 import utils
+
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 #import rsatoolbox
 
 import seaborn as sns
@@ -86,6 +89,19 @@ def rdm_mahalanobis(vectors):
     vectors_mat = np.asarray(vectors)
     #mu = np.mean(vectors_mat)
     covmat = np.cov(vectors_mat.T)
+    invcovmat = np.linalg.inv(covmat)
+    matrix = np.zeros((len(vectors), len(vectors)))
+    for i, vec1 in enumerate(vectors):
+        for j, vec2 in enumerate(vectors):
+            matrix[i, j] = scispa.distance.mahalanobis(vec1, vec2, invcovmat)
+            # np.matmul(np.transpose(vec1-vec2), np.matmul(invcovmat, (vec1-vec2)))
+    return np.nan_to_num(matrix)
+
+def rdm_noisy2_mahalanobis(vectors, noise=1., extra_samples=10):
+    vectors_mat = np.asarray(vectors)
+    vectors_mat2 = np.concatenate([vectors_mat+np.random.normal(loc=0., scale=noise, size=vectors_mat.shape) for i in range(extra_samples)], axis=0)
+    #mu = np.mean(vectors_mat)
+    covmat = np.cov(vectors_mat2.T)
     invcovmat = np.linalg.inv(covmat)
     matrix = np.zeros((len(vectors), len(vectors)))
     for i, vec1 in enumerate(vectors):
@@ -189,7 +205,7 @@ def rdm_of_rdms(rdms, type=SPEARMAN):
 
 # Do activation distributions differences predict matrix differences
 def kolmogorov_smirnov(sample1, sample2):
-        return stats.ks_2samp(sample1, sample2)[0]
+    return stats.ks_2samp(sample1, sample2)[0]
 
 
 def rdm_ldt(data, noise=0.):  # Our data is an mxnxk matrix. m = samples, n = states, k = activation.
@@ -317,7 +333,6 @@ def barplot_figure_ablations(filename):
     plt.savefig(filename)
     plt.clf()
 
-from matplotlib.patches import Patch
 def bargraph_with_without_goalunits(filename):
     # no goals
     means_action_errors_goals = (6.25, 35.41, 59.96, 75.15, 81.25)
@@ -365,6 +380,103 @@ def bargraph_with_without_goalunits(filename):
     plt.savefig(filename)
     plt.clf()
 
-def noise_plot_matplotlib():
-    # prenoise, noise, noise+1, noise+2, noise+3, noise+4, error-4, error-3, error-2, error-1, error
-    noise1 = [4.72, 8.22, 8.93, 10.07, 10.82, 12.45, 14.43, 16.31, 16.05, 14.70, 16.40]
+def loss_big_plot(filename="loss_plots"):
+    fig = plt.figure()
+    plt.clf()
+    #plt.title('Loss per timestep between noise injection and error')
+    plotcount = 0
+    for length in [3, 6, 10]:
+        for goals in [True, False]:
+            plotcount += 1
+            ax1 = fig.add_subplot(320 + plotcount)
+            _loss_plot(ax1, length, 2, goals)
+    plt.tight_layout()
+    plt.savefig(filename)
+    plt.clf()
+
+def _loss_plot(ax, length, noise_level, goals):
+    if length == 3 and noise_level == 2:
+        if goals:
+            noise_actions = [3.28,	3.26,	3.26,	5.02]
+            noise_goals = [2.69,	3.35,	3.89,	4.31]
+        else:
+            noise = [3.26,	3.30,	3.16,	5.17]
+    elif length == 6 and noise_level == 2:
+        if goals:
+            noise_actions = [3.62, 3.67, 3.01, 3.75, 3.83, 4.74, 6.46]
+            noise_goals = [3.22,	3.42,	4.93,	6.83,	7.73,	8.81,	10.47]
+        else:
+            noise = [3.76,	3.53,	3.11,	3.13,	3.23,	3.36,	5.25]
+    elif length == 10 and noise_level == 2:
+        if goals:
+            noise_actions = [3.71,	3.41,	3.24,	2.85,	3.29,	3.03,	2.61,	3.43,	3.60,	4.12,	6.75]
+            noise_goals = [3.84,	2.57,	3.32,	4.21,	3.41,	4.25,	6.00,	8.51,	8.82,	9.62,	11.64]
+        else:
+            noise = [4.91,	4.85,	5.10,	4.48,	4.87,	4.22,	3.64,	3.88,	4.25,	4.30,	6.11]
+
+    ax.title.set_text('Error occurs on step ' + str(length))
+    if goals:
+        timestep = range(len(noise_actions))
+        ax.plot(timestep, noise_goals, color='orangered', marker='+', label="Loss: goals")
+        ax.plot(timestep, noise_actions, color='orange', marker='+', label="Loss: actions")
+    else:
+        timestep = range(len(noise))
+        ax.plot(timestep, noise, color='orange', marker='+', label="Loss: actions")
+    ax.set_ylim(bottom=0)
+    ax.xaxis.set_ticks(timestep)
+
+    #ax.legend()
+    ax.set_ylabel("Loss")
+    ax.set_xlabel("Timesteps since noise injection")
+
+
+def plot_tsne(filefrom, fileto):
+    points = np.loadtxt(filefrom)
+    points = points.T#reshape((2, -1))
+    print(points)
+    plt.clf()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    points_seq1 = points[:, 0:39]
+    points_seq2 = points[:, 39:74]
+    points_seq3 = points[:, 74:109]
+
+    # plot seq 1
+    ax.plot(points_seq1[0, :], points_seq1[1, :], color='gold', linestyle='solid', marker='+')
+
+    # Plot seq 2
+    ax.plot(points_seq2[0, :], points_seq2[1, :], color='orange', linestyle='dashed', marker='+')
+
+    # Plot seq 3
+    ax.plot(points_seq3[0, :], points_seq3[1, :], color='brown', linestyle='dotted', marker='+')
+
+    # start points
+    ax.plot(points_seq1[0, 0], points_seq1[1, 0], color='gold', marker='>')
+    ax.plot(points_seq2[0, 0], points_seq2[1, 0], color='orange', marker='>')
+    ax.plot(points_seq3[0, 0], points_seq3[1, 0], color='brown', marker='>')
+
+    # End points
+    ax.plot(points_seq1[0, -1], points_seq1[1, -1], color='gold', marker='o')
+    ax.plot(points_seq2[0, -1], points_seq2[1, -1], color='orange', marker='o')
+    ax.plot(points_seq3[0, -1], points_seq3[1, -1], color='brown', marker='o')
+
+    ax.plot(points_seq3[0, 28:36], points_seq3[1, 28:36], linestyle='None', color='brown', marker='v', markerfacecolor='black')
+    ax.plot(points_seq3[0, 14:23], points_seq3[1, 14:23], linestyle='None', color='brown', marker='v', markerfacecolor='white')
+
+    legend_elements = [Line2D([0], [0], color='gold', label='Coffee cream', linestyle='solid'),
+                       Line2D([0], [0], color='orange', label='Tea cream', linestyle='dashed'),
+                       Line2D([0], [0], color='brown', label='Tea milk', linestyle='dotted'),
+                       Line2D([0], [0], marker='>', color='w', label='Sequence start', markerfacecolor='k'),
+                       Line2D([0], [0], marker='o', color='w', label='Sequence end', linestyle='', markerfacecolor='k'),
+                       Line2D([0], [0], marker='v', linestyle='dotted', color='brown', label='Clamped: Tea', markerfacecolor='black'),
+                       Line2D([0], [0], marker='v', linestyle='dotted', color='brown', label='Clamped: Cream', markerfacecolor='white'),
+                       ]
+
+    ax.legend(handles=legend_elements, loc='lower left')
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+
+    plt.tight_layout()
+    plt.savefig(fileto)
+    plt.clf()

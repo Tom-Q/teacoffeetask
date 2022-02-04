@@ -3,10 +3,10 @@ import utils
 import sys
 import neuralnet as nn
 from cognitiveload import cogloadtask
+import numpy as np
 
 import analysis
 from pnas import pnas2018
-
 """
 #for i in range(25):
 #    print(i)
@@ -14,20 +14,21 @@ from pnas import pnas2018
 #    utils.save_object("rdm_measure_test100", model)
 
 rdms=[]
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=100, rdm_type=analysis.SPEARMAN, save_name="spearman_1")[0])
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=100, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_1")[0])
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=100, rdm_type=analysis.MAHALANOBIS, save_name="mahalanobis_1")[0])
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=100, noise_after=.1, num_samples=20, save_name="LDt_1_01"))
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=100, noise_after=.5, num_samples=20, save_name="LDt_1_05"))
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=100, noise_after=1., num_samples=20, save_name="LDt_1_1"))
+#num networks should be 10 and 5
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=10, rdm_type=analysis.SPEARMAN, save_name="spearman_1")[0])
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=10, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_1")[0])
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=10, rdm_type=analysis.MAHALANOBIS, save_name="mahalanobis_1")[0])
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=10, noise_after=.1, num_samples=20, save_name="LDt_1_01"))
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=10, noise_after=.5, num_samples=20, save_name="LDt_1_05"))
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=10, noise_after=1., num_samples=20, save_name="LDt_1_1"))
 
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=25, rdm_type=analysis.SPEARMAN, save_name="spearman_2")[0])
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=25, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_2")[0])
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=25, rdm_type=analysis.MAHALANOBIS, save_name="mahalanobis_2")[0])
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=25, noise_after=.1, num_samples=20, save_name="LDt_2_01"))
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=25, noise_after=.5, num_samples=20, save_name="LDt_2_05"))
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=25, noise_after=1., num_samples=20, save_name="LDt_2_1"))
-10
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=5, rdm_type=analysis.SPEARMAN, save_name="spearman_2")[0])
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=5, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_2")[0])
+rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=5, rdm_type=analysis.MAHALANOBIS, save_name="mahalanobis_2")[0])
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=5, noise_after=.1, num_samples=20, save_name="LDt_2_01"))
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=5, noise_after=.5, num_samples=20, save_name="LDt_2_05"))
+rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=5, noise_after=1., num_samples=20, save_name="LDt_2_1"))
+
 
 rdm = analysis.rdm_of_rdms(rdms, type=analysis.PEARSON)
 analysis.save_rdm(rdm, filename="rdm_of_rdms", labels=["spearman_1", "euclidian_1", "mahalanobis_1",
@@ -36,11 +37,12 @@ analysis.save_rdm(rdm, filename="rdm_of_rdms", labels=["spearman_1", "euclidian_
                                                        "LDt_2_01", "LDt_2_05", "LDt_2_1"])
 sys.exit()
 """
+#analysis.loss_big_plot()
 #analysis.bargraph_with_without_goalunits("myfile4.png")
 #analysis.barplot_figure_errors("myfile2.png")
 #analysis.barplot_figure_ablations("myfile3.png")
+#analysis.plot_tsne("mds_tsne.txt", "tsne.png")
 #sys.exit()
-# TODO: try with random initial state. Try with more units
 # import time
 # from pnas import pnas2018
 # for i in range(20):
@@ -56,30 +58,77 @@ sys.exit()
 #sys.exit()
 
 
-if False:
-    from goalenv import goalenv2020, environment
-    for i in range(10):
-        #model = utils.load_object("bigmodel3")
-        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-                                size_goal1=len(environment.GoalEnvData.goals1_list),
-                                size_goal2=len(environment.GoalEnvData.goals2_list),
-                                algorithm=nn.ADAM, learning_rate=0.001, initialization=nn.HE,
-                                last_action_inputs=True)
-        model = goalenv2020.train(model=model, goals=True, num_iterations=100000, learning_rate=0.001, L2_reg=0.00001, noise=0.05, sequences=range(21))
-        utils.save_object("bigmodel1_goals", model)
-    #sys.exit()
 
-    for i in range(6, 10):
-        model = utils.load_object("bigmodel1_nogoals", i)
-        #sys.exit()
-        #test_data = utils.load_object("test_data_tsne")
-        #test_data = goalenv2020.generate_test_data(model, noise=0.5, one_run_per_step=True, goal1_noise=0., goal2_noise=0., goals=True, num_tests=3, sequence_ids=range(21))
-        test_data = goalenv2020.generate_test_data(model, noise=0.5,  goal1_noise=0., goal2_noise=0., goals=False, num_tests=10, sequence_ids=range(21), noise_per_step=True, disruption_per_step=False, initialization="seminormal")
-        tsne_results, test_data = goalenv2020.analyse_test_data(test_data, do_error_analysis=True, do_rdm=False, goals=False)
-        #utils.save_object("test_data_tsne_bigmodel1_nogoals", test_data)
-        #utils.save_object("tsne_results_bigmodel1_nogoals", tsne_results)
+if True:
+    from goalenv import goalenv2020
+    from goalenv import environment as env
+        # model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+        #                        size_goal1=len(environment.GoalEnvData.goals1_list),
+        #                        size_goal2=len(environment.GoalEnvData.goals2_list),
+        #                        algorithm=nn.ADAM, learning_rate=0.001,
+        #                        L2_reg=0.0001,
+        #                        initialization=nn.HE,
+        #                        nonlinearity=nn.RELU,
+        #                        last_action_inputs=True)
+
+        # stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=3010, check_frequency=1000,
+        #                             stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
+        # model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
+        #                          noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL)
+        # utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise", model)
+    error_data_list = []
+    for model_type in ["yesgoals"]:#, "nogoals"]:
+        goals = model_type == "yesgoals"
+        for goal_multiplier in [1, 2, 3]:#, 2]:
+            print("goal multiplier:")
+            print(goal_multiplier)
+            for noise in [0, 1, 2, 3, 4, 5]:
+                print("noise:")
+                print(noise)
+                for i in range(10):
+                    print("Network:")
+                    print(i)
+                    model = utils.load_object("bigmodel1_" + model_type +"_relu_adam_nonoise", i)
+
+                    #goal1 = utils.str_to_onehot("g_1_make_tea", env.GoalEnvData.goals1_list) * 4  #np.zeros((1, 2), np.float32)
+                    #goal2 = utils.str_to_onehot("g_2_infuse_tea", env.GoalEnvData.goals2_list) #np.zeros((1, 9), np.float32)
+                    #goal2 = utils.str_to_onehot("g_2_add_milk", env.GoalEnvData.goals2_list) * 2. # np.zeros((1, 9), np.float32)
+                    #goal2 = utils.str_to_onehot("g_2_add_cream", env.GoalEnvData.goals2_list) * 4
+
+                    if True:
+                        test_data = goalenv2020.generate_test_data(model, noise=noise,
+                                                               goal1_noise=0., goal2_noise=0.,
+                                                               goals=goals, num_tests=1,
+                                                               goal_multiplier=goal_multiplier,
+                                                               sequence_ids=range(21), ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
+                                                               switch_goal1= None, #(range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
+                                                               switch_goal2= None, #(range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
+                                                               #switch_sequence=2,
+                                                               noise_per_step=True,
+                                                               noise_per_step_to_input=False,
+                                                               disruption_per_step=False,
+                                                               initialization=nn.SEMINORMAL,
+                                                               clamped_goals = True)
+                    print("generated data")
+
+                    utils.save_object("control"+model_type+str(i), test_data)
+                    test_data = utils.load_object("control" + model_type + str(i))
+                    goalenv2020.VERBOSE = False
+                    tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, do_tsne=False,
+                                                                                           goals=True, mds_sequences=[0, 1, 2])#, mds_range=15)
+                    error_data_list.append(error_data)
+                    #utils.save_object("tsne_resultsmds"+model_type+str(i), tsne_results)
+                    #utils.save_object("mds"+model_type+str(i), test_data) # test dat ais updated by analysis
+                    #tsne_results = utils.load_object("tsne_resultsmds"+model_type+str(i))
+                    #test_data = utils.load_object("mds" + model_type + str(i))
+                    #goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=True, tsne_actions=False, tsne_sequences=False,
+                    #          tsne_errors=False, tsne_sequence=[0, 1, 2], #tsne_sequence_interval=[1, 30],
+                    #          filename="mds", annotate=True, save_txt=True)
+                    #utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
+
+    utils.write_lists_to_csv("control_clamped_noise_max.csv", error_data_list, labels=goalenv2020.error_testing_labels)
+
     sys.exit()
-#sys.exit()
 
 # Trained:
 # - "bigmodel1_yesgoals": 15 networks  (uniform initialization, sigmoid)
@@ -171,14 +220,14 @@ if True:
             print("\n\n\n" + str(noise))
             for i in range(10):
                 print(i)
-                model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-                                        size_goal1=len(environment.GoalEnvData.goals1_list),
-                                        size_goal2=len(environment.GoalEnvData.goals2_list),
-                                        algorithm=nn.ADAM, learning_rate=0.001,
-                                        L2_reg=0.0001,
-                                        initialization=nn.HE,
-                                        nonlinearity=nn.RELU,
-                                        last_action_inputs=True)
+                #model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+                #                        size_goal1=len(environment.GoalEnvData.goals1_list),
+                #                        size_goal2=len(environment.GoalEnvData.goals2_list),
+                #                        algorithm=nn.ADAM, learning_rate=0.001,
+                #                        L2_reg=0.0001,
+                #                        initialization=nn.HE,
+                #                        nonlinearity=nn.RELU,
+                #                        last_action_inputs=True)
         
                 #stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=3010, check_frequency=1000,
                 #                             stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
@@ -186,7 +235,7 @@ if True:
                 #                          noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL)
                 #utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise", model)
 
-                model = utils.load_object(model_files, i)  #"bigmodel1_nogoals_relu_adam_nonoise", i)
+                #model = utils.load_object(model_files, i)  #"bigmodel1_nogoals_relu_adam_nonoise", i)
 
                 test_data = goalenv2020.generate_test_data(model, noise=noise,
                                                            goal1_noise=0., goal2_noise=0.,
@@ -202,13 +251,13 @@ if True:
                 tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=True)  #, mds_sequences=[2, 5, 11], mds_range=15)
                 error_data_list.append(error_data)
 
-                #utils.save_objeNo Goact("tsne_bigmodel1_yesgoals", tsne_results)
-                #utils.save_object("tsnetest_bigmodel1_yesgoals", test_data)
-                #goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=True,
-                #          tsne_errors=True, tsne_sequence=[2, 5, 11], tsne_sequence_interval=[2, 14], filename="tsne", annotate=False)
-                #utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
+                #utils.save_object("tsne_bigmodel1_yesgoals", tsne_results)
+                utils.save_object("tsnetest_bigmodel1_yesgoals", test_data)
+                goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=True,
+                          tsne_errors=True, tsne_sequence=[2, 5, 11], tsne_sequence_interval=[2, 14], filename="tsne", annotate=False)
+                utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
 
-    utils.write_lists_to_csv("loss_actions_goals.csv", error_data_list, labels=goalenv2020.error_testing_labels)
+    utils.write_lists_to_csv("loss_six.csv", error_data_list, labels=goalenv2020.error_testing_labels)
 
     sys.exit()
 

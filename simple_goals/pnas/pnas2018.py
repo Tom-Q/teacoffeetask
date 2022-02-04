@@ -274,11 +274,12 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
         for k, tensor in enumerate(hidden):
             hidden[k] = tensor.numpy().reshape(-1)
 
-        if rdm_type==analysis.SPEARMAN:
+        if rdm_type == analysis.SPEARMAN:
             rdmatrix = analysis.rdm_spearman(hidden)
-        elif rdm_type==analysis.MAHALANOBIS:
+        elif rdm_type == analysis.MAHALANOBIS:
             rdmatrix = analysis.rdm_mahalanobis(hidden)
-        elif rdm_type ==analysis.EUCLIDIAN:
+            #rdmatrix = analysis.rdm_noisy2_mahalanobis(hidden)
+        elif rdm_type == analysis.EUCLIDIAN:
             rdmatrix = analysis.rdm_euclidian(hidden)
         elif rdm_type ==analysis.CRAPPYNOBIS:
             rdmatrix = analysis.rdm_crappynobis(hidden)

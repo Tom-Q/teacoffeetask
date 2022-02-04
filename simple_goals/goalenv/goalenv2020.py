@@ -170,13 +170,19 @@ def compute_last_step_loss(model, target, include_regularization=False):
 
 def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_noise=0., num_tests=10, goals=False,
                        initialization="uniform", verbose=False,
-                       noise_per_step=True, disruption_per_step=False,
+                       goal_multiplier=1,
+                       noise_per_step=True, 
+                       disruption_per_step=False,
                        noise_per_step_to_input=False,
+                       switch_sequence = None,
+                       switch_goal1=None, #otherwise, should be (list[timesteps], ndarray[new goal]])
+                       switch_goal2=None, #likewise
                        lesion_goal1_units=False,
                        lesion_goal2_units=False,
                        lesion_action_units=False,
                        lesion_observation_units=False,
-                       single_step_noise=None):
+                       single_step_noise=None,
+                       clamped_goals=False):
     # This runs a hundred version of the model with different random initializations
     env = environment.GoalEnv()
     outputs_per_sequence = []
@@ -194,6 +200,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
     max_length += 10  # add a bit of a margin for additions
 
     seq_counter = 0
+    seq_to_test = 0
     for seqid, sequence in zip(sequence_ids, sequences):
         if verbose:
             print("testing sequence: "+str(seqid))
@@ -209,6 +216,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                 noise_step = 0
             outputs = []
             for i in range(num_tests):
+                sequence_solutions = [alt.targets for alt in sequence.alt_solutions] + [sequence.targets]
                 # Initialize the sequence.
                 init_state = sequence.initial_state
                 # Set up the current state to be 0.
@@ -252,8 +260,41 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                                 observation += np.float32(np.random.normal(0., noise, size=(1, model.size_observation)))
                             if disruption_per_step:
                                 # Change the state
-                                env.state = disrupt_state(env.state, initial_state=sequence.initial_state, #mode=REINITIALIZE)
-                                                          mode=HOLD_RANDOM_OBJECT)
+                                env.state = disrupt_state(env.state, initial_state=sequence.initial_state,
+                                                          #mode=NOISIFY)
+                                                          mode=FLASHBANG)
+                                                          #mode=REINITIALIZE)
+                                                          #mode=HOLD_RANDOM_OBJECT)
+                        if seq_to_test == switch_sequence or switch_sequence is None:
+                            if switch_goal1 is not None and j in switch_goal1[0]:
+                                model.goal1 = copy.deepcopy(switch_goal1[1])
+                            if switch_goal2 is not None and j in switch_goal2[0]:
+                                model.goal2 = copy.deepcopy(switch_goal2[1])
+
+                        if clamped_goals and j>0 and j<=len(sequence.targets):
+                            # Take into account the alternative sequences.
+                            error = True
+                            # Check whether there's any goal that matches.
+                            for sol in sequence_solutions:
+                                if np.all(model.goal1 == sol[j - 1].goal1_one_hot) and \
+                                   np.all(model.goal2 == sol[j - 1].goal2_one_hot):
+                                    error = False
+                            # If nothing matches...
+                            if error:
+                                #print("error")
+                                # reset goals. Had overflows so I'm guessing this led to goal1_one_hot being multiplied
+                                # which over many sequences would lead to a crazy big goal. Which obviously would make all results wrong.
+                                model.goal1 = copy.deepcopy(sequence_solutions[0][j-1].goal1_one_hot)
+                                model.goal2 = copy.deepcopy(sequence_solutions[0][j-1].goal2_one_hot)
+
+                            # Remove any incorrect sequences: meaning any where the current goal1 and goal2 don't match.
+                            sequence_solutions[:] = [seq for seq in sequence_solutions
+                                                     if (np.all(seq[j-1].goal1_one_hot == model.goal1) and
+                                                         np.all(seq[j-1].goal2_one_hot == model.goal2))]
+
+                        model.goal1 *= goal_multiplier
+                        model.goal2 *= goal_multiplier
+
                         if lesion_goal1_units:
                             model.goal1 *= 0.
                         if lesion_goal2_units:
@@ -283,7 +324,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                         except environment.ActionException as error:  # The action doesn't make sense and cannot be executed in the environment.
                             if verbose:
                                 print(error)
-                            # reset the state when an impossible action is attempted.
+                            # maintain the current state when an impossible action is attempted
                             env.state.next = next_state
                         action_str = utils.onehot_to_str(model.h_action_wta[-1], environment.GoalEnvData.actions_list)
                         if action_str in environment.TERMINAL_ACTIONS:
@@ -300,15 +341,18 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                     model.clear_history()
             outputs_per_noise_step.append(outputs)
         outputs_per_sequence.append(outputs_per_noise_step)
+        seq_to_test +=1
     return outputs_per_sequence
 
 
 HOLD_RANDOM_OBJECT = 1
 REINITIALIZE = 2
+NOISIFY = 3
+FLASHBANG = 4
 def disrupt_state(state, initial_state, mode=HOLD_RANDOM_OBJECT):
+    c = state.current
+    n = state.next
     if mode == HOLD_RANDOM_OBJECT:
-        c = state.current
-        n = state.next
         if c.o_held_nothing == 0:
             # Drop what we're holding
             c.reset_held()
@@ -344,6 +388,14 @@ def disrupt_state(state, initial_state, mode=HOLD_RANDOM_OBJECT):
         return state
     elif mode == REINITIALIZE:
         return initial_state
+    elif mode == NOISIFY:
+        raise NotImplementedError()
+    elif mode == FLASHBANG: # Set all fields to 1
+        c._set_fields('o_f', np.ones(15))
+        c._set_fields('o_h', np.ones(8))
+        n._set_fields('o_f', np.ones(15))
+        n._set_fields('o_h', np.ones(8))
+        return state
 
 
 error_testing_labels = ["total sequences", "correct", "incorrect",
@@ -356,9 +408,10 @@ error_testing_labels = ["total sequences", "correct", "incorrect",
                        ["loss on and after noise (error)"] + [str(i) for i in range(1, 55)] + \
                        ["loss on and after noise (error ACTIONS)"] + [str(i) for i in range(1, 55)] + \
                        ["loss on and after noise (error GOALS)"] + [str(i) for i in range(1, 55)] + \
-                       ["loss error->noise (reverse time)"] + [str(i) for i in range(1, 55)]
+                       ["loss error->noise (reverse time)"] + [str(i) for i in range(1, 55)] + \
+                       ["loss noise min1", "loss on noise"]
 
-def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, mds_range=None):
+def analyse_test_data(test_data, goals=True, do_rdm=False, do_tsne=False, mds_sequences=None, mds_range=None, noise_steps=None):
     sequence_ids = range(len(test_data))
 
     ######################################################################################
@@ -493,6 +546,12 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
     loss_after_noise_error_goals = np.zeros(55)
     loss_after_noise_error_actions = np.zeros(55)
     loss_before_error = np.zeros(55)
+
+    loss_noise_min1 = 0
+    loss_on_noise = 0
+    counter_noise = 0
+    counter_noise_min1 = 0
+
     counter_loss_before_error = np.zeros(55)
     counter_loss_after_noise_no_error = np.zeros(55)
     counter_loss_after_noise_error = np.zeros(55)
@@ -506,11 +565,18 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
                     prior_to_noise_loss_total += sequence.losses[i]
                     counter_prior_to_noise+=1
 
-        # ONLY DO THE ANALYSIS FOR CASES WHERE THE NOISE --> ERROR DURATION IS EXACTLY 5.
-        if sequence.first_error is None or (sequence.first_error is not None and sequence.first_error - sequence.noise_step != 5):
-            continue  # Next sequence
-        else:
-            print('yo')
+        if sequence.noise_step is not None and len(sequence.losses) > sequence.noise_step:
+            if sequence.noise_step > 0 and len(sequence.losses) > sequence.noise_step - 1:
+                loss_noise_min1 += sequence.losses[sequence.noise_step - 1]
+                counter_noise_min1 += 1
+            loss_on_noise += sequence.losses[sequence.noise_step]
+            counter_noise += 1
+
+        if noise_steps is not None:
+            if sequence.first_error is None or (sequence.first_error is not None and sequence.first_error - sequence.noise_step != noise_steps):
+                continue  # Next sequence
+            else:
+                print('1 seq')
 
         if sequence.first_error is not None:
             first_error_loss_total += sequence.losses[sequence.first_error]
@@ -560,6 +626,8 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
                     i -= 1
                     j += 1
     # Compute avgs
+    loss_on_noise = loss_on_noise / counter_noise if counter_noise != 0 else 0
+    loss_noise_min1 = loss_noise_min1 / counter_noise_min1 if counter_noise_min1 != 0 else 0
     loss_after_noise_error = np.divide(loss_after_noise_error, counter_loss_after_noise_error, out=np.zeros_like(loss_after_noise_error),
                                   where=counter_loss_after_noise_error!=0)
     loss_after_noise_no_error = np.divide(loss_after_noise_no_error, counter_loss_after_noise_no_error,
@@ -604,14 +672,15 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
             loss_after_noise_error.tolist() +\
             loss_after_noise_error_actions.tolist() +\
             loss_after_noise_error_goals.tolist() +\
-            loss_before_error.tolist()
+            loss_before_error.tolist() +\
+            [loss_noise_min1, loss_on_noise]
 
     #print("LOSS:\n average loss={0:.2f}\n loss on first error={1:.2f}\n loss on noise={2:.2f} (+1: {3:.2f})\n loss_good_seq={4}\n loss_before_noise={5}".format(
     #                                                                            loss_avg,
     #                                                                            loss_first_error_avg,
     #                                                                            loss_prior_noise_avg))
-    if not do_rdm:
-        return None, test_data, num_errors, error_testing_results
+    #if not do_rdm:
+    #    return None, test_data, num_errors, error_testing_results
 
     ###################################
     # Analysis 4: RDM, MDS, and T-SNE #
@@ -623,11 +692,12 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
     activations = [seq.activations for seq in outputs_sequences_flat]
     activations_flat = utils.flatten_onelevel(activations)  # all this list wrangling is ugly as hell
     if do_rdm:  # Do the RDM and MDS
+        activations_flat_rdm = []
         for i, tensor in enumerate(activations_flat):
-            activations_flat[i] = tensor.numpy().reshape(-1)
+            activations_flat_rdm.append(tensor.numpy().reshape(-1))
 
         # Generate the RDM... That's actually very expensive computationally
-        rdmatrix = analysis.rdm_spearman(activations_flat)
+        rdmatrix = analysis.rdm_spearman(activations_flat_rdm)
 
         print("rdm done")
         # Generate the MDS from the RDM.
@@ -642,7 +712,7 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
             length = seq.length
             if mds_range is not None and length > mds_range:
                 length = mds_range
-            if i in mds_sequences:
+            if mds_sequences is not None and i in mds_sequences:
                 labels = []
                 for j in range(length):
                     labels.append("seq "+ str(i) + ": " + str(j+1))
@@ -653,26 +723,29 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, mds_sequences=None, m
         plt.show()
         plt.clf()
 
-    #T-SNE:
-    print("Generating t-SNE...")
-    activations = np.concatenate(activations_flat, axis=0)
-    start = time.time()
-    tsne = TSNE(perplexity=50.0, n_iter=3000)  # Defaults are perplexity=30 and n_iter=1000.
-    # Reducing perplexity captures global structure better. increasing n_iter makes sure we've converged.
-    tsne_results = tsne.fit_transform(X=activations)
-    print("KL divergence="+str(tsne.kl_divergence_))
-    end = time.time()
-    print(end - start)
-    print("...Done")
-    #df_subset['tsne-2d-one'] = tsne_results[:, 0]
-    #df_subset['tsne-2d-two'] = tsne_results[:, 1]
-    #x = tsne_results[:, 0]
-    #y = tsne_results[:, 1]
-    return tsne_results, test_data, num_errors  # Test data is enriched during analysis (first error step)
+    if do_tsne:
+        #T-SNE:
+        print("Generating t-SNE...")
+        activations = np.concatenate(activations_flat, axis=0)
+        start = time.time()
+        tsne = TSNE(perplexity=50.0, n_iter=3000)  # Defaults are perplexity=30 and n_iter=1000.
+        # Reducing perplexity captures global structure better. increasing n_iter makes sure we've converged.
+        tsne_results = tsne.fit_transform(X=activations)
+        print("KL divergence="+str(tsne.kl_divergence_))
+        end = time.time()
+        print(end - start)
+        print("...Done")
+        #df_subset['tsne-2d-one'] = tsne_results[:, 0]
+        #df_subset['tsne-2d-two'] = tsne_results[:, 1]
+        #x = tsne_results[:, 0]
+        #y = tsne_results[:, 1]
+    else:
+        tsne_results = None
+    return tsne_results, test_data, num_errors, error_testing_results  # Test data is enriched during analysis (first error step)
 
 
 def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=False,
-              tsne_errors=False, tsne_sequence=[], tsne_sequence_interval=[], filename="tsne", annotate=False):
+              tsne_errors=False, tsne_sequence=[], tsne_sequence_interval=[], filename="tsne", annotate=False, save_txt=False):
     # Flatten test data
     outputs_no_noise_step_distinction = []
     for seq_outputs in test_data:
@@ -684,6 +757,11 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
     # Color points corresponding to subgoal "stir" in green
     x = tsne_results[:, 0]
     y = tsne_results[:, 1]
+
+    # Save tsne points in csv, one line for x, one line for y
+    if save_txt:
+        np.savetxt(filename+"_tsne.txt", tsne_results, delimiter="\t", fmt='%.2e')
+
     plt.plot(x, y, ',k')
 
     # Add the TSNE plot points to the sequences.
@@ -725,9 +803,11 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
     for seqid, sequence in enumerate(outputs_sequences_flat):
         if seqid in tsne_sequence:
             if not tsne_sequence_interval:  # test if list is empty
-                tsne_sequence_interval = [0, sequence.length]
-            seq_start=tsne_sequence_interval[0]
-            seq_end=tsne_sequence_interval[1]
+                seq_start = 0
+                seq_end = sequence.length
+            else:
+                seq_start=tsne_sequence_interval[0]
+                seq_end=tsne_sequence_interval[1]
             # Plot the whole sequence
             plt.plot(sequence.tsne_coords[seq_start:seq_end, 0], sequence.tsne_coords[seq_start:seq_end, 1], linestyle='-', linewidth=1.,
                      color=colors[tsne_sequence.index(seqid)])
