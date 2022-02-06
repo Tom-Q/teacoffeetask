@@ -62,33 +62,36 @@ sys.exit()
 if True:
     from goalenv import goalenv2020
     from goalenv import environment as env
-        # model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-        #                        size_goal1=len(environment.GoalEnvData.goals1_list),
-        #                        size_goal2=len(environment.GoalEnvData.goals2_list),
-        #                        algorithm=nn.ADAM, learning_rate=0.001,
-        #                        L2_reg=0.0001,
-        #                        initialization=nn.HE,
-        #                        nonlinearity=nn.RELU,
-        #                        last_action_inputs=True)
+    for i in range(4):
+        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+                                size_goal1=len(env.GoalEnvData.goals1_list),
+                                size_goal2=len(env.GoalEnvData.goals2_list),
+                                algorithm=nn.ADAM, learning_rate=0.001,
+                                #L2_reg=0.0001,
+                                initialization=nn.HE,
+                                nonlinearity=nn.RELU,
+                                last_action_inputs=True)
 
-        # stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=3010, check_frequency=1000,
-        #                             stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
-        # model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
-        #                          noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL)
-        # utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise", model)
+        stopping = nn.ParamsStopping(max_iterations=40000, min_iterations=3001, check_frequency=1000,
+                                     stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
+        model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
+                                  noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL)
+        utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise_goaltest", model)
+    sys.exit()
+
     error_data_list = []
     for model_type in ["yesgoals"]:#, "nogoals"]:
         goals = model_type == "yesgoals"
-        for goal_multiplier in [1, 2, 3]:#, 2]:
+        for goal_multiplier in [1]:#, 2, 3]:#, 2]:
             print("goal multiplier:")
             print(goal_multiplier)
-            for noise in [0, 1, 2, 3, 4, 5]:
+            for noise in [0, 1, 2]:
                 print("noise:")
                 print(noise)
-                for i in range(10):
+                for i in [0]:#range(5):
                     print("Network:")
                     print(i)
-                    model = utils.load_object("bigmodel1_" + model_type +"_relu_adam_nonoise", i)
+                    model = utils.load_object("bigmodel1_" + model_type +"_relu_adam_nonoise_goaltest", i)
 
                     #goal1 = utils.str_to_onehot("g_1_make_tea", env.GoalEnvData.goals1_list) * 4  #np.zeros((1, 2), np.float32)
                     #goal2 = utils.str_to_onehot("g_2_infuse_tea", env.GoalEnvData.goals2_list) #np.zeros((1, 9), np.float32)
@@ -111,10 +114,10 @@ if True:
                                                                clamped_goals = True)
                     print("generated data")
 
-                    utils.save_object("control"+model_type+str(i), test_data)
-                    test_data = utils.load_object("control" + model_type + str(i))
+                    #utils.save_object("control"+model_type+str(i), test_data)
+                    #test_data = utils.load_object("control" + model_type + str(i))
                     goalenv2020.VERBOSE = False
-                    tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, do_tsne=False,
+                    tsne_results, test_data, _, error_data, _ = goalenv2020.analyse_test_data(test_data, do_rdm=False, do_tsne=False, do_loss=True,
                                                                                            goals=True, mds_sequences=[0, 1, 2])#, mds_range=15)
                     error_data_list.append(error_data)
                     #utils.save_object("tsne_resultsmds"+model_type+str(i), tsne_results)
@@ -126,7 +129,7 @@ if True:
                     #          filename="mds", annotate=True, save_txt=True)
                     #utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
 
-    utils.write_lists_to_csv("control_clamped_noise_max.csv", error_data_list, labels=goalenv2020.error_testing_labels)
+    utils.write_lists_to_csv("control_seqs.csv", error_data_list, labels=goalenv2020.error_testing_labels)
 
     sys.exit()
 
@@ -178,7 +181,7 @@ if True:
                                                                lesion_action_units=lesion_actions,
                                                                lesion_observation_units=lesion_observation)
 
-                    tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=False)
+                    tsne_results, test_data, _, error_data, _ = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=False)
                     error_data_list.append(error_data)
 
     utils.write_lists_to_csv("error_results_lesion.csv", error_data_list, labels=goalenv2020.error_testing_labels)
@@ -201,7 +204,7 @@ if True:
     utils.save_object("test_data_error_test", test_data)
     test_data = utils.load_object("test_data_error_test")
     goalenv2020.VERBOSE=True
-    tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=False)
+    tsne_results, test_data, _, error_data, _ = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=False)
 
     sys.exit()
     """
@@ -248,7 +251,7 @@ if True:
 
                 utils.save_object("test_data_error_test"+model_type+str(noise)+str(i), test_data)
                 test_data = utils.load_object("test_data_error_test"+model_type+str(noise)+str(i))
-                tsne_results, test_data, _, error_data = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=True)  #, mds_sequences=[2, 5, 11], mds_range=15)
+                tsne_results, test_data, _, error_data, _ = goalenv2020.analyse_test_data(test_data, do_rdm=False, goals=True)  #, mds_sequences=[2, 5, 11], mds_range=15)
                 error_data_list.append(error_data)
 
                 #utils.save_object("tsne_bigmodel1_yesgoals", tsne_results)
