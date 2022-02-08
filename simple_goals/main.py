@@ -62,12 +62,14 @@ sys.exit()
 if True:
     from goalenv import goalenv2020
     from goalenv import environment as env
-    for i in range(4):
+
+    for i in range(20):
+        print(i)
         model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
                                 size_goal1=len(env.GoalEnvData.goals1_list),
                                 size_goal2=len(env.GoalEnvData.goals2_list),
                                 algorithm=nn.ADAM, learning_rate=0.001,
-                                #L2_reg=0.0001,
+                                L2_reg=0.0001,
                                 initialization=nn.HE,
                                 nonlinearity=nn.RELU,
                                 last_action_inputs=True)
@@ -76,60 +78,63 @@ if True:
                                      stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
         model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
                                   noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL)
+
         utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise_goaltest", model)
     sys.exit()
+
 
     error_data_list = []
     for model_type in ["yesgoals"]:#, "nogoals"]:
         goals = model_type == "yesgoals"
-        for goal_multiplier in [1]:#, 2, 3]:#, 2]:
+        for goal_multiplier in [2]:#, 3]:#, 2]:
             print("goal multiplier:")
             print(goal_multiplier)
-            for noise in [0, 1, 2]:
+            for noise in [0, 1, 2, 3]:
                 print("noise:")
                 print(noise)
-                for i in [0]:#range(5):
-                    print("Network:")
-                    print(i)
-                    model = utils.load_object("bigmodel1_" + model_type +"_relu_adam_nonoise_goaltest", i)
+                for clamped_goals in [True]:#, False]:
+                    for i in [0, 1, 2, 3, 4, 5]: #range(5, 7):
+                        print("Network:")
+                        print(i)
+                        model = utils.load_object("bigmodel1_" + model_type +"_relu_adam_nonoise_goaltest", i)
 
-                    #goal1 = utils.str_to_onehot("g_1_make_tea", env.GoalEnvData.goals1_list) * 4  #np.zeros((1, 2), np.float32)
-                    #goal2 = utils.str_to_onehot("g_2_infuse_tea", env.GoalEnvData.goals2_list) #np.zeros((1, 9), np.float32)
-                    #goal2 = utils.str_to_onehot("g_2_add_milk", env.GoalEnvData.goals2_list) * 2. # np.zeros((1, 9), np.float32)
-                    #goal2 = utils.str_to_onehot("g_2_add_cream", env.GoalEnvData.goals2_list) * 4
+                        #goal1 = utils.str_to_onehot("g_1_make_tea", env.GoalEnvData.goals1_list) * 4  #np.zeros((1, 2), np.float32)
+                        #goal2 = utils.str_to_onehot("g_2_infuse_tea", env.GoalEnvData.goals2_list) #np.zeros((1, 9), np.float32)
+                        #goal2 = utils.str_to_onehot("g_2_add_milk", env.GoalEnvData.goals2_list) * 2. # np.zeros((1, 9), np.float32)
+                        #goal2 = utils.str_to_onehot("g_2_add_cream", env.GoalEnvData.goals2_list) * 4
 
-                    if True:
-                        test_data = goalenv2020.generate_test_data(model, noise=noise,
-                                                               goal1_noise=0., goal2_noise=0.,
-                                                               goals=goals, num_tests=1,
-                                                               goal_multiplier=goal_multiplier,
-                                                               sequence_ids=range(21), ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
-                                                               switch_goal1= None, #(range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
-                                                               switch_goal2= None, #(range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
-                                                               #switch_sequence=2,
-                                                               noise_per_step=True,
-                                                               noise_per_step_to_input=False,
-                                                               disruption_per_step=False,
-                                                               initialization=nn.SEMINORMAL,
-                                                               clamped_goals = True)
-                    print("generated data")
+                        if True:
+                            test_data = goalenv2020.generate_test_data(model, noise=noise,
+                                                                   goal1_noise=0., goal2_noise=0.,
+                                                                   goals=goals, num_tests=1,
+                                                                   goal_multiplier=goal_multiplier,
+                                                                   sequence_ids=range(21), ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
+                                                                   switch_goal1= None, #(range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
+                                                                   switch_goal2= None, #(range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
+                                                                   #switch_sequence=2,
+                                                                   noise_per_step=True,
+                                                                   noise_per_step_to_input=False,
+                                                                   disruption_per_step=False,
+                                                                   initialization=nn.SEMINORMAL,
+                                                                   clamped_goals = clamped_goals)
+                        print("generated data")
 
-                    #utils.save_object("control"+model_type+str(i), test_data)
-                    #test_data = utils.load_object("control" + model_type + str(i))
-                    goalenv2020.VERBOSE = False
-                    tsne_results, test_data, _, error_data, _ = goalenv2020.analyse_test_data(test_data, do_rdm=False, do_tsne=False, do_loss=True,
-                                                                                           goals=True, mds_sequences=[0, 1, 2])#, mds_range=15)
-                    error_data_list.append(error_data)
-                    #utils.save_object("tsne_resultsmds"+model_type+str(i), tsne_results)
-                    #utils.save_object("mds"+model_type+str(i), test_data) # test dat ais updated by analysis
-                    #tsne_results = utils.load_object("tsne_resultsmds"+model_type+str(i))
-                    #test_data = utils.load_object("mds" + model_type + str(i))
-                    #goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=True, tsne_actions=False, tsne_sequences=False,
-                    #          tsne_errors=False, tsne_sequence=[0, 1, 2], #tsne_sequence_interval=[1, 30],
-                    #          filename="mds", annotate=True, save_txt=True)
-                    #utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
+                        #utils.save_object("control"+model_type+str(i), test_data)
+                        #test_data = utils.load_object("control" + model_type + str(i))
+                        goalenv2020.VERBOSE = False
+                        tsne_results, test_data, _, error_data, _ = goalenv2020.analyse_test_data(test_data, do_rdm=False, do_tsne=False, do_loss=True,
+                                                                                               goals=True, mds_sequences=[0, 1, 2])#, mds_range=15)
+                        error_data_list.append(error_data)
+                        #utils.save_object("tsne_resultsmds"+model_type+str(i), tsne_results)
+                        #utils.save_object("mds"+model_type+str(i), test_data) # test dat ais updated by analysis
+                        #tsne_results = utils.load_object("tsne_resultsmds"+model_type+str(i))
+                        #test_data = utils.load_object("mds" + model_type + str(i))
+                        #goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=True, tsne_actions=False, tsne_sequences=False,
+                        #          tsne_errors=False, tsne_sequence=[0, 1, 2], #tsne_sequence_interval=[1, 30],
+                        #          filename="mds", annotate=True, save_txt=True)
+                        #utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
 
-    utils.write_lists_to_csv("control_seqs.csv", error_data_list, labels=goalenv2020.error_testing_labels)
+    utils.write_lists_to_csv("clamped_goals_4.csv", error_data_list, labels=goalenv2020.error_testing_labels)
 
     sys.exit()
 

@@ -314,6 +314,8 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                             output_sequence.losses_goals.append(goal_loss)
                         else:
                             output_sequence.losses.append(None)  # loss is undefined
+                            output_sequence.losses_actions.append(None)
+                            output_sequence.losses_goals.append(None)
 
                         output_sequence.activations.append(model.context)
                         # if there's an impossible action, ignore it and continue.
@@ -452,6 +454,7 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, do_tsne=False, do_los
                 all_targets = [target_sequence] + target_sequence.alt_solutions
                 all_targets_goals = [target_sequence] + target_sequence.alt_solutions
                 trial.first_error = None  # This trial is error-free
+                prev_goal_error = False
                 for j, action in enumerate(trial.get_actions_one_hot()):
                     # TODO: Remove this
                     # Just for the sake of this one figure
@@ -504,17 +507,18 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, do_tsne=False, do_los
                     # Look for goal errors too... Are the goals compatible with any current goals?
                     if goals:
                         invalid = []
-                        error = True
-                        for k, target in enumerate(all_targets):
+                        goal_error = True
+                        for k, target in enumerate(all_targets_goals):
                             if np.array_equal(trial.get_goals1_one_hot()[j], target.get_goals1_one_hot()[j]) and \
                                     np.array_equal(trial.get_goals2_one_hot()[j], target.get_goals2_one_hot()[j]):
-                                error = False
-                            if error:
+                                goal_error = False
+                            if goal_error:
                                 invalid.append(target)
                         for inv in invalid:
                             all_targets_goals.remove(inv)
-                        if error:
+                        if goal_error and not prev_goal_error:  # Only count the goal error once per sequence
                             goal_errors += 1
+                            prev_goal_error = True
 
                     if error:  # If we found an error we can terminate here
                         break
@@ -617,14 +621,16 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, do_tsne=False, do_los
                     i = 0
                     while sequence.noise_step + i < sequence.length:
                         id = sequence.noise_step+i
-                        loss = sequence.losses[id]
-                        loss_goals = sequence.losses_goals[id]
-                        loss_actions = sequence.losses_actions[id]
-
-                        loss_after_noise_no_error[i] += loss
-                        loss_after_noise_no_error_goals[i] += loss_goals
-                        loss_after_noise_no_error_actions[i] += loss_actions
-
+                        try:
+                            loss = sequence.losses[id]
+                            loss_goals = sequence.losses_goals[id]
+                            loss_actions = sequence.losses_actions[id]
+                            loss_after_noise_no_error[i] += loss
+                            loss_after_noise_no_error_goals[i] += loss_goals
+                            loss_after_noise_no_error_actions[i] += loss_actions
+                        except:
+                            print("what what")
+                            raise Exception()
                         counter_loss_after_noise_no_error[i] += 1
                         i += 1
                 elif sequence.first_error is not None: # an error occurred.
@@ -967,20 +973,21 @@ def train(stop_params, model, goals=False,
             elif context_initialization == nn.ZEROS:
                 model.context = np.zeros((1, model.size_hidden)).astype(dtype=np.float32)
 
-            # Set up the prior actions and goals to what they OUGHT to be
+            # Set up the prior actions and goals to what they OUGHT to be. Which is just zeros here.
             model.action = np.zeros_like(sequence.targets[0].action_one_hot)
             if goals:
                 model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
                 model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
-            # Alternative: zeros
-            #model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            # Run the entire sequence
             for i, target in enumerate(sequence.targets):
                 # Add noise to context layer
                 model.context += np.float32(np.random.normal(0., noise, size=(1, model.size_hidden)))
+                # Observe and act
                 observation = env.observe()
                 model.feedforward(observation)
+                # Ignore the selected action. Do the correct action anyway.
                 env.do_action(target.action_one_hot)
-                # Set the correct recurrent units:
+                # Ignore the selected goal units. Use the correct recurrent units:
                 if goals:
                     model.goal1 = copy.deepcopy(target.goal1_one_hot)
                     model.goal2 = copy.deepcopy(target.goal2_one_hot)
