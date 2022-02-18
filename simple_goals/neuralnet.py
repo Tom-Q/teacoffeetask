@@ -258,7 +258,8 @@ class ElmanGoalNet(NeuralNet):
                  size_action=len(tce.TeaCoffeeData.actions_list), initialization=NORMAL,
                  L1_reg = 0., L2_reg = 0.,
                  last_action_inputs=False,
-                 nonlinearity=SIGMOID, params=None):
+                 nonlinearity=SIGMOID, params=None,
+                 gradient=False):
         super().__init__(size_observation, size_action, initialization=initialization,
                          algorithm=algorithm, learning_rate=learning_rate, params=params)
         if params is None:
@@ -361,7 +362,7 @@ class ElmanGoalNet(NeuralNet):
         network_input = tf.concat([self.context, observation], 1)
         if not self.last_action_inputs: # cancel out actions
             self.action *= 0.
-        for inputs in [self.action, self.goal1, self.goal2]:
+        for inputs in [self.action, self.goal2, self.goal1]:
             if inputs is not None:
                 # Not sure if thatś necessary? In theory the winner take all has no gradient anyway.
                 inputs = tf.stop_gradient(inputs)

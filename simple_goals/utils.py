@@ -208,56 +208,54 @@ def reorder_list(list, new_order):
 
 
 def weight_regularization_calculator(weight_matrix, index_in, index_out, reg_const, reg_type="step",
-                                     reg_increase="linear"):
+                                     reg_increase="linear", middle=.5):
+    # The section of the weights that we care about, specifically
+    weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
+    mat = np.zeros_like(weights)
+    num_rows, num_cols = mat.shape
     if reg_type == "step":
         # Extract the relevant area of the weight matrix:
         return tf.reduce_sum(
             tf.abs(weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]])) * reg_const
     elif reg_type == "recurrent":
-        # 1 Make matrix:
-        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
-        mat = np.zeros_like(weights)
-        num_rows, num_cols = mat.shape
         for i in range(num_rows):
             for j in range(num_cols):
                 mat[i, j] = i - j
-        # print(mat)
+
     elif reg_type == "input_left":
-        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
-        # print(weights)
-        mat = np.zeros_like(weights)
-        num_rows, num_cols = mat.shape
         for i in range(num_rows):
             for j in range(num_cols):
                 mat[i, j] = j
-        # print(mat)
+
     elif reg_type == "input_right":
-        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
-        # print(weights)
-        mat = np.zeros_like(weights)
-        num_rows, num_cols = mat.shape
         for i in range(num_rows):
             for j in range(num_cols):
                 mat[i, j] = num_cols - j - 1
-        # print(mat)
+
     elif reg_type == "output_left":
-        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
-        # print(weights)
-        mat = np.zeros_like(weights)
-        num_rows, num_cols = mat.shape
         for i in range(num_rows):
             for j in range(num_cols):
                 mat[i, j] = i
-        # print(mat)
+
     elif reg_type == "output_right":
-        weights = weight_matrix[index_in[0]: index_in[1], index_out[0]: index_out[1]]
-        # print(weights)
-        mat = np.zeros_like(weights)
-        num_rows, num_cols = mat.shape
         for i in range(num_rows):
             for j in range(num_cols):
                 mat[i, j] = (num_rows - i - 1)
-        # print(mat)
+
+    elif reg_type == "output_middle":
+        for i in range(0, int(num_rows * middle)):
+            for j in range(num_cols):
+                mat[i, j] = num_rows*middle - i - 1
+        for i in range(int(num_rows * middle), num_rows):
+            for j in range(num_cols):
+                mat[i, j] = i - num_rows * middle
+
+    elif reg_type == "input_middle":
+        for i in range(0, num_rows):
+            for j in range(0, int(num_cols * middle)):
+                mat[i, j] = num_cols * middle - j - 1
+            for j in range(int(num_cols * middle), num_cols):
+                mat[i, j] = j - num_cols * middle
     else:
         raise ValueError("reg_type not implemented")
     if reg_increase == "linear":
@@ -266,6 +264,9 @@ def weight_regularization_calculator(weight_matrix, index_in, index_out, reg_con
         mat = mat ** 2
     else:
         raise ValueError("reg_increase must be either linear or square")
+
+    #print(reg_type)
+    #print(mat)
     return tf.reduce_sum(tf.abs(weights) * mat * reg_const)
 
 
@@ -278,14 +279,19 @@ def test_weight_regularization(regtype):
     print(weight_regularization_calculator(matrix, [0, 3], [0, 2], 1, regtype))
 
 
+# Writes data (in list format) to file (in csv format)
 def write_lists_to_csv(file_name, listoflists, labels=None):
     with open(file_name, 'a') as the_file:
-        # Writes data in csv format
         if labels is not None:
             listoflists = [labels] + listoflists
         for datarow in listoflists:
-            for element in datarow:
-                the_file.write(str(element) + ';')
-            the_file.write('\n')
+            _write_line(the_file, datarow)
 
+def write_line_to_csv(file_name, datalist):
+    with open(file_name, 'a') as the_file:
+        _write_line(the_file, datalist)
 
+def _write_line(the_file, datalist):
+    for element in datalist:
+        the_file.write(str(element) + ';')
+    the_file.write('\n')

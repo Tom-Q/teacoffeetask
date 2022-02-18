@@ -174,7 +174,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                        noise_per_step=True, 
                        disruption_per_step=False,
                        noise_per_step_to_input=False,
-                       switch_sequence = None,
+                       switch_sequence=None,
                        switch_goal1=None, #otherwise, should be (list[timesteps], ndarray[new goal]])
                        switch_goal2=None, #likewise
                        lesion_goal1_units=False,
@@ -182,7 +182,8 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                        lesion_action_units=False,
                        lesion_observation_units=False,
                        single_step_noise=None,
-                       clamped_goals=False):
+                       clamped_goals=False,
+                       hidden_goal_multiplier=1):
     # This runs a hundred version of the model with different random initializations
     env = environment.GoalEnv()
     outputs_per_sequence = []
@@ -249,6 +250,13 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                     output_sequence.losses_goals = []
                     for j in range(max_length):
                         observation = env.observe()
+                        # Do this before adding noise, to avoid multiplying the noise.
+                        if j > 0: # it's already a numpy array on step 0
+                            model.context = model.context.numpy()  # Doesn't matter here, we're not going to backpropagate thru that.
+                        model.context[0, :model.context.shape[1]//2] *= hidden_goal_multiplier
+                        model.goal1 *= goal_multiplier
+                        model.goal2 *= goal_multiplier
+
                         # Add noise to context layer
                         if j == noise_step:
                             if noise_per_step or single_step_noise:
@@ -292,8 +300,6 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                                                      if (np.all(seq[j-1].goal1_one_hot == model.goal1) and
                                                          np.all(seq[j-1].goal2_one_hot == model.goal2))]
 
-                        model.goal1 *= goal_multiplier
-                        model.goal2 *= goal_multiplier
 
                         if lesion_goal1_units:
                             model.goal1 *= 0.
@@ -304,7 +310,9 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                         if lesion_observation_units:
                             observation *= 0.
 
-                        model.feedforward(observation)
+                        model.feedforward(observation) #, hidden_goal_multiplier=hidden_goal_multiplier)
+
+
 
                         if j < len(sequence.targets):  # after that it's not defined.
                             target = sequence.targets[j] if goals else sequence.targets_nogoals[j]
@@ -903,6 +911,7 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
     plt.savefig(filename)
 
 
+NUM_TIMESTEPS = 899
 # used to identify perfect accuracy to stop the training
 def stop_condition(model, noise=0., goal1_noise=0., goal2_noise=0., goals=True, num_tests=10,
                    sequence_ids=range(21), noise_per_step=False,
@@ -915,12 +924,16 @@ def stop_condition(model, noise=0., goal1_noise=0., goal2_noise=0., goals=True, 
                                    disruption_per_step=disruption_per_step,
                                    initialization=initialization)
     tsne_results, test_data, total_errors, _, goal_errors = analyse_test_data(test_data, do_rdm=do_rdm, goals=goals)
+    #return total_errors + goal_errors < NUM_TIMESTEPS / 100  # (8 errors or less, or 1% of errors). TODO triple check
     return total_errors + goal_errors == 0
 
 
 def train(stop_params, model, goals=False,
           noise=0., sequences=None,
-          context_initialization=nn.ZEROS):
+          context_initialization=nn.ZEROS,
+          gradient=False,
+          reg_strength=0.001, # 0.0001
+          reg_increase="linear"):
     # Example models:
     #        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
     #                                size_goal1=len(environment.GoalEnvData.goals1_list),
@@ -1012,8 +1025,73 @@ def train(stop_params, model, goals=False,
                 for target in targets:
                     target.goal1_str = None
                     target.goal2_str = None
+
+            if goals and gradient:
+                # Train model, record loss.
+                #cols = model.size_hidden
+                size_input_to_hidden = model.size_hidden + model.size_goal1 + model.size_goal2 + model.size_action + model.size_observation
+                size_output = model.size_goal1 + model.size_goal2 + model.size_action
+                # Regularization in the hidden layer weights
+                # Recurrent hidden to hidden connections
+                #print("recurrent")
+                extra_loss = utils.weight_regularization_calculator(model.hidden_layer.w,
+                                                              [0, model.size_hidden], [0, model.size_hidden],
+                                                              reg_strength, reg_type="recurrent", reg_increase=reg_increase)
+
+                # Prev action to hidden
+                #print("action-->hidden")
+                extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
+                                                               [model.size_hidden+model.size_observation, model.size_hidden + model.size_observation+model.size_action],
+                                                               [0, model.size_hidden],
+                                                               reg_strength, reg_type="input_right", reg_increase=reg_increase)
+                # prev subgoal to hidden
+                #print("subgoal-->hidden")
+                extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
+                                                                     [model.size_hidden + model.size_observation + model.size_action,
+                                                                      model.size_hidden + model.size_observation + model.size_action + model.size_goal2],
+                                                                     [0, model.size_hidden],
+                                                                     reg_strength, reg_type="input_middle",
+                                                                     reg_increase=reg_increase,
+                                                                     middle=0.25)
+                # Prev goal to hidden
+                #print("goal-->hidden")
+                extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
+                                                              [model.size_hidden + model.size_observation + model.size_action + model.size_goal2,
+                                                               model.size_hidden + model.size_observation + model.size_action + model.size_goal2 + model.size_goal1],
+                                                              [0, model.size_hidden],
+                                                              reg_strength, reg_type="input_left", reg_increase=reg_increase)
+
+                # SWITCHED OUTPUT LEFT AND OUTPUT RIGHT.
+                # Regularization in the output layers (goals and actions) weights
+                # Layer looks like:
+                # [goals.....subgoals......|..................actions]
+                # hidden to next action
+                #print("hidden->action")
+                extra_loss += utils.weight_regularization_calculator(model.action_layer.w,
+                                                               [0, model.size_hidden], [0, model.size_action],
+                                                               reg_strength, reg_type="output_right", reg_increase=reg_increase)
+
+                # hidden to next subgoal
+                #print("hidden->subgoal")
+                extra_loss += utils.weight_regularization_calculator(model.goal2_layer.w,
+                                                               [0, model.size_hidden], [0, model.size_goal2],
+                                                               reg_strength, reg_type="output_middle", reg_increase=reg_increase,
+                                                               middle=0.25)
+
+                # Hidden to next goal
+                #print("hidden->goal")
+                extra_loss += utils.weight_regularization_calculator(model.goal1_layer.w,
+                                                               [0, model.size_hidden], [0, model.size_goal1],
+                                                               reg_strength, reg_type="output_left", reg_increase=reg_increase)
+
+            # Regularization of the observation (only goes to the action side)
+            #extra_loss += weight_regularization_calculator(model.hidden_layer.w,
+            #                                                     [model.size_hidden, model.size_hidden+model.size_observation],
+            #                                                     [0, cols],
+            #                                                     reg_strength, reg_type="input_right", reg_increase=reg_increase)
+
             # Train model, record loss.
-            loss = model.train(tape, targets)
+            loss = model.train(tape, targets, extra_loss=extra_loss)
 
         # Monitor progress using rolling averages.
         full_sequence = int(ratio_actions == 1)
