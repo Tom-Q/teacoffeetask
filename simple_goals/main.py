@@ -64,7 +64,7 @@ if True:
     from goalenv import environment as env
 
 
-    for i in range(19):
+    for i in range(0):
         print(i)
         model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
                                 size_goal1=len(env.GoalEnvData.goals1_list),
@@ -92,16 +92,16 @@ if True:
     error_data_list = []
     for model_type in ["yesgoals"]:#, "nogoals"]:
         goals = model_type == "yesgoals"
-        for goal_multiplier in [1.0, 1.01, 1.02, 1.05, 1.1]:
+        for goal_multiplier in [1.03, 1.04, 1.05]:
             print("goal multiplier:")
             print(goal_multiplier)
-            for noise in [1, 2, 3]:
+            for noise in [0, 1, 2, 3, 4, 5]:
                 print("noise:")
                 print(noise)
                 for clamped_goals in [False]: #[True, False]:
                     print("clamped goals")
                     print(clamped_goals)
-                    for i in range(10):#(20):
+                    for i in range(20):#(20):
                         print("time elapsed: {0}s".format(time.time() - start))
                         print("Network:")
                         print(i)
@@ -121,8 +121,8 @@ if True:
                                                                    switch_goal1= None, #(range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
                                                                    switch_goal2= None, #(range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
                                                                    #switch_sequence=2,
-                                                                   noise_per_step=False,
-                                                                   noise_per_step_to_input=True,
+                                                                   noise_per_step=True,
+                                                                   noise_per_step_to_input=False,
                                                                    disruption_per_step=False,
                                                                    initialization=nn.SEMINORMAL,
                                                                    clamped_goals = clamped_goals,
@@ -134,7 +134,7 @@ if True:
                         goalenv2020.VERBOSE = False
                         tsne_results, test_data, _, error_data, _ = goalenv2020.analyse_test_data(test_data, do_rdm=False, do_tsne=False, do_loss=True,
                                                                                                goals=True, mds_sequences=[0, 1, 2])#, mds_range=15)
-                        utils.write_line_to_csv("gradient_amplified_input2.csv", error_data)
+                        utils.write_line_to_csv("gradient_hidden_noise1.csv", error_data)
                         #error_data_list.append(error_data)
                         #utils.save_object("tsne_resultsmds"+model_type+str(i), tsne_results)
                         #utils.save_object("mds"+model_type+str(i), test_data) # test dat ais updated by analysis
