@@ -79,7 +79,7 @@ def load_object(name, latest=0):
     # Since the timestamps are in the format YYYYMMDD_HHMMSS, an alphabetical sort will sort them chronologically
     files = sorted(file_names)
     if latest >= len(files):
-        raise Exception("You asked for file # {0} ("+name+") but there are only {1} matching files".format(latest+1, len(files)))
+        raise Exception("You asked for file # {0} ({1}) but there are only {2} matching files".format(latest+1, name, len(files)))
 
     filehandler = open(SAVE_FOLDER + '/' + files[-1 - latest], 'rb')
     object = pickle.load(filehandler)
@@ -183,14 +183,30 @@ class ProgressBar(object):
                 print()
             self.update_counter += 1
 
-def save_rdm(rdm, name, labels, title, fontsize=0.6):
+
+import analysis
+def save_rdm(rdm, name, labels, title, fontsize=0.6, color=analysis.RDM_COLOR_SEQUENTIAL):
     np.savetxt(name+"_rdm_mat.txt", rdm, delimiter="\t", fmt='%.2e')
-    analysis.plot_rdm(rdm, labels, title + " spearman rho matrix", figsize=30, fontsize=fontsize)
+    analysis.plot_rdm(rdm, labels, title + " spearman rho matrix", figsize=30, fontsize=fontsize, color=color)
     plt.savefig(name+'_rdm.png', dpi=300, bbox_inches='tight')
     plt.clf()
 
 
-# Changes both rows and columns according to the new order
+# Changes both rows and columns according to the new order.
+# This assumes we're working with an RDM (symmetric etc.)
+# Example:
+# Matrix:
+# 1 2 3 4
+# 2 1 2 3
+# 3 2 1 2
+# 4 3 2 1
+# new order format: [0, 1, 3, 2]
+# Reordered matrix:
+# 1 2 4 3
+# 2 1 3 2
+# 4 3 1 2
+# 3 2 2 1
+
 def reorder_matrix(matrix, new_order):
     copy_mat = copy.deepcopy(matrix)
     for i, j in enumerate(new_order):

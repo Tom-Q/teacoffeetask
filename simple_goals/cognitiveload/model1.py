@@ -136,12 +136,16 @@ def ff_ari(nnet, seq_ari):
 
 def make_targets_ari(seq_ari):
     targets = []
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_ari[0], task.output_symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_ari[0], task.output_symbols)))
+    if seq_ari[1] == '+':
+        interm = int(seq_ari[0]) + int(seq_ari[2])
+    else:
+        interm = int(seq_ari[0]) - int(seq_ari[2])
+    targets.append(task.Target(utils.str_to_onehot(str(interm), task.output_symbols)))
+    targets.append(task.Target(utils.str_to_onehot(str(interm), task.output_symbols)))
+    targets.append(task.Target(utils.str_to_onehot(str(interm), task.output_symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.output_symbols)))  # Original = none none none except this line.
     return targets
 
 def train_ari(nnet, num_training_steps = 1000000):

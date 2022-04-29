@@ -145,13 +145,21 @@ def rdm_crappynobis(vectors):
             matrix[i, j] = np.sqrt(np.sum((zvecs[i, :]-zvecs[j, :])**2))
     return matrix
 
-def plot_rdm(matrix, labels, title, show_rdm=False, vmin=None, vmax=None, figsize=None, fontsize=None):
+RDM_COLOR_DIVERGING = "RDM COLOR DIVERGING"
+RDM_COLOR_SEQUENTIAL = "RDM COLOR SEQUENTIAL"
+def plot_rdm(matrix, labels, title, show_rdm=False, vmin=None, vmax=None, figsize=None, fontsize=None, color=RDM_COLOR_SEQUENTIAL):
     if fontsize is not None:
         sns.set(font_scale=fontsize)
     if figsize is not None:
         plt.figure(figsize = (figsize, figsize))
+
+    if color == RDM_COLOR_DIVERGING:
+        sns.color_palette("vlag", as_cmap=True)
+    else:
+        sns.color_palette("magma", as_cmap=True)
+
     if vmin is None and vmax is None:
-        plot = sns.heatmap(matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels)
+        plot = sns.heatmap(matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels, center=0)
     else:
         plot = sns.heatmap(matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels, vmin = vmin, vmax = vmax)
 
@@ -169,11 +177,11 @@ def plot_rdm(matrix, labels, title, show_rdm=False, vmin=None, vmax=None, figsiz
         plt.show()
 
 
-def save_rdm(rdm, labels, filename, title="", image=True, csv=True):
+def save_rdm(rdm, labels, filename, title="", image=True, csv=True, figsize=10, fontsize=0.6, color=RDM_COLOR_SEQUENTIAL):
     if csv:
         np.savetxt(filename+'.txt', rdm, delimiter="\t", fmt='%.2e')
     if image:
-        plot_rdm(rdm, labels, title, figsize=10, fontsize=0.6)
+        plot_rdm(rdm, labels, title, figsize=figsize, fontsize=fontsize, color=color)
         plt.savefig(filename+'.png', dpi=300, bbox_inches='tight')
 
 
@@ -334,13 +342,14 @@ def barplot_figure_ablations(filename):
     plt.clf()
 
 def bargraph_with_without_goalunits(filename):
-    # no goals
-    means_action_errors_goals = (6.25, 35.41, 59.96, 75.15, 81.25)
-    means_subseq_errors_goals = (8.57, 18.64, 19.22, 16.22, 14.44)
-
+    # Updated info based on 20 networks of each, 1 run each.
     # goals
-    means_action_errors_nogoals = (7.13, 37.42, 62.66, 75.52, 80.81)
-    means_subseq_errors_nogoals = (12.47, 22.73, 20.79, 17.64, 15.51)
+    means_action_errors_goals = (5.27, 34.25, 60.03, 73.98, 80.65)
+    means_subseq_errors_goals = (8.47, 19.24, 19.74, 16.97, 15.19)
+
+    # no goals
+    means_action_errors_nogoals = (6.70, 37.78, 61.76, 74.92, 81.76)
+    means_subseq_errors_nogoals = (16.60, 23.06, 22.02, 17.71, 14.63)
 
     ind = [1., 2., 3., 4., 5.]  # the x locations for the groups
     width = 0.2
@@ -443,40 +452,39 @@ def plot_tsne(filefrom, fileto):
     points_seq3 = points[:, 74:109]
 
     # plot seq 1
-    ax.plot(points_seq1[0, :], points_seq1[1, :], color='gold', linestyle='solid', marker='+')
+    ax.plot(points_seq1[0, :], points_seq1[1, :], color='orange', linestyle='solid', marker='+')
 
     # Plot seq 2
-    ax.plot(points_seq2[0, :], points_seq2[1, :], color='orange', linestyle='dashed', marker='+')
+    ax.plot(points_seq2[0, :], points_seq2[1, :], color='brown', linestyle='dashed', marker='+')
 
     # Plot seq 3
-    ax.plot(points_seq3[0, :], points_seq3[1, :], color='brown', linestyle='dotted', marker='+')
+    ax.plot(points_seq3[0, :], points_seq3[1, :], color='#79afdaff', linestyle='dotted', marker='+')
 
     # start points
-    ax.plot(points_seq1[0, 0], points_seq1[1, 0], color='gold', marker='>')
-    ax.plot(points_seq2[0, 0], points_seq2[1, 0], color='orange', marker='>')
-    ax.plot(points_seq3[0, 0], points_seq3[1, 0], color='brown', marker='>')
+    ax.plot(points_seq1[0, 0], points_seq1[1, 0], color='orange', marker='>')
+    ax.plot(points_seq2[0, 0], points_seq2[1, 0], color='brown', marker='>')
+    ax.plot(points_seq3[0, 0], points_seq3[1, 0], color='#79afdaff', marker='>')
 
     # End points
-    ax.plot(points_seq1[0, -1], points_seq1[1, -1], color='gold', marker='o')
-    ax.plot(points_seq2[0, -1], points_seq2[1, -1], color='orange', marker='o')
-    ax.plot(points_seq3[0, -1], points_seq3[1, -1], color='brown', marker='o')
+    ax.plot(points_seq1[0, -1], points_seq1[1, -1], color='orange', marker='o')
+    ax.plot(points_seq2[0, -1], points_seq2[1, -1], color='brown', marker='o')
+    ax.plot(points_seq3[0, -1], points_seq3[1, -1], color='#79afdaff', marker='o')
 
-    ax.plot(points_seq3[0, 28:36], points_seq3[1, 28:36], linestyle='None', color='brown', marker='v', markerfacecolor='black')
-    ax.plot(points_seq3[0, 14:23], points_seq3[1, 14:23], linestyle='None', color='brown', marker='v', markerfacecolor='white')
+    ax.plot(points_seq3[0, 28:36], points_seq3[1, 28:36], linestyle='None', color='#79afdaff', marker='v', markerfacecolor='black')
+    ax.plot(points_seq3[0, 14:23], points_seq3[1, 14:23], linestyle='None', color='#79afdaff', marker='v', markerfacecolor='white')
 
-    legend_elements = [Line2D([0], [0], color='gold', label='Coffee cream', linestyle='solid'),
-                       Line2D([0], [0], color='orange', label='Tea cream', linestyle='dashed'),
-                       Line2D([0], [0], color='brown', label='Tea milk', linestyle='dotted'),
+    legend_elements = [Line2D([0], [0], color='orange', label='Coffee cream', linestyle='solid'),
+                       Line2D([0], [0], color='brown', label='Tea milk', linestyle='dashed'),
+                       Line2D([0], [0], color='#79afdaff', label='Tea cream', linestyle='dotted'),
                        Line2D([0], [0], marker='>', color='w', label='Sequence start', markerfacecolor='k'),
                        Line2D([0], [0], marker='o', color='w', label='Sequence end', linestyle='', markerfacecolor='k'),
-                       Line2D([0], [0], marker='v', linestyle='dotted', color='brown', label='Clamped: Tea', markerfacecolor='black'),
-                       Line2D([0], [0], marker='v', linestyle='dotted', color='brown', label='Clamped: Cream', markerfacecolor='white'),
+                       Line2D([0], [0], marker='v', linestyle='dotted', color='#79afdaff', label='Clamped: Tea', markerfacecolor='black'),
+                       Line2D([0], [0], marker='v', linestyle='dotted', color='#79afdaff', label='Clamped: Cream', markerfacecolor='white'),
                        ]
-
-    ax.legend(handles=legend_elements, loc='lower left')
+    ax.legend(handles=legend_elements, bbox_to_anchor = (0, 0))#loc='lower left')
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
 
     plt.tight_layout()
-    plt.savefig(fileto)
+    plt.savefig(fileto, format='svg')
     plt.clf()

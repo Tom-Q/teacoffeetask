@@ -183,7 +183,10 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                        lesion_observation_units=False,
                        single_step_noise=None,
                        clamped_goals=False,
-                       hidden_goal_multiplier=1):
+                       hidden_goal_multiplier=1,
+                       gain_multiplier = 1.,
+                       gain_multiplier_from=0,
+                       gain_multiplier_to=None):
     # This runs a hundred version of the model with different random initializations
     env = environment.GoalEnv()
     outputs_per_sequence = []
@@ -221,7 +224,8 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                 # Initialize the sequence.
                 init_state = sequence.initial_state
                 # Set up the current state to be 0.
-                init_state.current.o_ddairy_first = 0
+                #init_state.current.o_ddairy_first = 0  #what's this?? Why bother? This makes no sense!!
+                #Just use the correct instructions all the time, and remove the alternative sequences. What is wrong with me.
                 env.reinitialize(init_state)
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
 
@@ -237,11 +241,13 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                             model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
                     elif initialization == 'seminormal':
                         model.context = np.random.normal(0.0, 0.1, (1, model.size_hidden)).astype(dtype=np.float32)
-                        model.context[model.context < 0.0] = 0.  # it's impossible for a sigmoid activation to be <0
+                        model.context[model.context < 0.0] = 0.  # it's impossible for a sigmoid/relu activation to be <0
                         model.action = np.zeros_like(sequence.targets[0].action_one_hot)
                         if goals:
                             model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
                             model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
+                    else:
+                        raise NotImplementedError("Initialization method not implemented")
 
                     output_sequence = task.BehaviorSequence(sequence.initial_state)
                     output_sequence.activations = []
@@ -251,11 +257,11 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                     for j in range(max_length):
                         observation = env.observe()
                         # Do this before adding noise, to avoid multiplying the noise.
-                        if j > 0: # it's already a numpy array on step 0
-                            model.context = model.context.numpy()  # Doesn't matter here, we're not going to backpropagate thru that.
-                        model.context[0, :model.context.shape[1]//2] *= hidden_goal_multiplier
-                        model.goal1 *= goal_multiplier
-                        model.goal2 *= goal_multiplier
+                        #if not isinstance(model.context, np.ndarray):
+                        #    model.context = model.context.numpy()  # Doesn't matter here, we're not going to backpropagate thru that.
+                        #model.context[0, :model.context.shape[1]//2] *= hidden_goal_multiplier
+                        #model.goal1 *= goal_multiplier
+                        #model.goal2 *= goal_multiplier
 
                         # Add noise to context layer
                         if j == noise_step:
@@ -275,9 +281,9 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                                                           #mode=HOLD_RANDOM_OBJECT)
                         if seq_to_test == switch_sequence or switch_sequence is None:
                             if switch_goal1 is not None and j in switch_goal1[0]:
-                                model.goal1 = copy.deepcopy(switch_goal1[1])
+                                model.goal1 = copy.deepcopy(switch_goal1[1]) * goal_multiplier
                             if switch_goal2 is not None and j in switch_goal2[0]:
-                                model.goal2 = copy.deepcopy(switch_goal2[1])
+                                model.goal2 = copy.deepcopy(switch_goal2[1]) * goal_multiplier
 
                         if clamped_goals and j>0 and j<=len(sequence.targets):
                             # Take into account the alternative sequences.
@@ -310,9 +316,9 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                         if lesion_observation_units:
                             observation *= 0.
 
-                        model.feedforward(observation) #, hidden_goal_multiplier=hidden_goal_multiplier)
-
-
+                        model.feedforward(observation)#, gain_multiplier=gain_multiplier,
+                                          #gain_multiplier_from=gain_multiplier_from,
+                                          #gain_multiplier_to=gain_multiplier_to)
 
                         if j < len(sequence.targets):  # after that it's not defined.
                             target = sequence.targets[j] if goals else sequence.targets_nogoals[j]
@@ -421,7 +427,12 @@ error_testing_labels = ["total sequences", "correct", "incorrect",
                        ["loss error->noise (reverse time)"] + [str(i) for i in range(1, 55)] + \
                        ["loss noise min1", "loss on noise"]
 
-def analyse_test_data(test_data, goals=True, do_rdm=False, do_tsne=False, do_loss=False, mds_sequences=None, mds_range=None, noise_steps=None):
+# RDM sorts
+NONE = "none"
+GOAL = "goal"
+SUBGOAL = "subgoal"
+ACTION = "action"
+def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsne=False, do_loss=False, mds_sequences=None, mds_range=None, noise_steps=None, one_rdm=True):
     sequence_ids = range(len(test_data))
 
     ######################################################################################
@@ -731,13 +742,44 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, do_tsne=False, do_los
     activations = [seq.activations for seq in outputs_sequences_flat]
     activations_flat = utils.flatten_onelevel(activations)  # all this list wrangling is ugly as hell
     if do_rdm:  # Do the RDM and MDS
-        activations_flat_rdm = []
-        for i, tensor in enumerate(activations_flat):
-            activations_flat_rdm.append(tensor.numpy().reshape(-1))
+        labels = []
+        for seqid, seq in enumerate(outputs_sequences_flat):
+            for targetid, target in enumerate(seq.targets):
+                label = ""
+                label += "Seq: " + str(seqid)
+                label += " - " + str(targetid + 1)
+                label += ": " + target.goal1_str + '-' + target.goal2_str + '-' + target.action_str
+                labels.append(label)
 
-        # Generate the RDM... That's actually very expensive computationally
-        rdmatrix = analysis.rdm_spearman(activations_flat_rdm)
+        if one_rdm:
+            activations_flat_rdm = []
+            for i, tensor in enumerate(activations_flat):
+                activations_flat_rdm.append(tensor.numpy().reshape(-1))
 
+            # Generate the RDM... That's actually very expensive computationally
+            rdmatrix = analysis.rdm_euclidian(activations_flat_rdm)
+            targets = utils.flatten_onelevel([sequence.targets for sequence in outputs_sequences_flat])
+            rdmatrix, labels, _ = reorder_rdm(rdmatrix, labels, targets, mode=rdm_sort)
+
+            analysis.save_rdm(rdmatrix, labels=labels, filename="rdm_goals", title="kitchen env goals: euclidian matrix", image=True, csv=True, figsize=50, fontsize=0.5)
+            plt.clf()
+        else: #two rdms
+            activations_goals = []
+            activations_actions = []
+            for i, tensor in enumerate(activations_flat):
+                activations = tensor.numpy().reshape(-1)
+                activations_goals.append(activations[0:len(activations)//2])
+                activations_actions.append(activations[len(activations)//2:])
+
+            for x in [(activations_goals, "goals"), (activations_actions, "actions")]:
+                # Generate the RDM... That's actually very expensive computationally
+                rdmatrix = analysis.rdm_euclidian(x[0])
+                targets = utils.flatten_onelevel([sequence.targets for sequence in outputs_sequences_flat])
+                rdmatrix, labels, _ = reorder_rdm(rdmatrix, labels, targets, rdm_sort)
+                analysis.save_rdm(rdmatrix, labels=labels, filename="rdm_side"+x[1],
+                                  title="kitchen env goals gradient: euclidian matrix - "+x[1], image=True, csv=True, figsize=50,
+                                  fontsize=0.5)
+                plt.clf()
         print("rdm done")
         # Generate the MDS from the RDM.
         mdsy = analysis.mds(rdmatrix)
@@ -759,7 +801,7 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, do_tsne=False, do_los
                                          style=list(colors.values())[(i)%len(colors)])
                 mdsy_idx += length
         plt.title("MDS")
-        plt.show()
+        #plt.show()
         plt.clf()
 
     if do_tsne:
@@ -781,6 +823,39 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, do_tsne=False, do_los
     else:
         tsne_results = None
     return tsne_results, test_data, num_errors, error_testing_results, goal_errors  # Test data is enriched during analysis (first error step)
+
+
+def reorder_rdm(rdm, labels, targets, mode=ACTION):
+    if mode == ACTION:
+        steps = [target.action_str for target in targets]
+    elif mode == SUBGOAL:
+        steps = [target.goal2_str for target in targets]
+    elif mode == GOAL:
+        steps = [target.goal1_str for target in targets]
+    elif mode == GOAL + SUBGOAL + ACTION:
+        # Sort first by action, then by subgoal. That way actions are grouped by which subgoal they match.
+        rdm, labels, targets = reorder_rdm(rdm, labels, targets, mode=ACTION)  # In principle resorting over actions, ESPECIALLY with a fixed labels
+        rdm, labels, targets = reorder_rdm(rdm, labels, targets, mode=SUBGOAL)
+        return reorder_rdm(rdm, labels, targets, mode=GOAL)
+    else: # nothing to do
+        return rdm
+
+    rdm = rdm.tolist()
+    # Sort the labels and targets so we can keep track of what goes where
+    # essential to use the lambda as otherwise sorted will sort first by key 1, then by key 2, which causes problems
+    # (sort is no longer stable which means we can get different permutations for the rows vs. the columns of the RDM!!)
+    labels = [label for _, label in sorted(zip(steps, labels), key=lambda zipped:zipped[0])]
+    targets = [target for _, target in sorted(zip(steps, targets), key=lambda zipped: zipped[0])]
+    # Sort for the rows
+    rdm = [rdmrow for _, rdmrow in sorted(zip(steps, rdm), key=lambda zipped:zipped[0])]
+    # transpose the list-rdm
+    rdm = np.transpose(np.array(rdm)).tolist()
+    # Sort again for the columns
+    rdm = [rdmrow for _, rdmrow in sorted(zip(steps, rdm), key=lambda zipped:zipped[0])]
+    # put the rdm back in 2d ndarray form
+    rdm = np.array(rdm)
+    # No need to retranspose again since an rdm is symmetrical anyway
+    return rdm, labels, targets
 
 
 def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=False,
@@ -932,7 +1007,7 @@ def train(stop_params, model, goals=False,
           noise=0., sequences=None,
           context_initialization=nn.ZEROS,
           gradient=False,
-          reg_strength=0.001, # 0.0001
+          reg_strength=0.001,
           reg_increase="linear"):
     # Example models:
     #        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
@@ -1026,6 +1101,7 @@ def train(stop_params, model, goals=False,
                     target.goal1_str = None
                     target.goal2_str = None
 
+            extra_loss = 0
             if goals and gradient:
                 # Train model, record loss.
                 #cols = model.size_hidden
@@ -1034,7 +1110,7 @@ def train(stop_params, model, goals=False,
                 # Regularization in the hidden layer weights
                 # Recurrent hidden to hidden connections
                 #print("recurrent")
-                extra_loss = utils.weight_regularization_calculator(model.hidden_layer.w,
+                extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
                                                               [0, model.size_hidden], [0, model.size_hidden],
                                                               reg_strength, reg_type="recurrent", reg_increase=reg_increase)
 
@@ -1050,9 +1126,9 @@ def train(stop_params, model, goals=False,
                                                                      [model.size_hidden + model.size_observation + model.size_action,
                                                                       model.size_hidden + model.size_observation + model.size_action + model.size_goal2],
                                                                      [0, model.size_hidden],
-                                                                     reg_strength, reg_type="input_middle",
-                                                                     reg_increase=reg_increase,
-                                                                     middle=0.25)
+                                                                     reg_strength, reg_type="input_left",
+                                                                     reg_increase=reg_increase)#,
+                                                                     #middle=0.25)
                 # Prev goal to hidden
                 #print("goal-->hidden")
                 extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
@@ -1075,8 +1151,8 @@ def train(stop_params, model, goals=False,
                 #print("hidden->subgoal")
                 extra_loss += utils.weight_regularization_calculator(model.goal2_layer.w,
                                                                [0, model.size_hidden], [0, model.size_goal2],
-                                                               reg_strength, reg_type="output_middle", reg_increase=reg_increase,
-                                                               middle=0.25)
+                                                               reg_strength, reg_type="output_left",
+                                                               reg_increase=reg_increase)#, middle=0.25)
 
                 # Hidden to next goal
                 #print("hidden->goal")

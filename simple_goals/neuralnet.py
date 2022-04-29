@@ -358,7 +358,7 @@ class ElmanGoalNet(NeuralNet):
                              size_goal1=self.size_goal1, size_goal2=self.size_goal2,
                              last_action_inputs=self.last_action_inputs)
 
-    def feedforward(self, observation):
+    def feedforward(self, observation):#, gain_multiplier=1., gain_multiplier_from=0, gain_multiplier_to=None):
         network_input = tf.concat([self.context, observation], 1)
         if not self.last_action_inputs: # cancel out actions
             self.action *= 0.
@@ -380,6 +380,13 @@ class ElmanGoalNet(NeuralNet):
             hidden_activation = self.dense_tanh(network_input, self.hidden_layer)
         else:
             raise(NotImplementedError("Nonlinearity " + self.nonlinearity + " not implemented"))
+
+        #if gain_multiplier != 1:
+        #    if gain_multiplier_to is None:
+        #        gain_multiplier_to = self.size_hidden
+        #    hidden_activation = hidden_activation.numpy()
+        #    hidden_activation[0, gain_multiplier_from:gain_multiplier_to] *= gain_multiplier
+        #    hidden_activation[0, gain_multiplier_to:] *= 1./gain_multiplier
 
         # Three separate softmaxes for the action and the goal
         self.action_softmax = self.dense_linear(hidden_activation, self.action_layer)

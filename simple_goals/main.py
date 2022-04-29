@@ -6,6 +6,8 @@ from cognitiveload import cogloadtask
 import numpy as np
 
 import analysis
+
+
 from pnas import pnas2018
 """
 #for i in range(25):
@@ -56,14 +58,29 @@ sys.exit()
 #pnas2018.make_rdm_multiple("pnasoverfittest100_1000", num_networks=20, with_goals=False, title="-", save_files=True)
 
 #sys.exit()
+#import tensorflow as tf
+
+# LOAD RDM TXT FILES.
+#rdm1 = np.loadtxt("rdm_goals.txt")
+#rdm2 = np.loadtxt("rdm_nogoals2.txt")
+
+# Reorder to group identical actions.
 
 
+# Reorder to group identical subsequences
 
-if True:
+
+#diff = rdm1 - rdm2
+#utils.save_rdm(diff, "diff_goalsnogoals", labels=[], title="Diff: goals nogoals", color=analysis.RDM_COLOR_DIVERGING)
+#sys.exit()
+#sys_details = tf.sysconfig.get_build_info()
+#cuda_version = sys_details["cuda_version"]
+#print(cuda_version)
+
+if False:
     from goalenv import goalenv2020
     from goalenv import environment as env
-
-
+    import tensorflow as tf
     for i in range(0):
         print(i)
         model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
@@ -75,76 +92,129 @@ if True:
                                 nonlinearity=nn.RELU,
                                 last_action_inputs=True)
 
-        stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=10001, check_frequency=1000,
+        stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=1, check_frequency=1000,
+                                     stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
+        model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
+                                  noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL,
+                                  gradient=False)
+        #utils.save_object("kitchenv_relu_adam_nonoise_", model) #gradient
+        #utils.save_object("kitchenv_relu_adam_nonoise_nogoals", model) #no goals
+        utils.save_object("kitchenv_relu_adam_goals", model) #goals
+        #utils.save_object("bigmodel1_relu_adam_nonoise_gradient", model)
+        #utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise_goaltest", model)
+    for i in range(0):
+        print(i)
+        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+                                size_goal1=0, #len(env.GoalEnvData.goals1_list),
+                                size_goal2=0, #len(env.GoalEnvData.goals2_list),
+                                algorithm=nn.ADAM, learning_rate=0.001,
+                                L2_reg=0.0001,
+                                initialization=nn.HE,
+                                nonlinearity=nn.RELU,
+                                last_action_inputs=True)
+
+        stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=5001, check_frequency=1000,
+                                     stop_condition=goalenv2020.stop_condition, goals=False, noise=0.0)
+        model = goalenv2020.train(stop_params=stopping, model=model, goals=False,
+                                  noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL,
+                                  gradient=False)
+        # utils.save_object("kitchenv_relu_adam_nonoise_", model) #gradient
+        # utils.save_object("kitchenv_relu_adam_nonoise_nogoals", model) #no goals
+        utils.save_object("kitchenv_relu_adam_nogoals", model)  # goals
+        # utils.save_object("bigmodel1_relu_adam_nonoise_gradient", model)
+        # utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise_goaltest", model)
+    #sys.exit()
+    for i in range(0):
+        print(i)
+        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+                                size_goal1=len(env.GoalEnvData.goals1_list),
+                                size_goal2=len(env.GoalEnvData.goals2_list),
+                                algorithm=nn.ADAM, learning_rate=0.001,
+                                L2_reg=0.0001,
+                                initialization=nn.HE,
+                                nonlinearity=nn.RELU,
+                                last_action_inputs=True)
+
+        stopping = nn.ParamsStopping(max_iterations=15000, min_iterations=10000, check_frequency=1000,
                                      stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
         model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
                                   noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL,
                                   gradient=True)
-
-        utils.save_object("bigmodel1_relu_adam_nonoise_gradient", model)
-        #utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise_goaltest", model)
+        # utils.save_object("kitchenv_relu_adam_nonoise_", model) #gradient
+        # utils.save_object("kitchenv_relu_adam_nonoise_nogoals", model) #no goals
+        utils.save_object("kitchenv_relu_adam_gradient", model)  # goals
+        # utils.save_object("bigmodel1_relu_adam_nonoise_gradient", model)
+        # utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise_goaltest", model)
+    #analysis.plot_tsne("mds_tsne.txt", "tsne.svg")
     #sys.exit()
 
     import time
     start = time.time()
 
-
     error_data_list = []
-    for model_type in ["yesgoals"]:#, "nogoals"]:
-        goals = model_type == "yesgoals"
-        for goal_multiplier in [1.03, 1.04, 1.05]:
+    for model_type in ["goals"]:#, "nogoals"]:
+        goals = model_type == "goals"
+        for goal_multiplier in [1.]:
             print("goal multiplier:")
             print(goal_multiplier)
-            for noise in [0, 1, 2, 3, 4, 5]:
+            for noise in [0]:
                 print("noise:")
                 print(noise)
                 for clamped_goals in [False]: #[True, False]:
                     print("clamped goals")
                     print(clamped_goals)
-                    for i in range(20):#(20):
+                    for i in [11]:#range(1):
                         print("time elapsed: {0}s".format(time.time() - start))
                         print("Network:")
                         print(i)
+                        model = utils.load_object("kitchenv_relu_adam_"+model_type, i)
                         #model = utils.load_object("bigmodel1_" + model_type +"_relu_adam_nonoise_goaltest", i)
-                        model = utils.load_object("bigmodel1_relu_adam_nonoise_gradient", i)
-                        #goal1 = utils.str_to_onehot("g_1_make_tea", env.GoalEnvData.goals1_list) * 4  #np.zeros((1, 2), np.float32)
+                        #model = utils.load_object("bigmodel1_relu_adam_nonoise_gradient", i)
+                        goal1 = utils.str_to_onehot("g_1_make_tea", env.GoalEnvData.goals1_list) * 4  #np.zeros((1, 2), np.float32)
                         #goal2 = utils.str_to_onehot("g_2_infuse_tea", env.GoalEnvData.goals2_list) #np.zeros((1, 9), np.float32)
                         #goal2 = utils.str_to_onehot("g_2_add_milk", env.GoalEnvData.goals2_list) * 2. # np.zeros((1, 9), np.float32)
-                        #goal2 = utils.str_to_onehot("g_2_add_cream", env.GoalEnvData.goals2_list) * 4
+                        goal2 = utils.str_to_onehot("g_2_add_cream", env.GoalEnvData.goals2_list) * 4
 
                         if True:
-                            test_data = goalenv2020.generate_test_data(model, noise=noise,
-                                                                   goal1_noise=0., goal2_noise=0.,
-                                                                   goals=goals, num_tests=1,
-                                                                   #goal_multiplier=goal_multiplier,
-                                                                   sequence_ids=range(21), ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
-                                                                   switch_goal1= None, #(range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
-                                                                   switch_goal2= None, #(range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
-                                                                   #switch_sequence=2,
-                                                                   noise_per_step=True,
-                                                                   noise_per_step_to_input=False,
-                                                                   disruption_per_step=False,
-                                                                   initialization=nn.SEMINORMAL,
-                                                                   clamped_goals = clamped_goals,
-                                                                   hidden_goal_multiplier=goal_multiplier)
+                            with tf.device('/cpu:0'):
+                                #print("time elapsed: {0}s".format(time.time() - start))
+                                test_data = goalenv2020.generate_test_data(model, noise=noise,
+                                                                       goal1_noise=0., goal2_noise=0.,
+                                                                       goals=goals, num_tests=1,
+                                                                       goal_multiplier=goal_multiplier,
+                                                                       sequence_ids=[3, 16, 16], ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
+                                                                       #switch_goal1= (range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
+                                                                       #switch_goal2= (range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
+                                                                       switch_sequence=2,
+                                                                       noise_per_step=False,
+                                                                       noise_per_step_to_input=False,
+                                                                       disruption_per_step=False,
+                                                                       initialization=nn.SEMINORMAL,
+                                                                       clamped_goals = clamped_goals)
+                                                                       #hidden_goal_multiplier=1.)
+                                                                       #gain_multiplier = goal_multiplier,
+                                                                       #gain_multiplier_from=0,
+                                                                       #gain_multiplier_to=50)
+                        #print("time elapsed: {0}s".format(time.time() - start))
                         print("generated data")
 
-                        #utils.save_object("control"+model_type+str(i), test_data)
+                        utils.save_object("control"+model_type+str(i), test_data)
                         #test_data = utils.load_object("control" + model_type + str(i))
-                        goalenv2020.VERBOSE = False
-                        tsne_results, test_data, _, error_data, _ = goalenv2020.analyse_test_data(test_data, do_rdm=False, do_tsne=False, do_loss=True,
-                                                                                               goals=True, mds_sequences=[0, 1, 2])#, mds_range=15)
-                        utils.write_line_to_csv("gradient_hidden_noise1.csv", error_data)
+                        goalenv2020.VERBOSE = True
+                        tsne_results, test_data, _, error_data, _ = goalenv2020.analyse_test_data(test_data, do_rdm=True, rdm_sort=goalenv2020.GOAL + goalenv2020.SUBGOAL + goalenv2020.ACTION,
+                                                                                                do_tsne=True, do_loss=True,
+                                                                                                goals=goals, one_rdm=True)#, mds_sequences=[0, 1, 2])#, mds_range=15)
+                        #utils.write_line_to_csv("goalmultiplierinputFINAL.csv", error_data)
                         #error_data_list.append(error_data)
-                        #utils.save_object("tsne_resultsmds"+model_type+str(i), tsne_results)
-                        #utils.save_object("mds"+model_type+str(i), test_data) # test dat ais updated by analysis
+                        utils.save_object("tsne_resultsmds"+model_type+str(i), tsne_results)
+                        utils.save_object("mds"+model_type+str(i), test_data) # test dat ais updated by analysis
                         #tsne_results = utils.load_object("tsne_resultsmds"+model_type+str(i))
                         #test_data = utils.load_object("mds" + model_type + str(i))
-                        #goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=True, tsne_actions=False, tsne_sequences=False,
-                        #          tsne_errors=False, tsne_sequence=[0, 1, 2], #tsne_sequence_interval=[1, 30],
-                        #          filename="mds", annotate=True, save_txt=True)
+                        goalenv2020.plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=True, tsne_actions=False, tsne_sequences=False,
+                                  tsne_errors=False, tsne_sequence=[0, 1, 2], #tsne_sequence_interval=[1, 30],
+                                  filename="mds", annotate=True, save_txt=True)
                         #utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
-
+    analysis.plot_tsne("mds_tsne.txt", "tsne.svg")
     #utils.write_lists_to_csv("clamped_goals_noise0.csv", error_data_list, labels=goalenv2020.error_testing_labels)
 
     sys.exit()
@@ -154,7 +224,7 @@ if True:
 # - "bigmodel1_yesgoals_2nd_batch": 1 network (same)
 # - "bigmodel1_yesgoals_relu": 4 networks, HE initialization, seminormal context initialization. UNSURE, RETRAIN
 # - "bigmodel1_yesgoals_relu": 4 networks, HE initialization, normal context initialization
-if True:
+if False:
     from goalenv import goalenv2020
     from goalenv import environment
     """
@@ -282,7 +352,49 @@ if True:
 
 if True:
     import cognitiveload.model3 as mod3
+    import cognitiveload.model2 as mod2
     mod3.FAST_RDM = True
+    import cognitiveload.cogloadtask as task
+    # Use the easy arithmetic sequences :-)
+    task.arithmetic_seqs = task.arithmetic_seqs_easy
+    hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00001)
+    nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
+                                nonlinearity=nn.RELU,
+                                initialization=nn.HE,
+                                learning_rate=0.001,
+                                size_action=None,  # these will get filled automatically
+                                size_observation=None,  #
+                                size_hidden=25,
+                                L1_reg=0, L2_reg=0.0)
+    stopping = nn.ParamsStopping(max_iterations=150001, min_iterations=1000, check_frequency=1000,
+                                 stop_condition=mod3.stop_condition, blanks=True, min_accuracy=1.0)
+    #i=-1
+    #print(i)
+    #hrp.reg_strength = 0.001
+    #nnparams.L2_reg = 0.0
+
+    #mod3.run_model3_multiple(stopping_params=stopping,
+    #                         num_networks=25, #from_file="model3-bis",
+    #                         name="model3-gradient",
+    #                         hrp=hrp,
+    #                         nnparams=nnparams,
+    #                         blanks=True)
+
+    hrp.reg_strength = 0.0
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="model3-goals_nogradient",
+                             name="model3-goals_nogradient_",
+                             hrp=None,
+                             nnparams=nnparams,
+                             blanks=True)
+
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=5,  #from_file="model2",
+                             name="model2_",
+                             nnparams=nnparams,
+                             blanks=True)
+
+    sys.exit()
     #hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00002)
     #mod3.run_model3_multiple(from_file="model3_test_gradient_2goals00002", num_networks=2, name="model3_test_gradient_2goals00002_test2", hrp=hrp)
 
@@ -303,6 +415,20 @@ if True:
 
     stopping = nn.ParamsStopping(max_iterations=150001, min_iterations=10000, check_frequency=1000,
                                  stop_condition=mod3.stop_condition, blanks=True, min_accuracy=0.95)
+
+    i=-1
+    print(i)
+    hrp.reg_strength = 0.00003
+    nnparams.L2_reg = 0.0
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=25, #from_file="model3_nodummy"
+                             name="test"+str(i),#"model3_withoutdummy_150000_goals",
+                             hrp=hrp,
+                             nnparams=nnparams,
+                             blanks=True)
+    # 3. about 100,000 iterations. Massive left/right difference.=
+
+    sys.exit()
     i=0
     print(i)
     hrp.reg_strength=0.0

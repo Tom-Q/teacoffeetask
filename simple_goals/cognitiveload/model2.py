@@ -10,12 +10,12 @@ import neuralnet as nn
 # No blansk approach
 
 def ff_ari_noblanks(nnet, seq_ari):
-    nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.input_symbols))
 
 def make_targets_ari_noblanks(seq_ari):
     targets = []
@@ -24,25 +24,25 @@ def make_targets_ari_noblanks(seq_ari):
     targets.append(task.Target(None))
     targets.append(task.Target(None))
     targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.output_symbols)))
     return targets
 
 def ff_bev_noblanks(nnet, seq_bev):
-    nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.input_symbols))
 
 def make_targets_bev_noblanks(seq_bev):
     targets = []
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.symbols)))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.symbols)))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.symbols)))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.symbols)))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.symbols)))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.output_symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.output_symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.output_symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.output_symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.output_symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.output_symbols)))
     return targets
 
 
@@ -198,103 +198,149 @@ def run_model2_noblanks(from_file=False):
 
 # Blanks
 def ff_ari(nnet, seq_ari):
-    zeros = np.zeros_like(utils.str_to_onehot(seq_ari[0], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.symbols))
+    zeros = np.zeros_like(utils.str_to_onehot(seq_ari[0], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.input_symbols))
     nnet.feedforward(zeros)
-    nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.input_symbols))
     nnet.feedforward(zeros)
-    nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.input_symbols))
     nnet.feedforward(zeros)
-    nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.input_symbols))
     nnet.feedforward(zeros)
-    nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.input_symbols))
     nnet.feedforward(zeros)
-    nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.input_symbols))
 
 def make_targets_ari(seq_ari):
+    target0 = utils.str_to_onehot(seq_ari[1], task.output_symbols)
+    target1 = utils.str_to_onehot(seq_ari[2], task.output_symbols)
+    target2 = utils.str_to_onehot(seq_ari[3], task.output_symbols)
+    target3 = utils.str_to_onehot(seq_ari[4], task.output_symbols)
+    target4 = utils.str_to_onehot(seq_ari[5], task.output_symbols)
+    target5 = utils.str_to_onehot(seq_ari[6], task.output_symbols)
+
     targets = []
+    targets.append(task.Target(target0))
     targets.append(task.Target(None))
+    targets.append(task.Target(target1))
     targets.append(task.Target(None))
+    targets.append(task.Target(target2))
     targets.append(task.Target(None))
+    targets.append(task.Target(target3))
     targets.append(task.Target(None))
+    targets.append(task.Target(target4))
     targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.symbols)))
+    targets.append(task.Target(target5))
     return targets
 
+
 def ff_bev(nnet, seq_bev):
-    zeros = np.zeros_like(utils.str_to_onehot(seq_bev[0], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.symbols))
+    zeros = np.zeros_like(utils.str_to_onehot(seq_bev[0], task.input_symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.input_symbols))
     nnet.feedforward(zeros)
-    nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.input_symbols))
     nnet.feedforward(zeros)
-    nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.input_symbols))
     nnet.feedforward(zeros)
-    nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.input_symbols))
     nnet.feedforward(zeros)
-    nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.input_symbols))
     nnet.feedforward(zeros)
-    nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.symbols))
+    nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.input_symbols))
+
 
 def make_targets_bev(seq_bev):
     targets = []
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.output_symbols)))
     targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.output_symbols)))
     targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.output_symbols)))
     targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.output_symbols)))
     targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.output_symbols)))
     targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.symbols)))
+    targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.output_symbols)))
     return targets
 
-def ff_all(nnet, seq_bev, seq_ari):
-    nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.symbols))
-    nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.symbols))
 
-def make_targets_all(seq_bev, seq_ari):
+def ff_all(nnet, seq_bev, seq_ari, start):
+    if start == task.START_BEV:
+        nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.input_symbols))
+    elif start == task.START_ARI:
+        nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.input_symbols))
+        nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.input_symbols))
+
+def make_targets_all(seq_bev, seq_ari, start):
+    target0 = utils.str_to_onehot(seq_ari[1], task.output_symbols)
+    target1 = utils.str_to_onehot(seq_ari[2], task.output_symbols)
+    target2 = utils.str_to_onehot(seq_ari[3], task.output_symbols)
+    target3 = utils.str_to_onehot(seq_ari[4], task.output_symbols)
+    target4 = utils.str_to_onehot(seq_ari[5], task.output_symbols)
+    target5 = utils.str_to_onehot(seq_ari[6], task.output_symbols)
+
     targets = []
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.symbols)))
-    targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.symbols)))
-    targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.symbols)))
-    targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.symbols)))
-    targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.symbols)))
-    targets.append(task.Target(None))
-    targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.symbols)))
-    targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.symbols)))
+    if start == task.START_BEV:
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.output_symbols)))
+        targets.append(task.Target(target0))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.output_symbols)))
+        targets.append(task.Target(target1))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.output_symbols)))
+        targets.append(task.Target(target2))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.output_symbols)))
+        targets.append(task.Target(target3))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.output_symbols)))
+        targets.append(task.Target(target4))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.output_symbols)))
+        targets.append(task.Target(target5))
+    elif start == task.START_ARI:
+        targets.append(task.Target(target0))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.output_symbols)))
+        targets.append(task.Target(target1))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.output_symbols)))
+        targets.append(task.Target(target2))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.output_symbols)))
+        targets.append(task.Target(target3))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.output_symbols)))
+        targets.append(task.Target(target4))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.output_symbols)))
+        targets.append(task.Target(target5))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.output_symbols)))
     return targets
 
-def train_all(nnet, num_training_steps = 1000000):
+
+def train_all(stopping_params, nnet, blanks=True): #nnet, num_training_steps = 1000000):
     i=0
     avg_loss = 0.
-    while i < num_training_steps:
-        # Pick a random arithmetic seq:
+    while not stopping_params.is_time_to_stop(nnet, i): #i < num_training_steps:
+        # Pick a random arithmetic seq
         # and a random beverage seq
-        seq_ari = random.choice(task.arithmetic_seqs)
+        seq_ari = random.choice(task.arithmetic_seqs_easy)
         seq_bev = random.choice(task.beverage_seqs)
-        # 1/3rd = only ari, 1/3rd = only bev, 1/3rd = combo.
-        mode = np.random.randint(0, 3)
+
+        mode = np.random.choice([task.ONLY_ARI, task.ONLY_BEV, task.BOTH + task.START_BEV, task.BOTH + task.START_ARI])
 
         with tf.GradientTape() as tape:
             nnet.new_episode()
@@ -304,66 +350,53 @@ def train_all(nnet, num_training_steps = 1000000):
             elif mode == task.ONLY_BEV:
                 targets = make_targets_bev(seq_bev)
                 ff_ari(nnet, seq_bev)
-            elif mode == task.BOTH:
-                targets = make_targets_all(seq_bev,seq_ari)
-                ff_all(nnet, seq_bev, seq_ari)
+            elif mode == task.BOTH+task.START_BEV:
+                targets = make_targets_all(seq_bev,seq_ari, task.START_BEV)
+                ff_all(nnet, seq_bev, seq_ari, task.START_BEV)
+            elif mode == task.BOTH+task.START_ARI:
+                targets = make_targets_all(seq_bev,seq_ari, task.START_ARI)
+                ff_all(nnet, seq_bev, seq_ari, task.START_ARI)
 
             loss = nnet.train(tape, targets)
             loss = loss.numpy()[0]
             avg_loss = 0.999 * avg_loss + 0.001 * loss
-            if i % 100 == 0 or i > (num_training_steps - 20):
+            if i % 1000 == 0: # or i > (num_training_steps - 20):
                 print('{0}, avgloss={1}'.format(i, avg_loss))
-            if mode == task.BOTH:
-                if i % 1019 == 0:
-                    print(seq_ari)
-                    print(np.argmax(nnet.action) - 9)
             i += 1
     nnet.new_episode() # just clear up the network history to avoid any bad surprises
 
+
 def test_network_all(model):
-    sequence_length = len(make_targets_all(task.beverage_seqs[0], task.arithmetic_seqs[0])) # wasteful but works
+    sequence_length = len(make_targets_all(task.beverage_seqs[0], task.arithmetic_seqs[0], task.START_BEV)) # wasteful but works
     hidden_activation = []
     accuracy_totals = np.zeros(sequence_length)
     accuracy_fullseqs = 0.
-    for seq_bev in task.beverage_seqs:
-        for seq_ari in task.arithmetic_seqs:
-            model.new_episode()
-            ff_all(model, seq_bev, seq_ari)
-            context = [c.numpy().flatten() for c in model.h_context]
-            hidden_activation.append(context)
+    for start in task.STARTS:
+        for seq_bev in task.beverage_seqs:
+            for seq_ari in task.arithmetic_seqs:
+                model.new_episode()
+                ff_all(model, seq_bev, seq_ari, start)
+                context = [c.numpy().flatten() for c in model.h_context]
+                hidden_activation.append(context)
 
-            # Now also test whether the model was correct or not: compare targets with actual outputs
-            targets = make_targets_all(seq_bev, seq_ari)
-            outputs = [a.flatten() for a in model.h_action_wta]
-            accuracy_sequence = np.zeros_like(accuracy_totals)
-            sequence_fail = False
-            for i in range(sequence_length):
-                ta = targets[i].action_one_hot
-                op = outputs[i]
-                if ta is None or (op == ta[0]).all():
-                    accuracy_sequence[i] += 1
-                else:
-                    sequence_fail = True
-            if not sequence_fail:
-                accuracy_fullseqs += 1
-            accuracy_totals += accuracy_sequence
+                # Now also test whether the model was correct or not: compare targets with actual outputs
+                targets = make_targets_all(seq_bev, seq_ari, start)
+                outputs = [a.flatten() for a in model.h_action_wta]
+                accuracy_sequence = np.zeros_like(accuracy_totals)
+                sequence_fail = False
+                for i in range(sequence_length):
+                    ta = targets[i].action_one_hot
+                    op = outputs[i]
+                    if ta is None or (op == ta[0]).all():
+                        accuracy_sequence[i] += 1
+                    else:
+                        sequence_fail = True
+                if not sequence_fail:
+                    accuracy_fullseqs += 1
+                accuracy_totals += accuracy_sequence
     accuracy_totals /= 4*4*17
     accuracy_fullseqs /= 4*4*17
 
-    if task.FAST_RDM:
-        # So I've got all the networks and for each I've computed accuracy and extracted hidden layer activation.
-        # Now to do some averaging: average all the ++, +-, -+, and -- sequences together. Also deal with accuracy.
-        # The sequences are ordered like so: 4 bev. sequences, each has 4*17 arithmetic sequences.
-        averaged_up_hidden_activation = []
-        for i in range(4):
-            for j in range(4):
-                # add up those 17 sequences
-                averaged_up_hidden_activation.append(np.zeros_like(hidden_activation[0]))
-                for k in range(17):
-                    idx = i*4*17+j*17+k
-                    averaged_up_hidden_activation[-1] += hidden_activation[idx]
-                averaged_up_hidden_activation[-1] /= 17
-        hidden_activation = averaged_up_hidden_activation
     return hidden_activation, accuracy_totals, accuracy_fullseqs
 
 def test_network_ari(model):
@@ -394,20 +427,6 @@ def test_network_ari(model):
         accuracy_totals += accuracy_sequence
     accuracy_totals /= 4*17
     accuracy_fullseqs /= 4*17
-
-    if task.FAST_RDM:
-        # So I've got all the networks and for each I've computed accuracy and extracted hidden layer activation.
-        # Now to do some averaging: average all the ++, +-, -+, and -- sequences together. Also deal with accuracy.
-        # The sequences are ordered like so: 4 bev. sequences, each has 4*17 arithmetic sequences.
-        averaged_up_hidden_activation = []
-        for i in range(4):
-            # add up those 17 sequences
-            averaged_up_hidden_activation.append(np.zeros_like(hidden_activation[0]))
-            for j in range(17):
-                idx = i*17+j
-                averaged_up_hidden_activation[-1] += hidden_activation[idx]
-            averaged_up_hidden_activation[-1] /= 17
-        hidden_activation = averaged_up_hidden_activation
     return hidden_activation, accuracy_totals, accuracy_fullseqs
 
 def test_network_bev(model):
@@ -456,48 +475,76 @@ def generate_rdm_all(nnet, name, rdm_type=analysis.SPEARMAN, save_files=True, ti
         hidden = utils.flatten_onelevel(hidden_bev) +\
                  utils.flatten_onelevel(hidden_ari) +\
                  utils.flatten_onelevel(hidden_both)
-        rdmatrix = analysis.rdm_spearman(hidden)
+        rdmatrix = analysis.rdm_euclidian(hidden)
         # save the massive rdm for debug purposes (so that I don't have to generate it all over again everytime).
         utils.save_object("rdmatrix_test", rdmatrix)
     else:
         rdmatrix = utils.load_object("rdmatrix_test")
 
-    if not task.FAST_RDM: # the rdm is massive and we need to average out of the fluff
-        rdmatrix = average_arithmetic_sequences(rdmatrix)
+    return process_matrix(rdmatrix, delete_blank_states)
 
+
+def process_matrix(rdmatrix, delete_blank_states):
     if delete_blank_states:
         rdmatrix = delete_blanks(rdmatrix)
+        #labels = utils.flatten_onelevel(task.label_seqs_bev_noblanks) + \
+        #         utils.flatten_onelevel(task.label_seqs_ari) + \
+        #         utils.flatten_onelevel(task.label_seqs_all_collapsed)
         labels = utils.flatten_onelevel(task.label_seqs_bev_noblanks) + \
-                 utils.flatten_onelevel(task.label_seqs_ari_noblanks) + \
-                 utils.flatten_onelevel(task.label_seqs_all)
+                 utils.flatten_onelevel(task.label_seqs_ari)
+        labels *= 2
+
     else:
         labels = utils.flatten_onelevel(task.label_seqs_bev) +\
                  utils.flatten_onelevel(task.label_seqs_ari) +\
-                 utils.flatten_onelevel(task.label_seqs_all)
-    """
-    name=name.replace('.', '_')+'_'+rdm_type
-    if save_files:
-        np.savetxt(name+"_rdm_mat.txt", rdmatrix, delimiter="\t", fmt='%.2e')
-    analysis.plot_rdm(rdmatrix, labels, title + " spearman rho matrix", figsize=30, fontsize=0.6)
-    if save_files:
-        plt.savefig(name+'_rdm.png', dpi=300, bbox_inches='tight')
-    plt.clf()
-    """
+                 utils.flatten_onelevel(task.label_seqs_all_collapsed)
+
+    # Now do the averaging and re-arranging.
+    #if collapse_rdm:
+    # average the 16 combo bev first and 16 combo ari first. Must be done first row-by-row then column-by-column
+    start_idx_bev_first = 6*8 if delete_blank_states else 11 * 8
+    #rdmatrix = average_combined_seqs(rdmatrix, start_idx_bev_first)
+    rdmatrix = merge_both_orders(rdmatrix, start_idx_bev_first)
+    rdmatrix = rearrange_rdm2(rdmatrix, start_idx_bev_first)
     return rdmatrix, labels
 
+def average_combined_seqs(rdmatrix, start_idx):
+    # average the 16 combo bev first and 16 combo ari first. Must be done first row-by-row then column-by-column
+    start_idx_bev_first = start_idx
+    start_idx_ari_first = start_idx + 16 * 12
+    rdmatrix = average_onetype_ari_sequence(rdmatrix, idx0=start_idx_ari_first, seq_size=12, num_seqs=16)
+    rdmatrix = average_onetype_ari_sequence(rdmatrix, idx0=start_idx_bev_first, seq_size=12, num_seqs=16)
+    return rdmatrix
 
-def run_model2_multiple(from_file=None, num_networks=1):
+def rearrange_rdm(rdmatrix, labels, start_idx):
+    # re-arrange to have all the beverage together and all the arithmetic together
+    # Make a list
+    new_order = list(range(len(rdmatrix[0, :])))
+    # Easiest to do this by hand
+    swapped = [0, 2, 4, 6, 8, 10, 13, 15, 17, 19, 21, 23, 1, 3, 5, 7, 9, 11, 12, 14, 16, 18, 20, 22]
+    swapped = [val + start_idx for val in swapped]
+    new_order[start_idx:] = swapped[:]
+    rdmatrix = utils.reorder_matrix(rdmatrix, new_order)
+    labels = utils.reorder_list(labels, new_order)
+    return rdmatrix, labels
+
+def run_model2_multiple(stopping_params, nnparams, blanks, from_file=None,
+                        num_networks=1, name="model2"):
+    #    from_file=None, num_networks=1):
     if from_file is not None:
         networks = utils.load_objects(from_file, num_networks)
     else:
         networks = []
         for i in range(num_networks):
-            nnet = nn.ElmanGoalNet(size_hidden=25, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                                   size_observation=len(task.symbols), size_action=len(task.symbols),
-                                   learning_rate=0.001, algorithm=nn.ADAM)
-            nnet.L2_regularization = 0.00001
-            train_all(nnet, num_training_steps=200000)
-            utils.save_object("cogloadtasknet", nnet)
+            nnparams.size_goal1=0
+            nnparams.size_action=len(task.output_symbols)
+            nnparams.size_observation=len(task.input_symbols)
+            nnet = nn.ElmanGoalNet(params=nnparams) #size_hidden=25, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
+                                   #size_observation=len(task.symbols), size_action=len(task.symbols),
+                                   #learning_rate=0.001, algorithm=nn.ADAM)
+            #nnet.L2_regularization = 0.00001
+            train_all(stopping_params, nnet, blanks=blanks) #nnet, num_training_steps=200000)
+            utils.save_object(name, nnet)
             networks.append(nnet)
             # Print some stuff
             hidden_activation, accuracy_totals, accuracy_fullseqs = test_network_all(nnet)
@@ -507,13 +554,12 @@ def run_model2_multiple(from_file=None, num_networks=1):
     sum_rdm = None
     labels = None
     for net in networks:
-        rdm, labels = generate_rdm_all(net, name="cogloadtasknet", from_file = False, )
+        rdm, labels = generate_rdm_all(net, name=name, from_file = False)
         if sum_rdm is None:
             sum_rdm = rdm
         else:
             sum_rdm += rdm
     average_rdm = sum_rdm/num_networks
-    name = "cogloadtasknet"
     utils.save_rdm(average_rdm, name, labels,  title="RDM training combined")
 
 def run_model2(from_file=False):
@@ -521,7 +567,7 @@ def run_model2(from_file=False):
         # COMBINED #
         num_training_steps = 100000
         nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                               size_observation=len(task.symbols), size_action=len(task.symbols),
+                               size_observation=len(task.input_symbols), size_action=len(task.output_symbols),
                                learning_rate=0.01, algorithm=nn.ADAM)
         nnet.L2_regularization = 0.00001
         train_all(nnet, num_training_steps)
@@ -535,7 +581,7 @@ def run_model2_deleteblanks(from_file=False):
         # COMBINED #
         num_training_steps = 100000
         nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                               size_observation=len(task.symbols), size_action=len(task.symbols),
+                               size_observation=len(task.input_symbols), size_action=len(task.output_symbols),
                                learning_rate=0.01, algorithm=nn.ADAM)
         nnet.L2_regularization = 0.00001
         train_all(nnet, num_training_steps)
@@ -565,7 +611,7 @@ def average_arithmetic_sequences(rdm, distinguish_operators=True):
     ari_cats = 4  # number of arithmetic categories: ++,+-, -+, --
     bev_seqs = 4  # number of beverage sequences: tea water first, etc.
     len_nomix_seq = 11  # number of steps in a non-mixed sequence (including blanks!)
-    len_mixed_seq = 12  #
+    len_mixed_seq = 12  # number of steps in the total sequence
 
     # These are the lengths BEFORE all these averages and other corrections are applied; on the RAW rdm
     len_ari = len_nomix_seq * ari_cats * ari_seqs_per_cat  #
@@ -608,8 +654,6 @@ def average_arithmetic_sequences(rdm, distinguish_operators=True):
 
 
 # This cleans up the massive RDM by averaging the rows and columns corresponding to a single category
-# (e.g. all the "++" sequences).
-# This must be called once for each sequence that needs to be cleaned up, meaning: ++, +-, -+, --
 def average_onetype_ari_sequence(rdm, idx0, seq_size, num_seqs):
     """
     @param rdm: The RDM
@@ -631,3 +675,116 @@ def average_onetype_ari_sequence(rdm, idx0, seq_size, num_seqs):
     rdm[idx0:idx0+seq_size, :] /= num_seqs
     rdm[:, idx0:idx0+seq_size] /= num_seqs
     return rdm
+
+# The rdmatrix has two orderings, bev first then arithmetic first. This averages distances across the two orders.
+def merge_both_orders(rdmatrix, start_idx):
+    # each order has 12*16 rdm rows.
+    # rows
+    for idx in range(start_idx, start_idx+12*16):
+            if idx % 2 == 0:  # Beverage sequences
+                rdmatrix[idx, :] += rdmatrix[idx + 12 * 16 + 1, :]
+            else:  # arithmetic sequences
+                rdmatrix[idx, :] += rdmatrix[idx + 12 * 16 - 1, :]
+
+            rdmatrix[idx, :] /= 2.
+    # columns
+    for idx in range(start_idx, start_idx+12*16):
+        if idx % 2 == 0:
+            rdmatrix[:, idx] += rdmatrix[:, idx + 12 * 16 + 1]
+        else:
+            rdmatrix[:, idx] += rdmatrix[:, idx + 12 * 16 - 1]
+
+        rdmatrix[:, idx] /= 2.
+
+    # Cut off the part that we've averaged.
+    return rdmatrix[:start_idx+12*16,:start_idx+12*16]
+
+import copy
+# The rdmatrix has 4x4 = 16 different combined sequences (after merging the two orderings).
+# This averages distances for all instances of each sequence, e.g. all 4 instances of coffee water first are averaged.
+def rearrange_rdm2(rdmatrix, start_idx):
+    rdmatrix_in = rdmatrix
+
+    rdmatrix_in = _rearrange2_rows(start_idx, rdmatrix_in)
+    rdmatrix_in = rdmatrix_in.T
+    rdmatrix_in = _rearrange2_rows(start_idx, rdmatrix_in)
+    # No need to undo the transpose, since the matrix is symmetric
+
+    # Delete unneeded rdmatrix_out steps. We should have: 6*4 + 6*4 + 6*4 + 6*4 = 96
+    rdmatrix_in = rdmatrix_in[0:96, 0:96]
+
+    return rdmatrix_in
+
+def _rearrange2_rows(start_idx, rdmatrix_in):
+    # Make a copy to avoid overtwriting useful info
+    rdmatrix_out = copy.deepcopy(rdmatrix_in)
+
+    # Average sequence tea1, tea2, coffee1, coffee2
+    seq_length = 12  # bev1 ari1 bev2 ... = 12 steps
+    for seq_type in range(0, 4): # four sequences = tea water first, tea water second, etc.
+        for seq_combi in range(0, 4): # for each sequence four combination: tea1 ari1, tea1 ari2, etc.
+            start_idx_seq_in = start_idx + seq_type * 48 + seq_length * seq_combi
+            start_idx_seq_out = start_idx + seq_type * 6
+            for step in range(6):
+                rdmatrix_out[start_idx_seq_out + step, :] += rdmatrix_in[start_idx_seq_in + step*2, :]
+
+    # Now the arithmetic sequences
+    for seq_type in range(4):
+        for seq_combi in range(4):
+            start_idx_seq_in = start_idx + 1 + seq_combi * 48 + seq_type * 12
+            start_idx_seq_out = start_idx + 24 + seq_type * 6
+            for step in range(6):
+                rdmatrix_out[start_idx_seq_out + step, :] += rdmatrix_in[start_idx_seq_in + step * 2, :]
+
+    # dont forget to divide after all these additions
+    rdmatrix_out[48:96, :] /= 4
+
+    return rdmatrix_out
+
+def _rearrange2_columns(start_idx, rdmatrix_in, rdmatrix_out):
+    # Average sequence tea1, tea2, coffee1, coffee2
+    seq_length = 12  # bev1 ari1 bev2 ... = 12 steps
+    for seq_type in range(4): # four sequences = tea water first, tea water second, etc.
+        for seq_combi in range(4): # for each sequence four combination: tea1 ari1, tea1 ari2, etc.
+            start_idx_seq_in = start_idx + seq_type * 48 + seq_length * seq_combi
+            start_idx_seq_out = start_idx + seq_type * 6
+            for step in range(6):
+                rdmatrix_in[:, start_idx_seq_out + step] += rdmatrix_in[:, start_idx_seq_in + step*2]
+    rdmatrix_in[:, 48:72]/=4
+
+    # Now the arithmetic parts
+    #for seq_type in range(4):
+    #    for seq_combi in range(4):
+    #        start_idx_seq_in = start_idx + 1 + seq_combi * 48 + seq_type * 12
+    #        start_idx_seq_out = start_idx + 24 + seq_type * 6
+    #        for step in range(6):
+    #            rdmatrix_out[start_idx_seq_out+step, :] += rdmatrix_in[start_idx_seq_in + step*2, :]
+    #rdmatrix_out[72:96, :] /= 4
+
+def new_order_combined(start_combined, len_combined):
+    new_order = list(range(len_combined + start_combined))
+    for i in range(start_combined, start_combined + len_combined):
+        if i < start_combined + len_combined/2:
+            new_order[i] = start_combined + 2*(i-start_combined)
+        else:
+            new_order[i] = start_combined + 1 + 2*(i - start_combined - len_combined//2)
+    return new_order
+
+
+def stop_condition(nnet, blanks, min_accuracy=1.):
+    _, accuracy_both, _ = test_network_all(nnet)
+    if blanks:
+        _, accuracy_ari, _ = test_network_ari(nnet)
+        _, accuracy_bev, _ = test_network_bev(nnet)
+    else:
+        _, accuracy_ari, _ = test_network_ari_noblanks(nnet)
+        _, accuracy_bev, _ = test_network_bev_noblanks(nnet)
+
+    if not blanks:
+        return np.all(accuracy_both >= [.75, .75, .5, .5, 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
+           np.all(accuracy_ari >= [1., .5, 1., 1., 1., min_accuracy]) and \
+           np.all(accuracy_bev >= [.5, .5, 1., 1., 1., 1.])
+    elif blanks:
+        return np.all(accuracy_both >= [.75, .75, .5, .5, 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
+        np.all(accuracy_ari >= [1., .5, 1., 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
+        np.all(accuracy_bev >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1.])

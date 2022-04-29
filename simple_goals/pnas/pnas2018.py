@@ -15,7 +15,7 @@ ZEROS = 'zeros'
 UNIFORM = 'uniform'
 
 def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorithm=neuralnet.SGD,
-          size_hidden=15, learning_rate=None, loss_type='cross_entropy', initialization="normal",
+          size_hidden=15, learning_rate=None, loss_type='cross_entropy',
           initial_context=ZEROS):
     if model is None:
         model = nn.ElmanGoalNet(size_hidden=size_hidden, size_observation=9, size_action=8, size_goal1=0, size_goal2=0,

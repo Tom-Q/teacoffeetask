@@ -7,43 +7,33 @@ import random
 import analysis
 import matplotlib.pyplot as plt
 
-# This controls whether I produce fast RDMs (technically incorrect but very quick to do) or slow
-# RDMs (technically correct but takes 90 minutes)
-FAST_RDM = True
-# Whether the generated RDMs separates arithmetic sequences as ++, +-, -+, etc. or not.
-COLLAPSE_ARITHMETIC_SEQS = True
-
 # Whether to train on ARI, BEV, or BOTH
-ONLY_ARI = 0
-ONLY_BEV = 1
-BOTH = 2
+ONLY_ARI = "only_ari"
+ONLY_BEV = "only_bev"
+BOTH = "both"
+START_BEV = "start_bev"
+START_ARI = "start_ari"
+STARTS = [START_BEV, START_ARI]
 
-output_symbols = ['-9', '-8', '-7', '-6', '-5', '-4', '-3', '-2', '-1',
-           '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-           '10', '11', '12', '13', '14', '15', '16','17', '18', '19',
+output_symbols = ['0', '1', '2', '3', '+', '-', '=',
            "tea", "coffee", "water", "stir", "sugar", "cream", "serve_tea", "serve_coffee"]
 
-input_symbols = ['-9', '-8', '-7', '-6', '-5', '-4', '-3', '-2', '-1',
-                 '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-                 '+', '-', '=',
-                 "init", "tea", "coffee", "water", "stir", "sugar", "cream"]
+input_symbols = ['1', '2', '+', '-', '=',
+                 "choose", "tea", "coffee", "water", "stir", "sugar", "cream"]
 
-symbols = ['-9', '-8', '-7', '-6', '-5', '-4', '-3', '-2', '-1',
-           '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-           '10', '11', '12', '13', '14', '15', '16', '17', '18', '19',
-           '+', '-', '=',
-           "init", "tea", "coffee", "water", "stir", "sugar", "cream", "serve_tea", "serve_coffee"]
+symbols = list(set(output_symbols + input_symbols))
 
-goal_symbols = ["math", "beverage"]#, "tea", "coffee"]
+goal_symbols = ["math", "beverage"]
 
 beverage_seqs = [
-    ["init", "tea", "water", "stir", "sugar", "stir", "serve_tea"],
-    ["init", "tea", "sugar", "stir", "water", "stir", "serve_tea"],
-    ["init", "coffee", "water", "stir", "cream", "stir", "serve_coffee"],
-    ["init", "coffee", "cream", "stir", "water", "stir", "serve_coffee"]
+    ["choose", "tea", "water", "stir", "sugar", "stir", "serve_tea"],
+    ["choose", "tea", "sugar", "stir", "water", "stir", "serve_tea"],
+    ["choose", "coffee", "water", "stir", "cream", "stir", "serve_coffee"],
+    ["choose", "coffee", "cream", "stir", "water", "stir", "serve_coffee"]
 ]
 
 arithmetic_seqs = []
+"""
 plusplusseqs = [
 [3,4,5,12],[4,3,6,13],[5,4,3,12],[6,3,4,13],
 [7,4,2,13],[8,5,4,17],[9,6,3,18],[7,4,3,14],
@@ -101,55 +91,51 @@ for seq in minusminusseqs:
     seq.insert(3, '-')
     seq.insert(5, '=')
     arithmetic_seqs.append(seq)
+"""
 
-for seq in arithmetic_seqs:
-    print(seq)
+arithmetic_seqs_easy = [['1', '+', '1', '-', '2', '=', '0'],
+                        ['2', '+', '1', '-', '2', '=', '1'],
+                        ['1', '+', '2', '-', '1', '=', '2'],
+                        ['2', '+', '2', '-', '1', '=', '3']]
 
-label_seqs_ari = [['num1', '+', 'num2', '+', 'num3', '='],
-                    ['num1', '+', 'num2', '-', 'num3', '='],
-                    ['num1', '-', 'num2', '+', 'num3', '='],
-                    ['num1', '-', 'num2', '-', 'num3', '=']]
-
-label_seqs_bev = []
-for seq in beverage_seqs:
-    label_seqs_bev.append(seq[1:])
-
-label_seqs_all = []
-for b in beverage_seqs:
-    for a in label_seqs_ari:
-        label_seqs_all.append([b[1], a[0], b[2], a[1], b[3], a[2], b[4], a[3], b[5], a[4], b[6], a[5]])
-
-label_seqs_ari_noblanks_collapsed = [['num1', '+/-', 'num2', '+/-', 'num3', '=']]
-label_seqs_all_collapsed = []
-for b in beverage_seqs:
-    for a in label_seqs_ari_noblanks_collapsed:
-        label_seqs_all_collapsed.append([b[1], a[0], b[2], a[1], b[3], a[2], b[4], a[3], b[5], a[4], b[6], a[5]])
-
+label_seqs_ari = [['1->+', '+->1', '1->-', '-->2', '2->=', '=->0'],
+                  ['2->+', '+->1', '1->-', '-->2', '2->=', '=->1'],
+                  ['1->+', '+->2', '2->-', '-->1', '1->=', '=->2'],
+                  ['2->+', '+->2', '2->-', '-->1', '1->=', '=->3']
+]
 
 # Model 2: we're training only one network. This network is trained to perform all 3 tasks.
 # To achieve this, when training for bev or ari we train on the same time-steps (=with a blank timestep in between)
-label_seqs_ari = [['num1', '0', '+', '0', 'num2', '0', '+', '0', 'num3', '0', '='],
+label_seqs_ari_blanks = [['num1', '0', '+', '0', 'num2', '0', '+', '0', 'num3', '0', '='],
                   ['num1', '0', '+', '0', 'num2', '0', '-', '0', 'num3', '0', '='],
                   ['num1', '0', '-', '0', 'num2', '0', '+', '0', 'num3', '0', '='],
                   ['num1', '0', '-', '0', 'num2', '0', '-', '0', 'num3', '0', '=']]
-label_seqs_bev = [
+label_seqs_bev_blanks = [
     ["tea", '0', "water", '0', "stir", '0', "sugar", '0', "stir", '0', "serve_tea"],
     ["tea", '0', "sugar", '0', "stir", '0', "water", '0', "stir", '0', "serve_tea"],
     ["coffee", '0', "water", '0', "stir", '0', "cream", '0', "stir", '0', "serve_coffee"],
     ["coffee", '0', "cream", '0', "stir", '0', "water", '0', "stir", '0', "serve_coffee"]]
 
-label_seqs_ari_noblanks = [['num1', '+', 'num2', '+', 'num3', '='],
-                    ['num1', '+','num2','-', 'num3', '='],
-                    ['num1', '-', 'num2', '+',  'num3',  '='],
-                    ['num1',  '-',  'num2', '-',  'num3',  '=']]
-
+label_seqs_ari_noblanks = label_seqs_ari
 
 label_seqs_bev_noblanks = [
-    ["tea", "water", "stir", "sugar", "stir", "serve_tea"],
-    ["tea", "sugar", "stir", "water", "stir", "serve_tea"],
-    ["coffee", "water", "stir", "cream", "stir", "serve_coffee"],
-    ["coffee", "cream", "stir", "water", "stir", "serve_coffee"]
+    ["choose->tea", "tea->water", "water->stir", "stir->sugar", "sugar->stir", "stir->serve_tea"],
+    ["choose->tea", "tea->sugar", "sugar->stir", "stir->water", "water->stir", "stir->serve_tea"],
+    ["choose->coffee", "coffee->water", "water->stir", "stir->cream", "cream->stir", "stir->serve_coffee"],
+    ["choose->coffee", "coffee->cream", "cream->stir", "stir->water", "water->stir", "stir->serve_coffee"]
 ]
+
+label_seqs_bev = []
+for seq in beverage_seqs:
+    label_seqs_bev.append(seq[1:])
+
+# Beverage first, then arithmetic first.
+label_seqs_all_collapsed = [["choose->t/c1", "num1->total2", "t/c->w/s/g/c1", "+>total2", "w/s/c->stir1", "num2->total2",
+                            "stir->w/s/c1", "-->total2", "w/s/g->stir1", "num3->total2", "stir->serve t/c1", "=->total2"],
+                           ["num1->total1", "choose->t/c2", "+>total1", "t/c->w/s/g/c2", "num2->total1", "w/s/c->stir2",
+                            "-->total1", "stir->w/s/c2", "num3->total1", "w/s/g->stir2", "=->total1", "stir->serve t/c2"]]
+
+
 
 class Target(object):
     def __init__(self, action, goal1=None):
@@ -160,11 +146,5 @@ class Target(object):
         self.goal2_one_hot = None
 
 # 2 goals option
-goal_target_bev = [["beverage"]*6]* 4
-"""[
-    ["tea"]*6,
-    ["tea"]*6,
-    ["coffee"]*6,
-    ["coffee"]*6
-]"""
-goal_target_ari = ["math"]*6
+goal_target_bev = ['beverage']*6
+goal_target_ari = ['math']*6

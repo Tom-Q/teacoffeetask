@@ -183,9 +183,9 @@ class BehaviorSequence(object):
         state = copy.deepcopy(self._initial_state)
         # Special case for dairy first: 50% chance to just be 0.
         # The idea is to enforce the match between actions and goals.
-        if state.current.o_ddairy_first == 1 or state.current.o_ddairy_first == -1 and random.random() > 0.5:
-            state.current.o_ddairy_first = 0
-            state.next.o_ddairy_first = 0
+        #if state.current.o_ddairy_first == 1 or state.current.o_ddairy_first == -1 and random.random() > 0.5:
+        #    state.current.o_ddairy_first = 0
+        #    state.next.o_ddairy_first = 0
         return state
 
     def set_targets(self, list_goals1, list_goals2, list_actions):
@@ -475,7 +475,7 @@ topgoals_coffeesugarcream = ["g_1_make_coffee"] * len(actions_coffeesugarcream)
 midgoals_coffeesugarcream = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_sugar"] * 4 + ["g_2_clean_up"] * 2 +\
                             ["g_2_stir"] * 6 + ["g_2_add_cream"] * 9 + ["g_2_stir"] * 6 + ["g_2_drink_coffee"] * 6
 targets = _make_targets(topgoals_coffeesugarcream, midgoals_coffeesugarcream, actions_coffeesugarcream)
-data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, o_ddairy_first=-1)
+data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1)#, o_ddairy_first=-1)
 sequence_coffeesugarcream = BehaviorSequence(state.State(data), targets, name="coffee sugar cream")
 
 actions_coffee2sugarcream = [  # grounds
@@ -502,7 +502,7 @@ topgoals_coffee2sugarcream = ["g_1_make_coffee"] * len(actions_coffee2sugarcream
 midgoals_coffee2sugarcream = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_sugar"] * 8 + ["g_2_clean_up"] * 2 \
                              + ["g_2_stir"] * 6 + ["g_2_add_cream"] * 9 + ["g_2_stir"] * 6 + ["g_2_drink_coffee"] * 6
 targets = _make_targets(topgoals_coffee2sugarcream, midgoals_coffee2sugarcream, actions_coffee2sugarcream)
-data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1, o_ddairy_first=-1)
+data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1)#, o_ddairy_first=-1)
 sequence_coffee2sugarcream = BehaviorSequence(state.State(data), targets, name="coffee 2 sugar cream")
 
 # Cream then sugar
@@ -528,7 +528,7 @@ topgoals_coffeecreamsugar = ["g_1_make_coffee"] * len(actions_coffeecreamsugar)
 midgoals_coffeecreamsugar = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_cream"] * 9 + ["g_2_stir"] * 6 +\
                             ["g_2_add_sugar"] * 4 + ["g_2_clean_up"] * 2 + ["g_2_stir"] * 6 +  ["g_2_drink_coffee"] * 6
 targets = _make_targets(topgoals_coffeecreamsugar, midgoals_coffeecreamsugar, actions_coffeecreamsugar)
-data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, o_ddairy_first=1)
+data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1)#, o_ddairy_first=1)
 sequence_coffeecreamsugar = BehaviorSequence(state.State(data), targets, name="coffee cream sugar")
 
 actions_coffeecream2sugar = [  # Grounds
@@ -555,7 +555,7 @@ topgoals_coffeecream2sugar = ["g_1_make_coffee"] * len(actions_coffeecream2sugar
 midgoals_coffeecream2sugar = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_cream"] * 9 + ["g_2_stir"] * 6 +\
                             ["g_2_add_sugar"] * 8 + ["g_2_clean_up"] * 2 + ["g_2_stir"] * 6 + ["g_2_drink_coffee"] * 6
 targets = _make_targets(topgoals_coffeecream2sugar, midgoals_coffeecream2sugar, actions_coffeecream2sugar)
-data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1, o_ddairy_first=1)
+data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1)#, o_ddairy_first=1)
 sequence_coffeecream2sugar = BehaviorSequence(state.State(data), targets, name="coffee cream 2 sugar")
 
 ####################
@@ -610,7 +610,7 @@ topgoals_coffeesugarmilk = ["g_1_make_coffee"] * len(actions_coffeesugarmilk)
 midgoals_coffeesugarmilk = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_sugar"] * 4 + ["g_2_clean_up"] * 2 \
                            + ["g_2_stir"] * 6 + ["g_2_add_cream"] * 2 + ["g_2_add_milk"] * 7 + ["g_2_stir"] * 6 + ["g_2_drink_coffee"] * 6
 targets = _make_targets(topgoals_coffeesugarmilk, midgoals_coffeesugarmilk, actions_coffeesugarmilk)
-data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, h_cream_present=0, o_ddairy_first=-1)
+data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, h_cream_present=0)#, o_ddairy_first=-1)
 sequence_coffeesugarmilk = BehaviorSequence(state.State(data), targets, name="coffee sugar milk")
 
 actions_coffee2sugarmilk = [  # Grounds
@@ -639,7 +639,7 @@ topgoals_coffee2sugarmilk = ["g_1_make_coffee"] * len(actions_coffee2sugarmilk)
 midgoals_coffee2sugarmilk = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6  + ["g_2_add_sugar"] * 8 + ["g_2_clean_up"] * 2\
                             + ["g_2_stir"] * 6 + ["g_2_add_cream"] * 2 + ["g_2_add_milk"] * 7 + ["g_2_stir"] * 6 + ["g_2_drink_coffee"] * 6
 targets = _make_targets(topgoals_coffee2sugarmilk, midgoals_coffee2sugarmilk, actions_coffee2sugarmilk)
-data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1, h_cream_present=0, o_ddairy_first=-1)
+data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1, h_cream_present=0)#, o_ddairy_first=-1)
 sequence_coffee2sugarmilk = BehaviorSequence(state.State(data), targets, name="coffee 2 sugar milk")
 
 # milk then sugar
@@ -667,7 +667,7 @@ topgoals_coffeemilksugar = ["g_1_make_coffee"] * len(actions_coffeemilksugar)
 midgoals_coffeemilksugar = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_cream"] * 2 + ["g_2_add_milk"] * 7 + ["g_2_stir"] * 6 + \
                            ["g_2_add_sugar"] * 4 + ["g_2_clean_up"] * 2 + ["g_2_stir"] * 6 + ["g_2_drink_coffee"] * 6
 targets = _make_targets(topgoals_coffeemilksugar, midgoals_coffeemilksugar, actions_coffeemilksugar)
-data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, h_cream_present=0, o_ddairy_first=1)
+data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, h_cream_present=0)#, o_ddairy_first=1)
 sequence_coffeemilksugar = BehaviorSequence(state.State(data), targets, name="coffee milk sugar")
 
 
@@ -697,7 +697,7 @@ topgoals_coffeemilk2sugar = ["g_1_make_coffee"] * len(actions_coffeemilk2sugar)
 midgoals_coffeemilk2sugar = ["g_2_add_grounds"] * 11 + ["g_2_stir"] * 6 + ["g_2_add_cream"] * 2 + ["g_2_add_milk"] * 7 + ["g_2_stir"] * 6 + \
                            ["g_2_add_sugar"] * 8 + ["g_2_clean_up"] * 2 + ["g_2_stir"] * 6 + ["g_2_drink_coffee"] * 6
 targets = _make_targets(topgoals_coffeemilk2sugar, midgoals_coffeemilk2sugar, actions_coffeemilk2sugar)
-data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1, h_cream_present=0, o_ddairy_first=1)
+data = env.GoalEnvData(o_dcoffee=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1, h_cream_present=0)#, o_ddairy_first=1)
 sequence_coffeemilk2sugar = BehaviorSequence(state.State(data), targets, name="coffee milk 2 sugars")
 
 #                                            #################                                                         #
@@ -810,7 +810,7 @@ topgoals_teasugarmilk = ["g_1_make_tea"] * len(actions_teasugarmilk)
 midgoals_teasugarmilk = ["g_2_infuse_tea"] * 6 + ["g_2_stir"] * 6  + ["g_2_add_sugar"] * 4 +["g_2_clean_up"] * 2 \
                            + ["g_2_stir"] * 6 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + ["g_2_drink_tea"] * 6
 targets = _make_targets(topgoals_teasugarmilk, midgoals_teasugarmilk, actions_teasugarmilk)
-data = env.GoalEnvData(o_dtea=1, o_ddairy=1, o_dsugar=1, o_ddairy_first=-1)
+data = env.GoalEnvData(o_dtea=1, o_ddairy=1, o_dsugar=1)#, o_ddairy_first=-1)
 sequence_teasugarmilk = BehaviorSequence(state.State(data), targets, name="tea sugar milk")
 
 actions_tea2sugarmilk = [   # dip teabag
@@ -837,7 +837,7 @@ topgoals_tea2sugarmilk = ["g_1_make_tea"] * len(actions_tea2sugarmilk)
 midgoals_tea2sugarmilk = ["g_2_infuse_tea"] * 6 + ["g_2_stir"] * 6 + ["g_2_add_sugar"] * 8 +["g_2_clean_up"] * 2 \
                            + ["g_2_stir"] * 6 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + ["g_2_drink_tea"] * 6
 targets = _make_targets(topgoals_tea2sugarmilk, midgoals_tea2sugarmilk, actions_tea2sugarmilk)
-data = env.GoalEnvData(o_dtea=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1, o_ddairy_first=-1)
+data = env.GoalEnvData(o_dtea=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1)#, o_ddairy_first=-1)
 sequence_tea2sugarmilk = BehaviorSequence(state.State(data), targets, name="tea 2 sugar milk")
 
 # milk then sugar
@@ -863,7 +863,7 @@ topgoals_teamilksugar = ["g_1_make_tea"] * len(actions_teamilksugar)
 midgoals_teamilksugar = ["g_2_infuse_tea"] * 6 + ["g_2_stir"] * 6 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + \
                            ["g_2_add_sugar"] * 4 + ["g_2_clean_up"] * 2 + ["g_2_stir"] * 6 + ["g_2_drink_tea"] * 6
 targets = _make_targets(topgoals_teamilksugar, midgoals_teamilksugar, actions_teamilksugar)
-data = env.GoalEnvData(o_dtea=1, o_ddairy=1, o_dsugar=1, o_ddairy_first=1)
+data = env.GoalEnvData(o_dtea=1, o_ddairy=1, o_dsugar=1)#, o_ddairy_first=1)
 sequence_teamilksugar = BehaviorSequence(state.State(data), targets, name="tea milk sugar")
 
 
@@ -891,10 +891,11 @@ topgoals_teamilk2sugar = ["g_1_make_tea"] * len(actions_teamilk2sugar)
 midgoals_teamilk2sugar = ["g_2_infuse_tea"] * 6 + ["g_2_stir"] * 6 + ["g_2_add_milk"] * 9 + ["g_2_stir"] * 6 + \
                            ["g_2_add_sugar"] * 8 + ["g_2_clean_up"] * 2 + ["g_2_stir"] * 6 + ["g_2_drink_tea"] * 6
 targets = _make_targets(topgoals_teamilk2sugar, midgoals_teamilk2sugar, actions_teamilk2sugar)
-data = env.GoalEnvData(o_dtea=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1, o_ddairy_first=1)
+data = env.GoalEnvData(o_dtea=1, o_ddairy=1, o_dsugar=1, o_dextrasugar=1)#, o_ddairy_first=1)
 sequence_teamilk2sugar = BehaviorSequence(state.State(data), targets, name="tea milk 2 sugars")
 
 # Some sequences admit alternative, valid solutions (interchanging the order of sugar and dairy)
+# Except that's no longer true if there's an ordering instruction?!?
 sequence_coffeesugarcream.alt_solutions.append(sequence_coffeecreamsugar)
 sequence_coffeecreamsugar.alt_solutions.append(sequence_coffeesugarcream)
 sequence_coffee2sugarcream.alt_solutions.append(sequence_coffeecream2sugar)
