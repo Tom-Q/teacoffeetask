@@ -381,15 +381,15 @@ if True:
     #                         blanks=True)
 
     hrp.reg_strength = 0.0
-    mod3.run_model3_multiple(stopping_params=stopping,
-                             num_networks=5, #from_file="model3-goals_nogradient",
-                             name="model3-goals_nogradient_",
-                             hrp=None,
-                             nnparams=nnparams,
-                             blanks=True)
+    #mod3.run_model3_multiple(stopping_params=stopping,
+    #                         num_networks=5, from_file="model3-goals_nogradient_",
+    #                         name="model3-goals_nogradient_",
+    #                         hrp=None,
+    #                         nnparams=nnparams,
+    #                         blanks=True)
 
     mod2.run_model2_multiple(stopping_params=stopping,
-                             num_networks=5,  #from_file="model2",
+                             num_networks=5,  from_file="model2_",
                              name="model2_",
                              nnparams=nnparams,
                              blanks=True)

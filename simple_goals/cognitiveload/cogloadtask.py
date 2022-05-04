@@ -148,3 +148,8 @@ class Target(object):
 # 2 goals option
 goal_target_bev = ['beverage']*6
 goal_target_ari = ['math']*6
+
+
+RDM_MODE_AVERAGE_ACTIVATIONS = "rdm_mode_average_activations"
+RDM_MODE_AVERAGE_DISTANCES = "rdm_mode_average_distances"
+RDM_MODE_AVERAGE_DISTANCES_SMART = "rdm_mode_average_distances_smart"
