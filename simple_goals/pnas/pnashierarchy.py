@@ -1,6 +1,6 @@
 from pnas import pnas2018task
 import utils
-import neuralnet as nn
+from neural import neuralnet as nn
 import numpy as np
 import tensorflow as tf
 import scripts
@@ -8,7 +8,8 @@ import analysis
 import matplotlib.pyplot as plt
 
 def train_with_goals(noise=0, iterations=10000, learning_rate=0.1):
-    model = nn.ElmanGoalNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=2, size_goal2=0)
+    # TODO: SWITCH BACK TO ELMAN DUH
+    model = nn.ElmanGoalNet(size_hidden=15, size_observation=7, size_action=8, size_goal1=2, size_goal2=0, recurrent_layer=nn.GRU)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.
@@ -28,7 +29,7 @@ def train_with_goals(noise=0, iterations=10000, learning_rate=0.1):
         # run the network
         with tf.GradientTape() as tape:
             # Initialize context with random/uniform values.
-            model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            model.new_episode()  # = np.zeros((1, model.size_hidden), dtype=np.float32)
             model.goal1 = goal[0]
             for i in range(len(targets)):
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
@@ -334,7 +335,8 @@ def make_rdm_multiple_hierarchy_nogoals(name, num_networks, title="-", save_file
             plt.savefig(side_name + '_mds'+utils.datestr())
         plt.clf()
 
-def accuracy_test_with_goals(model):
+import copy
+def accuracy_test_with_goals(model, gain=[1, 1, 1, 1]):
     hidden_activation = []
     all_choices = []
     for j, sequence in enumerate(pnas2018task.seqs):
@@ -347,10 +349,12 @@ def accuracy_test_with_goals(model):
         # run the network
         with tf.GradientTape() as tape:
             # Initialize context with random/uniform values.
-            model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
-            model.goal1 = goal[0]
+            #model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
+            model.new_episode()
+            model.goal1 = copy.deepcopy(goal[0])
             # Reset the previous action
             for i in range(len(targets)):
+                model.goal1 *= gain[j]
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
                 observation = inputs[i].reshape(1, -1)
                 model.feedforward(observation)

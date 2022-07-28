@@ -1,11 +1,11 @@
-import neuralnet
+from neural import neuralnet
 import utils
 from pnas import pnas2018
 import numpy as np
 import analysis
 import matplotlib.pyplot as plt
 from scipy import stats
-import seaborn as sns
+
 
 # Train 100 networks of each
 def full_hyperparameter_test():

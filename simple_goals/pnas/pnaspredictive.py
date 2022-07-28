@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 import analysis
 import matplotlib.pyplot as plt
-import neuralnet as nn
+from neural import neuralnet as nn
 import scripts
 
 def train_predictive_net(model=None, iterations=5000, learning_rate=0.1, algorithm=nn.RMSPROP, hidden_units=15):

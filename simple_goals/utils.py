@@ -86,6 +86,7 @@ def load_object(name, latest=0):
     filehandler.close()
     return object
 
+
 def dense_linear(x, w, b):
     """
     :param x: input
@@ -97,6 +98,56 @@ def dense_linear(x, w, b):
         preactivation += b
     return preactivation
 
+
+UNIFORM = "uniform"
+NORMAL = "normal"
+XAVIER = "xavier"
+HE = "he"
+SEMINORMAL = "seminormal"
+ZERO_INIT = "zero_init"
+
+def initialize(dimensions, mode):
+    if mode == UNIFORM:
+        return uniform_initialization(dimensions)
+    elif mode == NORMAL:
+        return normal_initialization(dimensions)
+    elif mode == XAVIER:
+        return xavier_initialization(dimensions)
+    elif mode == HE:
+        return he_initialization(dimensions)
+    elif mode == SEMINORMAL:
+        return seminormal_initialization(dimensions)
+    elif mode == ZERO_INIT:
+        return zero_initialization(dimensions)
+    else:
+        return NotImplementedError("unknown/not implemented initialization mode")
+
+def zero_initialization(dimensions):
+    return np.zeros(dimensions)
+
+def seminormal_initialization(dimensions):
+    return np.abs(np.random.normal(0., .1, size=dimensions))
+
+def normal_initialization(dimensions):
+    return np.random.normal(0., .1, size=dimensions)
+
+def uniform_initialization(dimensions):
+    return np.random.uniform(-1, .1, size=dimensions)
+
+# normalized
+def xavier_initialization(dimensions):
+    # higher and lowre bound hidden layer
+    hb = np.sqrt(6 / np.sqrt(dimensions[0] + dimensions[1]))
+    lb = -hb
+    return np.random.uniform(lb, hb, size=dimensions)
+
+def he_initialization(dimensions):
+    # higher and lowre bound hidden layer
+    hb = 2. / np.sqrt(dimensions[1])
+    lb = -hb
+    return np.random.uniform(lb, hb, size=dimensions)
+
+
 def dense_softmax(x, w, b):
     """
     :param x: input
@@ -106,8 +157,6 @@ def dense_softmax(x, w, b):
     """
     return tf.nn.softmax(dense_linear(x, w, b))
 
-
-# Pretty useless
 def dense_sigmoid(x, w, b):
     """
     :param x: input
@@ -115,6 +164,15 @@ def dense_sigmoid(x, w, b):
     :return: densely connected layer with sigmoid output
     """
     return tf.nn.sigmoid(dense_linear(x, w, b))
+
+
+def dense_tanh(x, w, b):
+    """
+    :param x: input
+    :param layer: Layer object with weights matrix [+ bias]
+    :return: densely connected layer with sigmoid output
+    """
+    return tf.nn.tanh(dense_linear(x, w, b))
 
 
 def winner_take_all(a):
@@ -187,7 +245,7 @@ class ProgressBar(object):
 import analysis
 def save_rdm(rdm, name, labels, title, fontsize=0.6, color=analysis.RDM_COLOR_SEQUENTIAL):
     np.savetxt(name+"_rdm_mat.txt", rdm, delimiter="\t", fmt='%.2e')
-    analysis.plot_rdm(rdm, labels, title + " spearman rho matrix", figsize=30, fontsize=fontsize, color=color)
+    analysis.plot_rdm(rdm, labels, title + " matrix", figsize=30, fontsize=fontsize, color=color)
     plt.savefig(name+'_rdm.png', dpi=300, bbox_inches='tight')
     plt.clf()
 

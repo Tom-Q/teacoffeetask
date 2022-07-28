@@ -6,7 +6,7 @@ import teacoffeeenv as tce
 import tensorflow as tf
 import numpy as np
 import utils
-import neuralnet as nn
+from neural import neuralnet as nn
 import analysis
 import matplotlib.pyplot as plt
 import random

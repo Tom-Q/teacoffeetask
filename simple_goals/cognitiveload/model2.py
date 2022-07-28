@@ -5,7 +5,7 @@ import random
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
-import neuralnet as nn
+from neural import neuralnet as nn
 import copy
 
 # No blansk approach
@@ -461,8 +461,8 @@ def test_network_bev(model):
 
     return hidden_activation, accuracy_totals, accuracy_fullseqs
 
-def generate_rdm_all(nnet, name, rdm_type=analysis.EUCLIDIAN, save_files=True, title="RDM training combined",
-                     from_file=False, delete_blank_states=True):
+def generate_rdm_all(nnet, rdm_type=analysis.EUCLIDIAN, save_files=True,
+                     from_file=False, delete_blank_states=True, mode=task.RDM_MODE_AVERAGE_DISTANCES):
     # There's 3 ways to go about this.
     # 1. AVERAGE THE ACTIVATIONS.
     # --> First we average activations for a given thing, then we compute distance across those averaged activations.
@@ -488,8 +488,11 @@ def generate_rdm_all(nnet, name, rdm_type=analysis.EUCLIDIAN, save_files=True, t
         hidden = utils.flatten_onelevel(hidden_bev) +\
                  utils.flatten_onelevel(hidden_ari) +\
                  utils.flatten_onelevel(hidden_both)
-        process_activations(hidden, task.RDM_MODE_AVERAGE_DISTANCES_SMART)
 
+        if mode == task.RDM_MODE_AVERAGE_ACTIVATIONS:
+            hidden = process_activations(hidden, delete_blank_states)
+            np.savetxt('processed_activations' + ".txt", np.stack(hidden, axis=0), delimiter="\t", fmt='%.2e')
+            np.savetxt('average_activations' + ".txt", np.asarray([np.mean(activation) for activation in hidden]), delimiter="\t", fmt='%.2e')
         if rdm_type == analysis.SPEARMAN:
             rdmatrix = analysis.rdm_spearman(hidden)
         elif rdm_type == analysis.EUCLIDIAN:
@@ -500,103 +503,112 @@ def generate_rdm_all(nnet, name, rdm_type=analysis.EUCLIDIAN, save_files=True, t
         utils.save_object("rdmatrix_test", rdmatrix)
     else:
         rdmatrix = utils.load_object("rdmatrix_test")
+    if mode == task.RDM_MODE_AVERAGE_DISTANCES:
+        rdmatrix = process_matrix(rdmatrix, delete_blank_states)
+    # Labels are always the same in the end
+    labels = utils.flatten_onelevel(task.label_seqs_bev_noblanks) + utils.flatten_onelevel(task.label_seqs_ari)
+    labels *= 2
+    return rdmatrix, labels
 
-    return process_matrix(rdmatrix, delete_blank_states, task.RDM_MODE_AVERAGE_DISTANCES_SMART)
-
-def process_activations(activations, mode):
-    if mode == task.RDM_MODE_AVERAGE_ACTIVATIONS:
+def process_activations(activations, delete_blank_states):
+    if delete_blank_states:
+        blank_states = []
+        for i in range(8):
+            blank_states += [i*11+1, i*11+3, i*11+5, i*11+7, i*11+9]
+        for idx in reversed(blank_states):
+            del activations[idx]
+        start_idx = 12 * 4
+    else:
         start_idx= 11 * 4 * 2  # where the combined sequences start. At this point we still
-                               # have activations for blank states
-        #1. Average activations for both arithmetic starts vs. beverage start
-        for idx in range(start_idx, start_idx+12*4*4):
-            if idx % 2 == 0:  # Beverage sequences
-                activations[idx] += activations[idx + 12 * 16 + 1, :]
-            else:  # arithmetic sequences
-                activations[idx] += activations[idx + 12 * 16 - 1, :]
+                           # have activations for blank states
+    #1. Average activations for arithmetic starts vs. beverage start
+    for idx in range(start_idx, start_idx+12*4*4):
+        if idx % 2 == 0:  # Beverage sequences
+            activations[idx] += activations[idx + 12 * 16 + 1]
+        else:  # arithmetic sequences
+            activations[idx] += activations[idx + 12 * 16 - 1]
+        activations[idx] /= 2.
 
-            activations[idx] /= 2.
-        # Remove the averaged-out entries
-        activations = activations[:start_idx+12*4*4]
+    # Remove the averaged-out entries
+    activations = activations[:start_idx+12*4*4]
 
-        # Average activations across sequence types
-        # For the next step, work on a copy
-        activations_copy = copy.deepcopy(activations)
-        # Average sequence tea1, tea2, coffee1, coffee2
-        seq_length = 12  # bev1 ari1 bev2 ... = 12 steps
-        for seq_type in range(0, 4):  # four sequences = tea water first, tea water second, etc.
-            for seq_combi in range(0, 4):  # for each sequence four combination: tea1 ari1, tea1 ari2, etc.
-                start_idx_seq_in = start_idx + seq_type * 48 + seq_length * seq_combi
-                start_idx_seq_out = start_idx + seq_type * 6
-                for step in range(6):
-                    activations_copy[start_idx_seq_out + step] += activations[start_idx_seq_in + step * 2]
+    # Average activations across sequence types
+    # For the next step, work on a copy
+    activations_copy = copy.deepcopy(activations)
 
-        # Now the arithmetic sequences
-        for seq_type in range(4):
-            for seq_combi in range(4):
-                start_idx_seq_in = start_idx + 1 + seq_combi * 48 + seq_type * 12
-                start_idx_seq_out = start_idx + 24 + seq_type * 6
-                for step in range(6):
-                    activations_copy[start_idx_seq_out + step] += activations[start_idx_seq_in + step * 2]
+    # Zero out everything that needs overwritten
+    for i in range(start_idx, len(activations_copy)):
+        activations_copy[i] *= 0.
 
-        # dont forget to divide after all these additions
-        activations_copy[start_idx:] /= 4
-        # Cut off the leftovers
-        activations = activations_copy[:start_idx + 6*4*2]
+    # Average sequence tea1, tea2, coffee1, coffee2
+    for seq_type in range(0, 4):  # four sequences = tea water first, tea water second, etc.
+        for seq_combi in range(0, 4):  # for each sequence four combination: tea1 ari1, tea1 ari2, etc.
+            start_idx_seq_in = start_idx + seq_type * 48 + seq_combi * 12
+            start_idx_seq_out = start_idx + seq_type * 6
+            for step in range(6):
+                activations_copy[start_idx_seq_out + step] += activations[start_idx_seq_in + step * 2]
+
+    # Now the arithmetic sequences
+    for seq_type in range(4):
+        for seq_combi in range(4):
+            start_idx_seq_in = start_idx + 1 + seq_combi * 48 + seq_type * 12
+            start_idx_seq_out = start_idx + 24 + seq_type * 6
+            for step in range(6):
+                activations_copy[start_idx_seq_out + step] += activations[start_idx_seq_in + step * 2]
+
+    # dont forget to divide after all these additions
+    for i in range(start_idx, len(activations_copy)):
+        activations_copy[i] = activations_copy[i] / 4.
+
+    # Cut off the leftovers
+    activations = activations_copy[:start_idx + 6*4*2]
     return activations
 
 CROSSTALK = "crosstalk"
 NOCROSSTALK = "nocrosstalk"
-def process_matrix(rdmatrix, delete_blank_states, mode=task.RDM_MODE_AVERAGE_ACTIVATIONS):
+def process_matrix(rdmatrix, delete_blank_states):
     # start by deleting blank states. Note, currently this will break the rest of the processing.
     if delete_blank_states:
         rdmatrix = delete_blanks(rdmatrix)
-
-    if mode == task.RDM_MODE_AVERAGE_ACTIVATIONS:
-        pass   # nothing to do. Everything was done from the activations
-    elif mode == task.RDM_MODE_AVERAGE_DISTANCES:
-        # average the 16 combo bev first and 16 combo ari first. Must be done first row-by-row then column-by-column
-        start_idx_bev_first = 6*8 if delete_blank_states else 11 * 8
-        rdmatrix = average_orderings(rdmatrix, start_idx_bev_first)
-        rdmatrix = average_combined(rdmatrix, start_idx_bev_first)
-    elif mode == task.RDM_MODE_AVERAGE_DISTANCES_SMART:
-        # The fancy one! The best way to do it, I THINK, is to set all unwanted values to 0, then do the average distances.
-        # So we zero out all the cross terms - terms which have nothing in common.
-        # etc.
-        # Merge the two different orders (bev first and ari first).
-        start_idx_bev_first = 6*8
-
-        # Here too I should first delete unwanted crosstalk. How could I miss that.
-        # In the bottom right it's again just a diagonal.
-        mask = np.zeros_like(rdmatrix)
-        mask[0:48, :] = 1.
-        mask[:, 0:48] = 1.
-        for i in range(32):
-            start_row=48+i*12
-            end_row=48+(i+1)*12
-            for j in range(16):
-                mask[start_row:end_row, j*48+((i%4)*12):j*48+((i%4)*12)+12] = 1.
-        for i in range(9):
-            mask[i*48:(i+1)*48, i*48:(i+1)*48] = 1.
-        mask[48:48*5, 48*5:48*9] = 0.
-        mask[48 * 5:48 * 9, 48:48 * 5] = 0.
-
-        # Merge:
-        rdmatrix = np.multiply(rdmatrix, mask)
-        # Average out the two orders (bev 1st and ari 1st)
-        rdmatrix = average_orderings(rdmatrix, start_idx_bev_first, crosstalk=NOCROSSTALK)
-        # Re-arrange the matrix
-        rdmatrix = average_combined_nocrosstalk(rdmatrix, start_idx_bev_first)
     else:
-        raise NotImplementedError("only 3 modes available, check 'em")
+        raise NotImplementedError("currently we're just assuming that the blank states are deleted")
 
+    #The best way to do it is I think to set all unwanted values to 0, then do the average distances.
+    # So we zero out all the cross terms - terms which have nothing in common.
+    # etc.
+    # Merge the two different orders (bev first and ari first).
+    start_idx_bev_first = 6*8
+
+    # Here too I should first delete unwanted crosstalk. How could I miss that.
+    # In the bottom right it's again just a diagonal.
+    mask = np.zeros_like(rdmatrix)
+    mask[0:48, :] = 1.
+    mask[:, 0:48] = 1.
+    for i in range(32):
+        start_row=48+i*12
+        end_row=48+(i+1)*12
+        for j in range(16):
+            mask[start_row:end_row, j*48+((i%4)*12):j*48+((i%4)*12)+12] = 1.
+    for i in range(9):
+        mask[i*48:(i+1)*48, i*48:(i+1)*48] = 1.
+    mask[48:48*5, 48*5:48*9] = 0.
+    mask[48 * 5:48 * 9, 48:48 * 5] = 0.
+
+    # Merge:
+    rdmatrix = np.multiply(rdmatrix, mask)
+    # Average out the two orders (bev 1st and ari 1st)
+    rdmatrix = average_orderings(rdmatrix, start_idx_bev_first, crosstalk=NOCROSSTALK)
+    # Re-arrange the matrix
+    rdmatrix = average_combined_nocrosstalk(rdmatrix, start_idx_bev_first)
     # RDM organization is always the same at the end of processing: beverage, math, bev. combined, math combined.
-    labels = utils.flatten_onelevel(task.label_seqs_bev_noblanks) + \
-             utils.flatten_onelevel(task.label_seqs_ari)
-    labels *= 2
-    return rdmatrix, labels
+    #labels = utils.flatten_onelevel(task.label_seqs_bev_noblanks) + \
+    #         utils.flatten_onelevel(task.label_seqs_ari)
+    #labels *= 2
+    return rdmatrix
 
 def run_model2_multiple(stopping_params, nnparams, blanks, from_file=None,
-                        num_networks=1, name="model2"):
+                        num_networks=1, name="model2", mode=task.RDM_MODE_AVERAGE_DISTANCES,
+                        type=analysis.EUCLIDIAN):
     #    from_file=None, num_networks=1):
     if from_file is not None:
         networks = utils.load_objects(from_file, num_networks)
@@ -621,13 +633,13 @@ def run_model2_multiple(stopping_params, nnparams, blanks, from_file=None,
     sum_rdm = None
     labels = None
     for net in networks:
-        rdm, labels = generate_rdm_all(net, name=name, from_file = False)
+        rdm, labels = generate_rdm_all(net, from_file=False, mode=mode, rdm_type=type)
         if sum_rdm is None:
             sum_rdm = rdm
         else:
             sum_rdm += rdm
     average_rdm = sum_rdm/num_networks
-    utils.save_rdm(average_rdm, name, labels,  title="RDM training combined")
+    utils.save_rdm(average_rdm, name, labels,  title="RDM training combined " + type + " " + mode)
 
 def run_model2(from_file=False):
     if not from_file:

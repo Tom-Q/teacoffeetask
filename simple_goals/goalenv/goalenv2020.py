@@ -2,9 +2,8 @@ import utils
 import numpy as np
 import tensorflow as tf
 from goalenv import environment, task
-import neuralnet as nn
+from neural import neuralnet as nn
 import scripts
-from termcolor import colored
 import copy
 import analysis
 import matplotlib.colors as mcolors
@@ -12,8 +11,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 from sklearn.manifold import TSNE
-import seaborn as sns
-import pandas as pd
 import time
 import random
 

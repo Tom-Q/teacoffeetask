@@ -7,8 +7,8 @@ import analysis
 import random
 import tensorflow as tf
 import numpy as np
-import matplotlib.pyplot as plt
-import neuralnet as nn
+from neural import neuralnet as nn
+
 
 class HierarchyGradientParams(object):
     def __init__(self, regstrength=0.001, regincrease="linear"):
@@ -18,11 +18,9 @@ class HierarchyGradientParams(object):
 
 # Model 3: with goals units.
 
-def generate_rdm_all(nnet, name, rdm_type=analysis.SPEARMAN, save_files=True, title="RDM training combined",
-                     from_file=False, delete_blank_states=True, collapse_rdm=True):
+def generate_rdm_all(nnet, name, rdm_type=analysis.EUCLIDIAN, save_files=True, title="RDM training combined",
+                     from_file=False, delete_blank_states=True, collapse_rdm=True, mode=task.RDM_MODE_AVERAGE_DISTANCES):
     if not from_file:
-        if rdm_type != analysis.SPEARMAN:
-            raise Exception("not implemented")
         hidden_both, accuracy_totals_both, accuracy_fullseqs_both = test_network_all(nnet)
         hidden_ari, accuracy_totals_ari, accuracy_fullseqs_ari = test_network_ari(nnet, blanks=True)
         hidden_bev, accuracy_totals_bev, accuracy_fullseqs_bev = test_network_bev(nnet, blanks=True)
@@ -33,14 +31,29 @@ def generate_rdm_all(nnet, name, rdm_type=analysis.SPEARMAN, save_files=True, ti
         hidden = utils.flatten_onelevel(hidden_bev) +\
                  utils.flatten_onelevel(hidden_ari) +\
                  utils.flatten_onelevel(hidden_both)
-        rdmatrix = analysis.rdm_euclidian(hidden)
+        if mode == task.RDM_MODE_AVERAGE_ACTIVATIONS:
+            hidden = model2.process_activations(hidden, delete_blank_states)
+            np.savetxt('processed_activations_goals' + ".txt", np.stack(hidden, axis=0), delimiter="\t", fmt='%.2e')
+            np.savetxt('average_activations_goals' + ".txt", np.asarray([np.mean(activation) for activation in hidden]), delimiter="\t", fmt='%.2e')
+        if rdm_type == analysis.EUCLIDIAN:
+            rdmatrix = analysis.rdm_euclidian(hidden)
+        elif rdm_type == analysis.SPEARMAN:
+            rdmatrix = analysis.rdm_spearman(hidden)
+        else:
+            raise NotImplementedError("only two types implemented")
 
         utils.save_object(name+"rdmat", rdmatrix)
     else:
         rdmatrix = utils.load_object(name+"rdmat")
 
-    return model2.process_matrix(rdmatrix, delete_blank_states)
+    if mode == task.RDM_MODE_AVERAGE_DISTANCES:
+        rdmatrix = model2.process_matrix(rdmatrix, delete_blank_states)
 
+    # Labels are always the same in the end
+    labels = utils.flatten_onelevel(task.label_seqs_bev_noblanks) + utils.flatten_onelevel(task.label_seqs_ari)
+    labels *= 2
+
+    return rdmatrix, labels
 
 def generate_rdm_all_gradient(nnet, name, blanks, rdm_type=analysis.SPEARMAN, save_files=True, title="RDM training combined",
                      from_file=False, delete_blank_states=True):
@@ -182,13 +195,15 @@ def stop_condition(nnet, blanks, min_accuracy=1.):
            np.all(accuracy_ari >= [1., .5, 1., 1., 1., min_accuracy]) and \
            np.all(accuracy_bev >= [.5, .5, 1., 1., 1., 1.])
     elif blanks:
-        return np.all(accuracy_both >= [.75, .75, .5, .5, 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
-        np.all(accuracy_ari >= [1., 1., .5, 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
+        return np.all(accuracy_both >= [.5, .5, .75, .75, .75, .75, 1., 1., 1., 1., 1., min_accuracy]) and \
+        np.all(accuracy_ari >= [.5, 1., 1., 1., .5, 1., 1., 1., 1., 1., min_accuracy]) and \
         np.all(accuracy_bev >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1.])
 
 
 def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
-                        num_networks=1, name="model3", hrp=None):
+                        num_networks=1, name="model3", hrp=None,
+                        mode=task.RDM_MODE_AVERAGE_DISTANCES,
+                        type=analysis.EUCLIDIAN):
     if from_file is not None:
         networks = utils.load_objects(from_file, num_networks)
     else:
@@ -213,7 +228,7 @@ def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
         sum_rdm = None
         labels = None
         for net in networks:
-            rdm, labels = generate_rdm_all(net, name=name, from_file=False)
+            rdm, labels = generate_rdm_all(net, name=name, from_file=False, mode=mode, rdm_type=type)
             if sum_rdm is None:
                 sum_rdm = rdm
             else:
@@ -224,6 +239,7 @@ def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
         utils.save_rdm(average_rdm, name, labels,  title="RDM training combined")
         analysis.make_mds(average_rdm, name, labels=labels, title="MDS training combined", pattern=pattern)
     else:
+        raise NotImplementedError("obsolete")
         sum_rdm_left = sum_rdm_right = None
         labels = None
         for net in networks:
@@ -253,24 +269,24 @@ def make_targets_ari(seq_ari, blanks):
 
     targets = []
     if blanks:
-        targets.append(task.Target(target0, task.goal_target_ari[0]))
-        targets.append(task.Target(None, None))
-        targets.append(task.Target(target1, task.goal_target_ari[1]))
-        targets.append(task.Target(None, None))
-        targets.append(task.Target(target2, task.goal_target_ari[2]))
-        targets.append(task.Target(None, None))
-        targets.append(task.Target(target3, task.goal_target_ari[3]))
-        targets.append(task.Target(None, None))
-        targets.append(task.Target(target4, task.goal_target_ari[4]))
-        targets.append(task.Target(None, None))
-        targets.append(task.Target(target5, task.goal_target_ari[-1]))
+        targets.append(task.Target(target0, None))
+        targets.append(task.Target(None, task.goal_target_ari[0]))
+        targets.append(task.Target(target1, None))
+        targets.append(task.Target(None, task.goal_target_ari[1]))
+        targets.append(task.Target(target2, None))
+        targets.append(task.Target(None, task.goal_target_ari[2]))
+        targets.append(task.Target(target3, None))
+        targets.append(task.Target(None, task.goal_target_ari[3]))
+        targets.append(task.Target(target4, None))
+        targets.append(task.Target(None, task.goal_target_ari[4]))
+        targets.append(task.Target(target5, None))
     else:
         targets.append(task.Target(target0, task.goal_target_ari[0]))
         targets.append(task.Target(target1, task.goal_target_ari[1]))
         targets.append(task.Target(target2, task.goal_target_ari[2]))
         targets.append(task.Target(target3, task.goal_target_ari[3]))
         targets.append(task.Target(target4, task.goal_target_ari[4]))
-        targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.output_symbols), task.goal_target_ari[-1]))
+        targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.output_symbols), None))
     return targets
 
 
@@ -396,7 +412,7 @@ def make_targets_all(seq_bev, seq_ari, start):
         targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.output_symbols), task.goal_target_ari[4]))
         targets.append(task.Target(target4, task.goal_target_bev[4]))
         targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.output_symbols), task.goal_target_ari[5]))
-        targets.append(task.Target(target5, task.goal_target_bev[5]))
+        targets.append(task.Target(target5, None))
     elif start == task.START_ARI:
         targets.append(task.Target(target0, task.goal_target_bev[0]))
         targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.output_symbols), task.goal_target_ari[0]))
@@ -409,7 +425,7 @@ def make_targets_all(seq_bev, seq_ari, start):
         targets.append(task.Target(target4, task.goal_target_bev[4]))
         targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.output_symbols), task.goal_target_ari[4]))
         targets.append(task.Target(target5, task.goal_target_bev[5]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.output_symbols), task.goal_target_ari[5]))
+        targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.output_symbols), None))
     return targets
 
 

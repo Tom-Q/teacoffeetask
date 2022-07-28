@@ -1,20 +1,58 @@
 # Entry point of the program. Mostly loads scripts from scripts, which themselves rely on more serious code.
 import utils
 import sys
-import neuralnet as nn
-from cognitiveload import cogloadtask
-import numpy as np
+from neural import neuralnet as nn
 
 import analysis
 
+if False:
+    from reward_task import reward
+    for i in range(0):
+        print(i)
+        model = reward.train_with_goals(nonlinearity=nn.RELU, learning_rate = 0.02)
+        #utils.save_object("reward_task_with_goals", model)
+        utils.save_object("reward_task_with_goals_relu", model)
+    cond="relu"
+    nets = "reward_task_with_goals_relu"
+    #nets = "reward_task_with_4goals"
+    num_nets =10
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_1111"+cond, gain=[1,1,1,1], skips=[0])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_0022"+cond, gain=[0,0,2,2])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_2200"+cond, gain=[2,2,0,0])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_0044"+cond, gain=[0,0,4,4])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_4400"+cond, gain=[4,4,0,0])
 
-from pnas import pnas2018
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_0000"+cond, gain=[0,0,0,0])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_0011"+cond, gain=[0,0,1,1])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_1100"+cond, gain=[1,1,0,0])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_1122"+cond, gain=[1,1,2,2])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_1110"+cond, gain=[1,1,1,0])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_0001"+cond, gain=[0,0,0,1])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_1112"+cond, gain=[1,1,1,2])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_5_5_52"+cond, gain=[.5,.5,.5,2])
+
+    sys.exit()
+
+if True:
+    from pnas import pnas2018, pnashierarchy
+
+    for i in range(10):
+        print(i)
+        #model, _ = pnas2018.train(iterations=5000, learning_rate=0.1, size_hidden=100)
+        model = pnashierarchy.train_with_goals(iterations=2000)
+        pnashierarchy.accuracy_test_with_goals(model)
+        utils.save_object("rdm_gru", model)
+
+    #gain = [1., 1., .0, 0.0]
+    pnas2018.make_rdm_multiple("rdm_gru", num_networks=10, with_goals=True, rdm_type=analysis.SPEARMAN, save_name="spearman_gru")
+    #pnas2018.make_rdm_multiple_gain("rdm_gains", num_networks=25, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_zeroed_goalstea", gain=gain)
+    #pnas2018.make_rdm_multiple("rdm_gains", num_networks=25, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_nogain", with_goals=True)
+    #pnas2018.make_rdm_multiple("rdm_gains", num_networks=25, rdm_type=analysis.SPEARMAN, save_name="spearman_nogain", with_goals=True)
+
+    sys.exit()
+
+
 """
-#for i in range(25):
-#    print(i)
-#    model, _ = pnas2018.train(iterations=5000, learning_rate=0.1, size_hidden=100)
-#    utils.save_object("rdm_measure_test100", model)
-
 rdms=[]
 #num networks should be 10 and 5
 rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=10, rdm_type=analysis.SPEARMAN, save_name="spearman_1")[0])
@@ -226,8 +264,7 @@ if False:
 # - "bigmodel1_yesgoals_relu": 4 networks, HE initialization, normal context initialization
 if False:
     from goalenv import goalenv2020
-    from goalenv import environment
-    """
+
     error_data_list = []
     print("ONLY GOALS")
     for model_type in ["goals"]:
@@ -272,7 +309,6 @@ if False:
 
     utils.write_lists_to_csv("error_results_lesion.csv", error_data_list, labels=goalenv2020.error_testing_labels)
     sys.exit()
-    """
     """
     error_data_list = []
 
@@ -381,19 +417,112 @@ if True:
     #                         blanks=True)
 
     hrp.reg_strength = 0.0
-    #mod3.run_model3_multiple(stopping_params=stopping,
-    #                         num_networks=5, from_file="model3-goals_nogradient_",
-    #                         name="model3-goals_nogradient_",
-    #                         hrp=None,
-    #                         nnparams=nnparams,
-    #                         blanks=True)
+
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=24, from_file="model3_plusminus", #"model3_distances_spearman",
+                             name="model3_euclidian_activations",
+                             hrp=None,
+                             nnparams=nnparams,
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_ACTIVATIONS,
+                             type=analysis.EUCLIDIAN)
+
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=25, from_file="model3_plusminus", #"model3_distances_spearman",
+                             name="model3_euclidian_distances",
+                             hrp=None,
+                             nnparams=nnparams,
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_DISTANCES,
+                             type=analysis.EUCLIDIAN)
+
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=25, from_file="model3_plusminus",
+                             name="model3_spearman_distances",
+                             hrp=None,
+                             nnparams=nnparams,
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_DISTANCES,
+                             type=analysis.SPEARMAN)
+
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=25, from_file="model3_plusminus",
+                             name="model3_spearman_activations",
+                             hrp=None,
+                             nnparams=nnparams,
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_ACTIVATIONS,
+                             type=analysis.SPEARMAN)
 
     mod2.run_model2_multiple(stopping_params=stopping,
-                             num_networks=5,  from_file="model2_",
-                             name="model2_",
+                             num_networks=25,  from_file="model2_plusminus",
+                             name="model2_spearman_distances",
                              nnparams=nnparams,
-                             blanks=True)
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_DISTANCES,
+                             type=analysis.SPEARMAN)
 
+
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=25,  from_file="model2_plusminus",
+                             name="model2_euclidian_activations",
+                             nnparams=nnparams,
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_ACTIVATIONS,
+                             type=analysis.EUCLIDIAN)
+
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=25,  from_file="model2_plusminus",
+                             name="model2_euclidian_distances",
+                             nnparams=nnparams,
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_DISTANCES,
+                             type=analysis.EUCLIDIAN)
+
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=25,  from_file="model2_plusminus",
+                             name="model2_spearman_activations",
+                             nnparams=nnparams,
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_ACTIVATIONS,
+                             type=analysis.SPEARMAN)
+
+    sys.exit()
+
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=25,  from_file="model2_",
+                             name="model2_distances_euclidian",
+                             nnparams=nnparams,
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_DISTANCES,
+                             type=analysis.EUCLIDIAN)
+
+
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=25,  from_file="model2_",
+                             name="model2_activations_euclidian",
+                             nnparams=nnparams,
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_ACTIVATIONS,
+                             type=analysis.EUCLIDIAN)
+
+
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=25,  from_file="model2_",
+                             name="model2_distances_euclidian",
+                             nnparams=nnparams,
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_DISTANCES,
+                             type=analysis.EUCLIDIAN)
+
+
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=25,  from_file="model2_",
+                             name="model2_activations_euclidian",
+                             nnparams=nnparams,
+                             blanks=True,
+                             mode=task.RDM_MODE_AVERAGE_ACTIVATIONS,
+                             type=analysis.EUCLIDIAN)
     sys.exit()
     #hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00002)
     #mod3.run_model3_multiple(from_file="model3_test_gradient_2goals00002", num_networks=2, name="model3_test_gradient_2goals00002_test2", hrp=hrp)

@@ -5,7 +5,8 @@ import random
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
-import neuralnet as nn
+from neural import neuralnet as nn
+
 
 # CASE 1: make 3 RDMs, one for the combined task, one for the arithmetic task, one for the beverage task.
 # We're also training 3 different networks.
@@ -313,7 +314,6 @@ def generate_rdm_bev(nnet, name, rdm_type=analysis.SPEARMAN, save_files=True, ti
     if save_files:
         plt.savefig(name+'_rdm.png', dpi=300, bbox_inches='tight')
     plt.clf()
-
 
 def run_model1_bev():
     # BEV #

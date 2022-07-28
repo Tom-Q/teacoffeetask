@@ -1,11 +1,10 @@
-import neuralnet as nn
+from neural import neuralnet as nn
 import utils
 import numpy as np
 import tensorflow as tf
 import scripts
 import analysis
 import matplotlib.pyplot as plt
-import timeit
 from pnas import pnashierarchy
 
 np.set_printoptions(precision=3)
