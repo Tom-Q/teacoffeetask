@@ -212,7 +212,7 @@ def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
             nnparams.size_goal1=2
             nnparams.size_action=len(task.output_symbols)
             nnparams.size_observation=len(task.input_symbols)
-            nnet = nn.ElmanGoalNet(params=nnparams)
+            nnet = nn.GoalNet(params=nnparams)
             train_all(stopping_params, nnet, hrp=hrp, blanks=blanks)
             utils.save_object(name, nnet)
             networks.append(nnet)

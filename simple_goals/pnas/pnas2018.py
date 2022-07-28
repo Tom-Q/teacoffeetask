@@ -17,8 +17,8 @@ def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorith
           size_hidden=15, learning_rate=None, loss_type='cross_entropy',
           initial_context=ZEROS):
     if model is None:
-        model = nn.ElmanGoalNet(size_hidden=size_hidden, size_observation=9, size_action=8, size_goal1=0, size_goal2=0,
-                                algorithm=algorithm, initialization="normal")
+        model = nn.GoalNet(size_hidden=size_hidden, size_observation=9, size_action=8, size_goal1=0, size_goal2=0,
+                           algorithm=algorithm, initialization="normal")
     num_episodes = iterations
     if learning_rate is not None:  # Else keep the model's learning rate
         model.learning_rate = learning_rate

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 def train_with_goals(noise=0, iterations=10000, learning_rate=0.1):
     # TODO: SWITCH BACK TO ELMAN DUH
-    model = nn.ElmanGoalNet(size_hidden=15, size_observation=7, size_action=8, size_goal1=2, size_goal2=0, recurrent_layer=nn.LSTM)
+    model = nn.GoalNet(size_hidden=15, size_observation=7, size_action=8, size_goal1=2, size_goal2=0, recurrent_layer=nn.ELMAN)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.
@@ -57,7 +57,7 @@ def train_with_goals(noise=0, iterations=10000, learning_rate=0.1):
 
 
 def train_hierarchical_nogoals(noise=0, iterations=10000, learning_rate=0.1, reg_strength=0.001, reg_increase="linear"):
-    model = nn.ElmanGoalNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=0, size_goal2=0)
+    model = nn.GoalNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=0, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.
@@ -141,7 +141,7 @@ def train_hierarchical_nogoals(noise=0, iterations=10000, learning_rate=0.1, reg
 
 def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strength=0.001, reg_increase="linear", num_goals=2):
     #model = nn.NeuralNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=2, size_goal2=0)
-    model = nn.ElmanGoalNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=num_goals, size_goal2=0)
+    model = nn.GoalNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=num_goals, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.

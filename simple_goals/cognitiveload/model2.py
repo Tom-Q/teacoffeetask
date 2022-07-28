@@ -187,9 +187,9 @@ def run_model2_noblanks(from_file=False):
     # COMBINED #
     if not from_file:
         num_training_steps = 100000
-        nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                           size_observation=len(task.symbols), size_action=len(task.symbols),
-                           learning_rate=0.005, algorithm=nn.ADAM)
+        nnet = nn.GoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
+                          size_observation=len(task.symbols), size_action=len(task.symbols),
+                          learning_rate=0.005, algorithm=nn.ADAM)
         nnet.L2_regularization = 0.00001
         train_all_noblanks(nnet, num_training_steps)
         utils.save_object("cogloadtasknet_noblanks", nnet)
@@ -618,7 +618,7 @@ def run_model2_multiple(stopping_params, nnparams, blanks, from_file=None,
             nnparams.size_goal1=0
             nnparams.size_action=len(task.output_symbols)
             nnparams.size_observation=len(task.input_symbols)
-            nnet = nn.ElmanGoalNet(params=nnparams) #size_hidden=25, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
+            nnet = nn.GoalNet(params=nnparams) #size_hidden=25, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
                                    #size_observation=len(task.symbols), size_action=len(task.symbols),
                                    #learning_rate=0.001, algorithm=nn.ADAM)
             #nnet.L2_regularization = 0.00001
@@ -645,9 +645,9 @@ def run_model2(from_file=False):
     if not from_file:
         # COMBINED #
         num_training_steps = 100000
-        nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                               size_observation=len(task.input_symbols), size_action=len(task.output_symbols),
-                               learning_rate=0.01, algorithm=nn.ADAM)
+        nnet = nn.GoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
+                          size_observation=len(task.input_symbols), size_action=len(task.output_symbols),
+                          learning_rate=0.01, algorithm=nn.ADAM)
         nnet.L2_regularization = 0.00001
         train_all(nnet, num_training_steps)
         utils.save_object("cogloadtasknet", nnet)
@@ -658,9 +658,9 @@ def run_model2_deleteblanks(from_file=False):
     if not from_file:
         # COMBINED #
         num_training_steps = 100000
-        nnet = nn.ElmanGoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
-                               size_observation=len(task.input_symbols), size_action=len(task.output_symbols),
-                               learning_rate=0.01, algorithm=nn.ADAM)
+        nnet = nn.GoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
+                          size_observation=len(task.input_symbols), size_action=len(task.output_symbols),
+                          learning_rate=0.01, algorithm=nn.ADAM)
         nnet.L2_regularization = 0.00001
         train_all(nnet, num_training_steps)
         utils.save_object("cogloadtasknet_deleteblanks", nnet)

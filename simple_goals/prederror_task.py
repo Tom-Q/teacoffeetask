@@ -83,7 +83,7 @@ def accuracy_test(model, test_number=None):
 
 def train(model = None, mse=False, noise= 0., iterations=5000, l2reg=0.0, learning_rate=0.1, algorithm=nn.SGD, hidden_units=15):
     if model is None:
-        model = nn.ElmanGoalNet(size_hidden=hidden_units, algorithm=algorithm, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=0, size_goal2=0)
+        model = nn.GoalNet(size_hidden=hidden_units, algorithm=algorithm, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=0, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = l2reg
@@ -140,7 +140,7 @@ def train_with_goals(model=None, mse=False, learning_rate=0.1, noise=0., iterati
                      reg_strength=0., reg_increase="square"):
     num_goals = 2
     if model is None:
-        model = nn.ElmanGoalNet(size_hidden=hidden_units, algorithm=algorithm, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=num_goals, size_goal2=0)
+        model = nn.GoalNet(size_hidden=hidden_units, algorithm=algorithm, size_observation=len(all_inputs), size_action=len(all_inputs), size_goal1=num_goals, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = 0.5 if mse else learning_rate
     model.L2_regularization = l2reg

@@ -3,12 +3,24 @@ import numpy as np
 import utils
 from abc import ABC, abstractmethod
 
+
+def winner_take_all(a):
+    a = a.numpy()
+    b = np.zeros_like(a)
+    b[range(len(a)), a.argmax(1)] = 1
+    return b
+
 class Layer(ABC):
     def __init__(self):
         pass
 
     @abstractmethod
     def feedforward(self, x):
+        return
+
+    @property
+    @abstractmethod
+    def parameters(self):
         return
 
 class BasicLayer(Layer):
@@ -32,10 +44,13 @@ class BasicLayer(Layer):
     def feedforward(self, x):
         return self.nonlinearity(utils.dense_linear(x, self.w, self.b))
 
+    @property
+    def parameters(self):
+        return [self.w, self.b]
 
-# TODO: Add a softmax layer class.
-# TODO: Add a recurrent layer abstract class
 
+#TODO: Add a softmax layer class. This is more complicated because of implementation tricks for backprop
+#Current implementation is just using a dense_linear.
 
 
 class RecurrentLayer(Layer):
@@ -54,9 +69,8 @@ class ElmanLayer(RecurrentLayer):
         else:
             self.h = initial_context
 
-        self.all_weights = [self.layer.w, self.layer.b]
-
-    def _make_weights(self, size_input, size_output, initialization_mode=utils.HE):
+    @staticmethod
+    def _make_weights(size_input, size_output, initialization_mode=utils.HE):
         dimensions = [size_input + size_output, size_output]
         return utils.initialize(dimensions, initialization_mode)
 
@@ -69,6 +83,11 @@ class ElmanLayer(RecurrentLayer):
             self.h *= 0.
         else:
             self.h = state
+
+    @property
+    def parameters(self):
+        return self.layer.parameters
+
 
 # Recurrent layers 2: GRU
 class GRULayer(RecurrentLayer):
@@ -89,11 +108,8 @@ class GRULayer(RecurrentLayer):
         else:
             self.h = initial_context
 
-        self.all_weights = [self.resetgate_layer.w, self.resetgate_layer.b,
-                            self.updategate_layer.w, self.updategate_layer.b,
-                            self.tanh_layer.w, self.tanh_layer.b]
-
-    def _make_weights(self, size_input, size_output):
+    @staticmethod
+    def _make_weights(size_input, size_output):
         dimensions = [size_input + size_output, size_output]
         # Note, everytime it's different weights.
         w_reset = utils.xavier_initialization(dimensions)
@@ -118,6 +134,11 @@ class GRULayer(RecurrentLayer):
         else:
             self.h = state
 
+    @property
+    def parameters(self):
+        return self.resetgate_layer.parameters + self.updategate_layer.parameters + self.tanh_layer.parameters
+
+
 class LSTMLayer(RecurrentLayer):
     # TODO: identity matrix weight initialization for recurrent units (check whether that makes sense)
     # Gru can be interpreted as consisting of 3 layers R (reset), Z (update), and H (history)
@@ -138,12 +159,8 @@ class LSTMLayer(RecurrentLayer):
             self.h = initial_context[0]
             self.c = initial_context[1]
 
-        self.all_weights = [self.forgetcellgate_layer.w, self.forgetcellgate_layer.b,
-                            self.updatecellgate_layer.w, self.updatecellgate_layer.b,
-                            self.updatecell_layer.w, self.updatecell_layer.b,
-                            self.output_layer.w, self.output_layer.b]
-
-    def _make_weights(self, size_input, size_output):
+    @staticmethod
+    def _make_weights(size_input, size_output):
         dimensions = [size_input + size_output, size_output]
         # Note, everytime it's different weights.
         w_forgetcellgate = utils.xavier_initialization(dimensions)
@@ -174,3 +191,8 @@ class LSTMLayer(RecurrentLayer):
             self.c *= 0.
         else:
             raise NotImplementedError("figure this out later")
+
+    @property
+    def parameters(self):
+        return self.forgetcellgate_layer.parameters + self.updatecellgate_layer.parameters +\
+               self.updatecell_layer.parameters + self.output_layer.parameters

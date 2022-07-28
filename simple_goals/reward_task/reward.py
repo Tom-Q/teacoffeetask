@@ -27,9 +27,9 @@ def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorith
           size_hidden=15, learning_rate=None, loss_type='cross_entropy',
           initial_context=pnas2018.ZEROS, with_goals=True):
     if model is None:
-        model = nn.ElmanGoalNet(size_hidden=size_hidden, size_observation=len(rewardtask.all_inputs),
-                                size_action=len(rewardtask.all_outputs), size_goal1=2 if with_goals else 0, size_goal2=0,
-                                algorithm=algorithm, initialization="normal")
+        model = nn.GoalNet(size_hidden=size_hidden, size_observation=len(rewardtask.all_inputs),
+                           size_action=len(rewardtask.all_outputs), size_goal1=2 if with_goals else 0, size_goal2=0,
+                           algorithm=algorithm, initialization="normal")
     num_episodes = iterations
     if learning_rate is not None:  # Else keep the model's learning rate
         model.learning_rate = learning_rate
@@ -192,7 +192,7 @@ def accuracy_test(model, name=None, noise=0., initial_context=pnas2018.ZEROS):
 
 
 def train_with_goals(noise=0, iterations=5000, learning_rate=0.1, nonlinearity=nn.SIGMOID):
-    model = nn.ElmanGoalNet(size_hidden=15, size_observation=8, size_action=8, size_goal1=2, size_goal2=0, nonlinearity=nonlinearity)
+    model = nn.GoalNet(size_hidden=15, size_observation=8, size_action=8, size_goal1=2, size_goal2=0, nonlinearity=nonlinearity)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.

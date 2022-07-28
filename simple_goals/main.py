@@ -36,7 +36,7 @@ if False:
 if True:
     from pnas import pnas2018, pnashierarchy
 
-    for i in range(0):
+    for i in range(1):
         print(i)
         #model, _ = pnas2018.train(iterations=5000, learning_rate=0.1, size_hidden=100)
         model = pnashierarchy.train_with_goals(iterations=1500)
@@ -44,7 +44,7 @@ if True:
         utils.save_object("rdm_lstm", model)
 
     #gain = [1., 1., .0, 0.0]
-    pnas2018.make_rdm_multiple("rdm_lstm", num_networks=10, with_goals=True, rdm_type=analysis.SPEARMAN, save_name="spearman_lstm")
+    pnas2018.make_rdm_multiple("rdm_lstm", num_networks=1, with_goals=True, rdm_type=analysis.SPEARMAN, save_name="spearman_lstm")
     #pnas2018.make_rdm_multiple_gain("rdm_gains", num_networks=25, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_zeroed_goalstea", gain=gain)
     #pnas2018.make_rdm_multiple("rdm_gains", num_networks=25, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_nogain", with_goals=True)
     #pnas2018.make_rdm_multiple("rdm_gains", num_networks=25, rdm_type=analysis.SPEARMAN, save_name="spearman_nogain", with_goals=True)
@@ -121,14 +121,14 @@ if False:
     import tensorflow as tf
     for i in range(0):
         print(i)
-        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-                                size_goal1=len(env.GoalEnvData.goals1_list),
-                                size_goal2=len(env.GoalEnvData.goals2_list),
-                                algorithm=nn.ADAM, learning_rate=0.001,
-                                L2_reg=0.0001,
-                                initialization=nn.HE,
-                                nonlinearity=nn.RELU,
-                                last_action_inputs=True)
+        model = nn.GoalNet(size_hidden=50, size_observation=29, size_action=19,
+                           size_goal1=len(env.GoalEnvData.goals1_list),
+                           size_goal2=len(env.GoalEnvData.goals2_list),
+                           algorithm=nn.ADAM, learning_rate=0.001,
+                           L2_reg=0.0001,
+                           initialization=nn.HE,
+                           nonlinearity=nn.RELU,
+                           last_action_inputs=True)
 
         stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=1, check_frequency=1000,
                                      stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
@@ -142,14 +142,14 @@ if False:
         #utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise_goaltest", model)
     for i in range(0):
         print(i)
-        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-                                size_goal1=0, #len(env.GoalEnvData.goals1_list),
-                                size_goal2=0, #len(env.GoalEnvData.goals2_list),
-                                algorithm=nn.ADAM, learning_rate=0.001,
-                                L2_reg=0.0001,
-                                initialization=nn.HE,
-                                nonlinearity=nn.RELU,
-                                last_action_inputs=True)
+        model = nn.GoalNet(size_hidden=50, size_observation=29, size_action=19,
+                           size_goal1=0,  #len(env.GoalEnvData.goals1_list),
+                           size_goal2=0,  #len(env.GoalEnvData.goals2_list),
+                           algorithm=nn.ADAM, learning_rate=0.001,
+                           L2_reg=0.0001,
+                           initialization=nn.HE,
+                           nonlinearity=nn.RELU,
+                           last_action_inputs=True)
 
         stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=5001, check_frequency=1000,
                                      stop_condition=goalenv2020.stop_condition, goals=False, noise=0.0)
@@ -164,14 +164,14 @@ if False:
     #sys.exit()
     for i in range(0):
         print(i)
-        model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-                                size_goal1=len(env.GoalEnvData.goals1_list),
-                                size_goal2=len(env.GoalEnvData.goals2_list),
-                                algorithm=nn.ADAM, learning_rate=0.001,
-                                L2_reg=0.0001,
-                                initialization=nn.HE,
-                                nonlinearity=nn.RELU,
-                                last_action_inputs=True)
+        model = nn.GoalNet(size_hidden=50, size_observation=29, size_action=19,
+                           size_goal1=len(env.GoalEnvData.goals1_list),
+                           size_goal2=len(env.GoalEnvData.goals2_list),
+                           algorithm=nn.ADAM, learning_rate=0.001,
+                           L2_reg=0.0001,
+                           initialization=nn.HE,
+                           nonlinearity=nn.RELU,
+                           last_action_inputs=True)
 
         stopping = nn.ParamsStopping(max_iterations=15000, min_iterations=10000, check_frequency=1000,
                                      stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
@@ -1129,11 +1129,11 @@ sys.exit()
 #goalenv2020.accuracy_test_botvinick(model, noise=0.5, noise_step=5, num_tests= 10, goals=True, sequence_ids=range(21))
 for i in range(0):
     #model = utils.load_object("bigmodel3")
-    model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-                            size_goal1=len(environment.GoalEnvData.goals1_list),
-                            size_goal2=len(environment.GoalEnvData.goals2_list),
-                            algorithm=nn.RMSPROP, learning_rate=0.001, initialization="uniform",
-                            last_action_inputs=True)
+    model = nn.GoalNet(size_hidden=50, size_observation=29, size_action=19,
+                       size_goal1=len(environment.GoalEnvData.goals1_list),
+                       size_goal2=len(environment.GoalEnvData.goals2_list),
+                       algorithm=nn.RMSPROP, learning_rate=0.001, initialization="uniform",
+                       last_action_inputs=True)
     model = goalenv2020.train(model=model, goals=True, num_iterations=150000, learning_rate=0.001, L2_reg=0.00001, noise=0.05, sequences=range(21))
     utils.save_object("bigmodel4", model)
 #sys.exit()
