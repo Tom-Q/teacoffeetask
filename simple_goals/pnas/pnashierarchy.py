@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 def train_with_goals(noise=0, iterations=10000, learning_rate=0.1):
     # TODO: SWITCH BACK TO ELMAN DUH
-    model = nn.ElmanGoalNet(size_hidden=15, size_observation=7, size_action=8, size_goal1=2, size_goal2=0, recurrent_layer=nn.GRU)
+    model = nn.ElmanGoalNet(size_hidden=15, size_observation=7, size_action=8, size_goal1=2, size_goal2=0, recurrent_layer=nn.LSTM)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.

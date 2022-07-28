@@ -163,6 +163,7 @@ ZEROS = "zeros"
 UNIFORM = "uniform"
 ELMAN = "elman"
 GRU = "gru"
+LSTM = "lstm"
 class ElmanGoalNet(NeuralNet):
     def __init__(self, size_hidden=15, algorithm=optimizers.SGD, learning_rate=0.1,
                  size_observation=len(tce.TeaCoffeeData.observations_list),
@@ -209,6 +210,8 @@ class ElmanGoalNet(NeuralNet):
             self.hidden_layer = layers.ElmanLayer(size_hidden_input, self.size_hidden, self.nonlinearity, initialization)
         elif recurrent_layer == GRU:
             self.hidden_layer = layers.GRULayer(size_hidden_input, self.size_hidden)
+        elif recurrent_layer == LSTM:
+            self.hidden_layer = layers.LSTMLayer(size_hidden_input, self.size_hidden)
         else:
             raise NotImplementedError("unknown layer type")
         self.goal1_layer = layers.BasicLayer(utils.initialize([self.size_hidden, self.size_goal1], initialization))
@@ -282,9 +285,9 @@ class ElmanGoalNet(NeuralNet):
         self.clear_history()
         self.action = np.zeros((1, self.size_action), dtype=np.float32)
         if initial_context == ZEROS:
-            self.hidden_layer.h = np.zeros((1, self.size_hidden), dtype=np.float32)
+            self.hidden_layer.reset()
         elif initial_context == UNIFORM:
-            self.hidden_layer.h = np.float32(np.random.uniform(0.01, 0.99, (1, self.size_hidden)))
+            state = np.float32(np.random.uniform(0.01, 0.99, (1, self.size_hidden)))
         else:
             raise ValueError("Initial context value not implemented")
         if self.size_goal1 > 0:

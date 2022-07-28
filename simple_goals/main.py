@@ -36,15 +36,15 @@ if False:
 if True:
     from pnas import pnas2018, pnashierarchy
 
-    for i in range(10):
+    for i in range(0):
         print(i)
         #model, _ = pnas2018.train(iterations=5000, learning_rate=0.1, size_hidden=100)
-        model = pnashierarchy.train_with_goals(iterations=2000)
+        model = pnashierarchy.train_with_goals(iterations=1500)
         pnashierarchy.accuracy_test_with_goals(model)
-        utils.save_object("rdm_gru", model)
+        utils.save_object("rdm_lstm", model)
 
     #gain = [1., 1., .0, 0.0]
-    pnas2018.make_rdm_multiple("rdm_gru", num_networks=10, with_goals=True, rdm_type=analysis.SPEARMAN, save_name="spearman_gru")
+    pnas2018.make_rdm_multiple("rdm_lstm", num_networks=10, with_goals=True, rdm_type=analysis.SPEARMAN, save_name="spearman_lstm")
     #pnas2018.make_rdm_multiple_gain("rdm_gains", num_networks=25, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_zeroed_goalstea", gain=gain)
     #pnas2018.make_rdm_multiple("rdm_gains", num_networks=25, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_nogain", with_goals=True)
     #pnas2018.make_rdm_multiple("rdm_gains", num_networks=25, rdm_type=analysis.SPEARMAN, save_name="spearman_nogain", with_goals=True)
