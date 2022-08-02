@@ -1,7 +1,7 @@
 # Entry point of the program. Mostly loads scripts from scripts, which themselves rely on more serious code.
 import utils
 import sys
-from neural import neuralnet as nn
+from neural import neuralnet as nn, optimizers
 
 import analysis
 
@@ -33,7 +33,7 @@ if False:
 
     sys.exit()
 
-if True:
+if False:
     from pnas import pnas2018, pnashierarchy
 
     for i in range(1):
@@ -394,9 +394,9 @@ if True:
     # Use the easy arithmetic sequences :-)
     task.arithmetic_seqs = task.arithmetic_seqs_easy
     hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00001)
-    nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
+    nnparams = nn.ParamsGoalNet(algorithm=optimizers.ADAM,
                                 nonlinearity=nn.RELU,
-                                initialization=nn.HE,
+                                initialization=utils.HE,
                                 learning_rate=0.001,
                                 size_action=None,  # these will get filled automatically
                                 size_observation=None,  #
@@ -419,14 +419,14 @@ if True:
     hrp.reg_strength = 0.0
 
     mod3.run_model3_multiple(stopping_params=stopping,
-                             num_networks=24, from_file="model3_plusminus", #"model3_distances_spearman",
+                             num_networks=7, #from_file="model3_euclidian_activations", #"model3_distances_spearman",
                              name="model3_euclidian_activations",
                              hrp=None,
                              nnparams=nnparams,
                              blanks=True,
                              mode=task.RDM_MODE_AVERAGE_ACTIVATIONS,
                              type=analysis.EUCLIDIAN)
-
+    sys.exit()
     mod3.run_model3_multiple(stopping_params=stopping,
                              num_networks=25, from_file="model3_plusminus", #"model3_distances_spearman",
                              name="model3_euclidian_distances",

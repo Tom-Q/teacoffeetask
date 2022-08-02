@@ -8,7 +8,6 @@ import analysis
 import matplotlib.pyplot as plt
 
 def train_with_goals(noise=0, iterations=10000, learning_rate=0.1):
-    # TODO: SWITCH BACK TO ELMAN DUH
     model = nn.GoalNet(size_hidden=15, size_observation=7, size_action=8, size_goal1=2, size_goal2=0, recurrent_layer=nn.ELMAN)
     num_episodes = iterations
     model.learning_rate = learning_rate

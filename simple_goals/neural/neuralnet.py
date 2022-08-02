@@ -50,6 +50,7 @@ class ParamsNeuralNet(object):
         self.L1_reg = L1_reg
         self.L2_reg = L2_reg
 
+RELU = "relu"
 class ParamsGoalNet(ParamsNeuralNet):
     def __init__(self, size_observation, size_action, size_hidden, initialization, algorithm, nonlinearity, learning_rate,
                  L1_reg=0, L2_reg=0, last_action_inputs=False, size_goal1=0, size_goal2=0):
@@ -162,7 +163,8 @@ class GoalNet(NeuralNet):
 
         size_hidden_input = self.size_observation + self.size_action + self.size_goal1 + self.size_goal2
         if recurrent_layer == ELMAN:
-            self.hidden_layer = layers.ElmanLayer(size_hidden_input, self.size_hidden, self.nonlinearity, initialization)
+            self.hidden_layer = layers.ElmanLayer(size_hidden_input, self.size_hidden, initial_context=None,
+                                                  nonlinearity=self.nonlinearity, initialization=initialization)
         elif recurrent_layer == GRU:
             self.hidden_layer = layers.GRULayer(size_hidden_input, self.size_hidden)
         elif recurrent_layer == LSTM:
@@ -317,3 +319,121 @@ class GoalNet(NeuralNet):
     @context.setter
     def context(self, val):
         self.hidden_layer.h = val
+
+
+# Convenience class that contains and manages three ACC Nets
+class TripleACCNet(NeuralNet):
+    def __init__(self, size_observation, size_action, size_hidden1, size_hidden2):
+        super().__init__(size_observation, size_action)
+        self.ACCNetPrediction = ACCNet(size_observation, size_action, size_hidden1, size_hidden2)
+        self.ACCNetReward = self.ACCNetPrediction.copy_with_same_weights()
+        self.ACCNetControl = self.ACCNetPrediction.copy_with_same_weights()
+        self.ACCNetPrediction._switch_mode(layers.PREDICT_ONLY)
+        self.ACCNetReward._switch_mode(layers.REWARD_ONLY)
+        self.ACCNetControl._switch_mode(layers.CONTROL_ONLY)
+        self.PredictionTape = tf.GradientTape()
+        self.RewardTape = tf.GradientTape()
+        self.ControlTape = tf.GradientTape()
+        self.nets = [(self.ACCNetPrediction, self.PredictionTape),
+                     (self.ACCNetReward, self.RewardTape),
+                     (self.ACCNetControl, self.ControlTape)]
+
+    def feedforward(self, observation):
+        for net, tape in self.nets:
+            with tape:
+                net.feedforward(observation)
+
+    def new_episode(self):
+        # Note, there should be no stochasticity here.
+        for net, _ in self.nets:
+            net.new_episode()
+
+    def save_history(self):
+        for net, _ in self.nets:
+            net.save_history()
+
+    def clear_history(self):
+        for net, _ in self.nets:
+            net.clear_history()
+
+    def train(self, dismissed_tape, targets):
+        gradients = []
+        total_loss = 0.
+        for net, tape in self.nets:
+            gradient, loss = net.compute_gradients(tape, targets) #TODO: need 3 different tapes, one for each network.
+            gradients.append(gradient)
+            total_loss += loss
+        for net, _ in self.nets:
+            net.update_weights(gradients)
+        return total_loss
+
+
+class ACCNet(NeuralNet):
+    def __init__(self, size_observation, size_action, size_hidden1, size_hidden2):
+        super().__init__(size_observation, size_action)
+        self.size_hidden1 = size_hidden1
+        self.size_hidden2 = size_hidden2
+        self.Layer1 = layers.RewardControlPredLayer(size_input=size_observation, size_output=size_hidden1, size_next=size_hidden2)
+        self.Layer2 = layers.RewardControlPredLayer(size_input=size_hidden1, size_output=size_action, size_next=0,
+                                                    output_nonlinearity=None)
+        self.parameters = self.Layer1.parameters + self.Layer2.parameters
+
+        self.h_action_logits = []
+        self.h_action_wta = []
+        self.h_context1 = []
+        self.h_context2 = []
+        self.history = [self.h_action_logits, self.h_action_wta, self.h_context1, self.h_context2]
+        self.optimizer = optimizers.AdamOptimizer(self.parameters)
+
+    def feedforward(self, observation):
+        #1. Feedforward
+        bottom_up = self.Layer1.feedforward(observation)
+        self.h_action_logits = self.Layer2.feedforward(bottom_up)
+        self.h_action_wta = layers.winner_take_all(self.h_action_logits)
+
+        #2. Feedbackward
+        top_down = self.Layer2.feedbackward(None)
+        self.Layer1.feedbackward(top_down)
+
+    def new_episode(self):
+        # Note, there should be no stochasticity here.
+        self.Layer1.reset()
+        self.Layer2.reset()
+        self.clear_history()
+
+    def save_history(self):
+        self.h_action_logits.append(self.h_action_logits)
+        self.h_action_wta.append(copy.deepcopy(self.h_action_wta))
+        self.h_context1.append(self.Layer1.representation_layer.h)
+        self.h_context2.append(self.Layer2.representation_layer.h)
+
+    def clear_history(self):
+        for data in self.history:
+            data.clear()
+
+    def _switch_mode(self, mode):
+        self.Layer1.mode = mode
+        self.Layer2.mode = mode
+
+    def compute_gradients(self, tape, targets):
+        loss = 0
+        for i, target in enumerate(targets):
+            if target.action_one_hot is not None:
+                loss += tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, self.h_action_logits[i])
+
+        gradients = tape.gradient(loss, self.parameters)
+        return gradients, loss
+
+    def update_weights(self, gradients):
+        for gradient in gradients:
+            self.optimizer.update_weights(gradient, self.learning_rate)
+        self.clear_history()
+
+    def copy_with_same_weights(self):
+        # Used to have different gradient updates for the same network
+        # Warning, this doesn't copy the hidden state of the recurrent layers (LSTM/GRU).
+        copy = ACCNet(self.size_observation, self.size_action, self.size_hidden1, self.size_hidden2)
+        # Make a deep copy of all network parameters
+        for i in range(len(self.parameters)):
+            copy.parameters[i].assign(self.parameters[i])
+        return copy

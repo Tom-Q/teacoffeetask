@@ -23,10 +23,23 @@ class Layer(ABC):
     def parameters(self):
         return
 
+
 class BasicLayer(Layer):
-    def __init__(self, w, bias=True, nonlinearity=None):
+    def __init__(self, w = None, input_size=None, output_size=None, bias=True, nonlinearity=None):
         super().__init__()
+        if w is None:
+            if input_size is None or output_size is None:
+                raise ValueError("either weights or dimensions must be specified")
+            if nonlinearity == tf.nn.relu:
+                w = utils.initialize([input_size, output_size], mode=utils.HE)
+            elif nonlinearity in [tf.nn.tanh, tf.sigmoid]:
+                w = utils.initialize([input_size, output_size], mode=utils.XAVIER)
+            elif nonlinearity is None:
+                w = utils.initialize([input_size, output_size], mode=utils.XAVIER)
+            else:
+                raise NotImplementedError("No default initialization for this nonlinearity")
         self.w = tf.Variable(w, dtype=tf.float32)
+
         if bias:
             self.b = tf.Variable(np.zeros([1, w.shape[1]]), dtype=tf.float32)
         else:
@@ -98,24 +111,14 @@ class GRULayer(RecurrentLayer):
     # then the weight matrices should be 30x10.
     def __init__(self, size_input, size_output, initial_context=None):
         super().__init__()
-        weights = self._make_weights(size_input, size_output)
-        self.resetgate_layer = BasicLayer(weights[0], nonlinearity=tf.sigmoid)
-        self.updategate_layer = BasicLayer(weights[1], nonlinearity=tf.sigmoid)
-        self.tanh_layer = BasicLayer(weights[2], nonlinearity=tf.tanh)
+        self.resetgate_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=tf.sigmoid)
+        self.updategate_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=tf.sigmoid)
+        self.tanh_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=tf.tanh)
         # Activation
         if initial_context is None:
             self.h = np.zeros((1, size_output), dtype=np.float32)
         else:
             self.h = initial_context
-
-    @staticmethod
-    def _make_weights(size_input, size_output):
-        dimensions = [size_input + size_output, size_output]
-        # Note, everytime it's different weights.
-        w_reset = utils.xavier_initialization(dimensions)
-        w_update = utils.xavier_initialization(dimensions)
-        w_tanh = utils.xavier_initialization(dimensions)
-        return w_reset, w_update, w_tanh
 
     def feedforward(self, x):
         #reset gate output
@@ -124,9 +127,10 @@ class GRULayer(RecurrentLayer):
         hreset = tf.math.multiply(reset, self.h)  # elemwise
         tanh_out = self.tanh_layer.feedforward(tf.concat([x, hreset], axis=1))
         # update gate output
-        update = self.updategate_layer.feedforward(tf.concat([x, self.h], axis=1))
-        self.h = tf.math.multiply(update, tanh_out) + tf.multiply(1-update, self.h)
-        return self.h
+        update_values = self.updategate_layer.feedforward(tf.concat([x, self.h], axis=1))
+        h = tf.math.multiply(update_values, tanh_out) + tf.multiply(1-update_values, self.h)
+        self.h = h
+        return h
 
     def reset(self, state=None):
         if state is None:
@@ -146,11 +150,10 @@ class LSTMLayer(RecurrentLayer):
     # then the weight matrices should be 30x10.
     def __init__(self, size_input, size_output, initial_context=None):
         super().__init__()
-        weights = self._make_weights(size_input, size_output)
-        self.forgetcellgate_layer = BasicLayer(weights[0], nonlinearity=tf.sigmoid)
-        self.updatecellgate_layer = BasicLayer(weights[1], nonlinearity=tf.sigmoid)
-        self.updatecell_layer = BasicLayer(weights[2], nonlinearity=tf.tanh)
-        self.output_layer = BasicLayer(weights[3], nonlinearity=tf.sigmoid)
+        self.forgetcellgate_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=tf.sigmoid)
+        self.updatecellgate_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=tf.sigmoid)
+        self.updatecell_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=tf.tanh)
+        self.output_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=tf.sigmoid)
 
         if initial_context is None:
             self.h = np.zeros((1, size_output), dtype=np.float32)
@@ -158,16 +161,6 @@ class LSTMLayer(RecurrentLayer):
         else:
             self.h = initial_context[0]
             self.c = initial_context[1]
-
-    @staticmethod
-    def _make_weights(size_input, size_output):
-        dimensions = [size_input + size_output, size_output]
-        # Note, everytime it's different weights.
-        w_forgetcellgate = utils.xavier_initialization(dimensions)
-        w_updatecellgate = utils.xavier_initialization(dimensions)
-        w_updatecell = utils.xavier_initialization(dimensions)
-        w_output = utils.xavier_initialization(dimensions)
-        return w_forgetcellgate, w_updatecellgate, w_updatecell, w_output
 
     def feedforward(self, x):
         # concatenate x and h
@@ -177,13 +170,14 @@ class LSTMLayer(RecurrentLayer):
         c_forget_gated = tf.math.multiply(self.c, self.forgetcellgate_layer.feedforward(combined_input))
         gate_cell_updates = self.updatecellgate_layer.feedforward(combined_input)
         cell_updates = self.updatecell_layer.feedforward(combined_input)
-        self.c = c_forget_gated + tf.math.multiply(gate_cell_updates, cell_updates)
+        c = c_forget_gated + tf.math.multiply(gate_cell_updates, cell_updates)
 
         # Compute and update the hidden state / output
         output_updates = self.output_layer.feedforward(combined_input)
-        output_updates_gated = tf.math.multiply(tf.tanh(self.c), output_updates)
+        output_updates_gated = tf.math.multiply(tf.tanh(c), output_updates)
         self.h = output_updates_gated
-        return self.h
+        self.c = c
+        return output_updates_gated
 
     def reset(self, state=None):
         if state is None:
@@ -196,3 +190,172 @@ class LSTMLayer(RecurrentLayer):
     def parameters(self):
         return self.forgetcellgate_layer.parameters + self.updatecellgate_layer.parameters +\
                self.updatecell_layer.parameters + self.output_layer.parameters
+
+
+# A predictive coding layer as described in arXiv:1605.08104
+# Note, the feedforward input consists of the
+class PredLayerLotteEtAl2018(RecurrentLayer):
+    def __init__(self, size_input, size_output, initial_context=None, nonlinearity=tf.nn.relu):
+        super().__init__()
+        self.representation_layer = LSTMLayer(size_input, size_output, initial_context)
+        self.predictive_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=nonlinearity)
+        self.input_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=nonlinearity)
+        self.last_error_loss = None
+
+    @property
+    def representation(self):
+        return self.representation_layer.h
+
+    def feedforward(self, x):
+        bottom_up = x[0]
+        top_down = x[1]
+        prediction = self.predictive_layer.feedforward(bottom_up)
+        target = self.input_layer.feedforward(bottom_up)
+        # use the LSTM's previous value as a predictor, and output only the resulting error.
+        error = target - prediction
+        self.last_error_loss = tf.math.square(error)
+
+        # upade the LSTM
+        self.representation_layer.feedforward(tf.concat([error, top_down], axis=1))
+
+        # output the error
+        return error
+
+    # There's two kinds of weights, because they're not trained the same way.
+    def predictive_parameters(self):
+        return self.representation_layer.parameters + self.predictive_layer.parameters
+
+    def optimizing_parameters(self):
+        return self.input_layer.parameters
+
+    def reset(self, state=None):
+        self.representation_layer.reset(state)
+
+    @property
+    def parameters(self):
+        return self.representation_layer.parameters + self.predictive_layer.parameters + self.input_layer.parameters
+
+
+# Alternative to arXiv:1605.08104 where we predict the input, and only afterwards we process it.
+# This is essentially the same (when stacked)
+class PredLayerPredFirst(RecurrentLayer):
+    def __init__(self, size_input, size_output, initial_context=None, nonlinearity=tf.nn.relu):
+        super().__init__()
+        self.representation_layer = LSTMLayer(size_input, size_output, initial_context)
+        self.predictive_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=nonlinearity)
+        self.output_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=nonlinearity)
+        self.last_error_loss = None
+
+    @property
+    def representation(self):
+        return self.representation_layer.h
+
+    def feedforward(self, x):
+        bottom_up = x[0]
+        top_down = x[1]
+        prediction = self.predictive_layer.feedforward(bottom_up)
+        # use the LSTM's previous value as a predictor, and output only the resulting error.
+        error = x - prediction
+        self.last_error_loss = tf.math.square(error)
+
+        # upade the LSTM
+        self.representation_layer.feedforward(tf.concat([error, top_down], axis=1))
+
+        # output the processed error
+        return self.output_layer.feedforward(error)
+
+    # There's two kinds of weights, because they're not trained the same way.
+    def predictive_parameters(self):
+        return self.representation_layer.parameters + self.predictive_layer.parameters
+
+    def optimizing_parameters(self):
+        return self.output_layer.parameters
+
+    def reset(self, state=None):
+        self.representation_layer.reset(state)
+
+    @property
+    def parameters(self):
+        return self.representation_layer.parameters + self.predictive_layer.parameters + self.output_layer.parameters
+
+# Reinforcement predlayer.
+# This has the following structure:  (Plus some stop gradients)
+#      top               up
+#       |                ^
+#       |              (relu)     - output layer: relu  (input = concat lstm out + prediction error out)
+#       |    -->-------/ ^
+#       v   /-->(sig)----|-\      - control gate: sigmoid
+#      LSTM ------<-----(-) |     - representation layer: lstm
+#       | \___(relu)_>__/| /      - predictive layer: relu
+#       |                |/
+#       v                ^
+#     down             bottom
+ALL = "all"
+PREDICT_ONLY = "predict_only"
+REWARD_ONLY = "reward_only"
+CONTROL_ONLY = "control_only"
+class RewardControlPredLayer(RecurrentLayer):
+    def __init__(self, size_input, size_output, size_next, initial_context=None, output_nonlinearity=tf.nn.relu, mode="all"):
+        super().__init__()
+        self.size_input = size_input
+        self.size_output = size_output
+        self.size_next = size_next
+        self.representation_layer = LSTMLayer(size_input + size_next, size_output, initial_context)
+        self.predictive_layer = BasicLayer(input_size=size_output, output_size=size_input, nonlinearity=tf.nn.relu)
+        self.output_layer = BasicLayer(input_size=size_input, output_size=size_output, nonlinearity=output_nonlinearity)
+        self.control_gate_layer = BasicLayer(input_size=size_output, output_size=size_input, nonlinearity=tf.sigmoid)
+        self.prediction_loss = None
+        self.control_loss = None
+        self.prediction_error = None
+        self.mode = mode
+
+    @property
+    def representation(self):
+        return self.representation_layer.h
+
+    def feedforward(self, x):
+        if self.mode == PREDICT_ONLY:
+            x = tf.stop_gradient(x)
+        # compute the prediction and prediction error
+        prediction = self.predictive_layer.feedforward(self.representation_layer.h)
+        if self.mode == REWARD_ONLY:
+            prediction = tf.stop_gradient(prediction)
+        self.prediction_error = tf.math.subtract(x - prediction)
+
+        self.prediction_loss = tf.reduce_sum(tf.math.square(self.prediction_error))
+
+        #compute the control level and apply it to the bottom-up information
+        control_level = self.control_gate_layer.feedforward(self.representation_layer.h)
+        gated_bottom_up = tf.math.add(tf.math.multiply(self.prediction_error, control_level), tf.math.multiply(x, 1-control_level))
+        self.control_loss = tf.reduce_sum(control_level)
+
+        # Compute the layer's outputs, up
+        representation = self.representation_layer.h
+        if self.mode == PREDICT_ONLY:
+            representation = tf.stop_gradient(representation)
+        bottom_up_output = self.output_layer.feedforward(tf.concat([representation, gated_bottom_up], axis=1))
+        # output the bottom-up  (top down can be accessed via the representation sub-layer)
+        return bottom_up_output
+
+    # This ensures that the LSTM layer gets updated with information from every future layer.
+    def feedbackward(self, x):
+        if x is not None:
+            return self.representation_layer.feedforward(tf.concat([x, self.prediction_error], axis=1))
+        else:
+            return self.representation_layer.feedforward(self.prediction_error)
+
+    # There's two kinds of weights, because they're not trained the same way.
+    def predictive_parameters(self):
+        return self.representation_layer.parameters + self.predictive_layer.parameters
+
+    def optimizing_parameters(self):
+        return self.output_layer.parameters + self.control_gate_layer.parameters
+
+    def reset(self, state=None):
+        self.representation_layer.reset(state)
+        self.prediction = None
+
+    @property
+    def parameters(self):
+        return self.representation_layer.parameters + self.predictive_layer.parameters +\
+               self.output_layer.parameters + self.control_gate_layer.parameters
