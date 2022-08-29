@@ -148,40 +148,6 @@ def he_initialization(dimensions):
     return np.random.uniform(lb, hb, size=dimensions)
 
 
-def dense_softmax(x, w, b):
-    """
-    :param x: input
-    :param layer: Layer object with weights matrix [+ bias]
-    :return: densely connected layer with softmax output
-    WARNING: DONT USE THIS METHOD FOR A LAST LAYER. TRAINING ASSUMES YOURE WORKING WITH LOGITS INSTEAD.
-    """
-    return tf.nn.softmax(dense_linear(x, w, b))
-
-def dense_sigmoid(x, w, b):
-    """
-    :param x: input
-    :param layer: Layer object with weights matrix [+ bias]
-    :return: densely connected layer with sigmoid output
-    """
-    return tf.nn.sigmoid(dense_linear(x, w, b))
-
-
-def dense_tanh(x, w, b):
-    """
-    :param x: input
-    :param layer: Layer object with weights matrix [+ bias]
-    :return: densely connected layer with sigmoid output
-    """
-    return tf.nn.tanh(dense_linear(x, w, b))
-
-
-def winner_take_all(a):
-    # Tensorflow implementation. Actually slower, as is
-    cond = tf.equal(a, tf.reduce_max(a))
-    a_wta = tf.where(cond, tf.ones_like(a), tf.zeros_like(a))
-    return a_wta
-
-
 def load_objects(name, number):
     objects = []
     for i in range(number):
@@ -241,13 +207,6 @@ class ProgressBar(object):
                 print()
             self.update_counter += 1
 
-
-import analysis
-def save_rdm(rdm, name, labels, title, fontsize=0.6, color=analysis.RDM_COLOR_SEQUENTIAL):
-    np.savetxt(name+"_rdm_mat.txt", rdm, delimiter="\t", fmt='%.2e')
-    analysis.plot_rdm(rdm, labels, title + " matrix", figsize=30, fontsize=fontsize, color=color)
-    plt.savefig(name+'_rdm.png', dpi=300, bbox_inches='tight')
-    plt.clf()
 
 
 # Changes both rows and columns according to the new order.

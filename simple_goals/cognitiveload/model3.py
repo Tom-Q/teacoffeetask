@@ -8,7 +8,7 @@ import random
 import tensorflow as tf
 import numpy as np
 from neural import neuralnet as nn
-
+import rdm
 
 class HierarchyGradientParams(object):
     def __init__(self, regstrength=0.001, regincrease="linear"):
@@ -18,12 +18,12 @@ class HierarchyGradientParams(object):
 
 # Model 3: with goals units.
 
-def generate_rdm_all(nnet, name, rdm_type=analysis.EUCLIDIAN, save_files=True, title="RDM training combined",
+def generate_rdm_all(nnet, name, rdm_type=rdm.EUCLIDIAN, save_files=True, title="RDM training combined",
                      from_file=False, delete_blank_states=True, collapse_rdm=True, mode=task.RDM_MODE_AVERAGE_DISTANCES):
     if not from_file:
-        hidden_both, accuracy_totals_both, accuracy_fullseqs_both = test_network_all(nnet)
-        hidden_ari, accuracy_totals_ari, accuracy_fullseqs_ari = test_network_ari(nnet, blanks=True)
-        hidden_bev, accuracy_totals_bev, accuracy_fullseqs_bev = test_network_bev(nnet, blanks=True)
+        hidden_both, accuracy_totals_both, accuracy_fullseqs_both, properties_both = test_network_all(nnet)
+        hidden_ari, accuracy_totals_ari, accuracy_fullseqs_ari, properties_ari = test_network_ari(nnet, blanks=True)
+        hidden_bev, accuracy_totals_bev, accuracy_fullseqs_bev, properties_bev = test_network_bev(nnet, blanks=True)
         print("Both: {0}, {1}".format(accuracy_totals_both, accuracy_fullseqs_both))
         print("Ari: {0}, {1}".format(accuracy_totals_ari, accuracy_fullseqs_ari))
         print("Bev: {0}, {1}".format(accuracy_totals_bev, accuracy_fullseqs_bev))
@@ -31,34 +31,36 @@ def generate_rdm_all(nnet, name, rdm_type=analysis.EUCLIDIAN, save_files=True, t
         hidden = utils.flatten_onelevel(hidden_bev) +\
                  utils.flatten_onelevel(hidden_ari) +\
                  utils.flatten_onelevel(hidden_both)
-        if mode == task.RDM_MODE_AVERAGE_ACTIVATIONS:
-            hidden = model2.process_activations(hidden, delete_blank_states)
-            np.savetxt('processed_activations_goals' + ".txt", np.stack(hidden, axis=0), delimiter="\t", fmt='%.2e')
-            np.savetxt('average_activations_goals' + ".txt", np.asarray([np.mean(activation) for activation in hidden]), delimiter="\t", fmt='%.2e')
-        if rdm_type == analysis.EUCLIDIAN:
-            rdmatrix = analysis.rdm_euclidian(hidden)
-        elif rdm_type == analysis.SPEARMAN:
-            rdmatrix = analysis.rdm_spearman(hidden)
-        else:
-            raise NotImplementedError("only two types implemented")
 
+        properties = properties_bev + properties_ari + properties_both
+
+        #if mode == task.RDM_MODE_AVERAGE_ACTIVATIONS:
+        #    hidden = model2.process_activations(hidden, delete_blank_states)
+        #    np.savetxt('processed_activations_goals' + ".txt", np.stack(hidden, axis=0), delimiter="\t", fmt='%.2e')
+        #    np.savetxt('average_activations_goals' + ".txt", np.asarray([np.mean(activation) for activation in hidden]), delimiter="\t", fmt='%.2e')
+        rdmatrix = rdm.rdm(properties, type=rdm_type, vectors=hidden)
         utils.save_object(name+"rdmat", rdmatrix)
     else:
         rdmatrix = utils.load_object(name+"rdmat")
 
     if mode == task.RDM_MODE_AVERAGE_DISTANCES:
-        rdmatrix = model2.process_matrix(rdmatrix, delete_blank_states)
+        rdmatrix = model2.process_rdmatrix(rdmatrix, delete_blank_states)
+    elif mode == task.RDM_MODE_AVERAGE_ACTIVATIONS:
+        hidden = model2.process_activations(rdmatrix, delete_blank_states)
+        np.savetxt('processed_activations_goals' + ".txt", np.stack(hidden, axis=0), delimiter="\t", fmt='%.2e')
+        np.savetxt('average_activations_goals' + ".txt", np.asarray([np.mean(activation) for activation in hidden]), delimiter="\t", fmt='%.2e')
 
     # Labels are always the same in the end
-    labels = utils.flatten_onelevel(task.label_seqs_bev_noblanks) + utils.flatten_onelevel(task.label_seqs_ari)
-    labels *= 2
+    #labels = utils.flatten_onelevel(task.label_seqs_bev_noblanks) + utils.flatten_onelevel(task.label_seqs_ari)
+    #labels *= 2
+    #for i in range(len(labels)):
+    #    rdmatrix.properties[i]['label'] = labels[i]
+    return rdmatrix
 
-    return rdmatrix, labels
-
-def generate_rdm_all_gradient(nnet, name, blanks, rdm_type=analysis.SPEARMAN, save_files=True, title="RDM training combined",
+def generate_rdm_all_gradient(nnet, name, blanks, rdm_type=rdm.SPEARMAN, save_files=True, title="RDM training combined",
                      from_file=False, delete_blank_states=True):
     if not from_file:
-        if rdm_type != analysis.SPEARMAN:
+        if rdm_type != rdm.SPEARMAN:
             raise Exception("not implemented")
         hidden_both, accuracy_totals_both, accuracy_fullseqs_both = test_network_all(nnet)
         hidden_ari, accuracy_totals_ari, accuracy_fullseqs_ari = test_network_ari(nnet, blanks)
@@ -78,8 +80,8 @@ def generate_rdm_all_gradient(nnet, name, blanks, rdm_type=analysis.SPEARMAN, sa
             hidden_right.append(vector[len(vector)//2:])
 
         # Now cut the hidden layer in two.
-        rdmatrix_left = analysis.rdm_spearman(hidden_left)
-        rdmatrix_right = analysis.rdm_spearman(hidden_right)
+        rdmatrix_left = rdm.rdm_spearman(hidden_left)
+        rdmatrix_right = rdm.rdm_spearman(hidden_right)
         # save the massive rdm for debug purposes (so that I don't have to generate it all over again everytime).
         utils.save_object(name+"rdmatright", rdmatrix_right)
         utils.save_object(name+"rdmatleft", rdmatrix_left)
@@ -177,9 +179,9 @@ def train_all(stopping_params, nnet, hrp=None, blanks=True):
             loss = loss.numpy()[0]
             avg_loss = 0.999 * avg_loss + 0.001 * loss
             if i % 1000 == 0:
-                _, accuracy_both, _ = test_network_all(nnet)
-                _, accuracy_ari, _ = test_network_ari(nnet, blanks)
-                _, accuracy_bev, _ = test_network_bev(nnet, blanks)
+                _, accuracy_both, _, _ = test_network_all(nnet)
+                _, accuracy_ari, _, _ = test_network_ari(nnet, blanks)
+                _, accuracy_bev, _, _ = test_network_bev(nnet, blanks)
                 print('{0}, avgloss={1}, accuracies=both{2}, ari{3}, bev{4}'.format(i, avg_loss, accuracy_both, accuracy_ari, accuracy_bev))
             i += 1
     print("Training complete after " + str(i) + " iterations")
@@ -187,9 +189,9 @@ def train_all(stopping_params, nnet, hrp=None, blanks=True):
 
 
 def stop_condition(nnet, blanks, min_accuracy=1.):
-    _, accuracy_both, _ = test_network_all(nnet)
-    _, accuracy_ari, _ = test_network_ari(nnet, blanks)
-    _, accuracy_bev, _ = test_network_bev(nnet, blanks)
+    _, accuracy_both, _, _ = test_network_all(nnet)
+    _, accuracy_ari, _, _ = test_network_ari(nnet, blanks)
+    _, accuracy_bev, _, _ = test_network_bev(nnet, blanks)
     if not blanks:
         return np.all(accuracy_both >= [.75, .75, .5, .5, 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
            np.all(accuracy_ari >= [1., .5, 1., 1., 1., min_accuracy]) and \
@@ -203,7 +205,7 @@ def stop_condition(nnet, blanks, min_accuracy=1.):
 def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
                         num_networks=1, name="model3", hrp=None,
                         mode=task.RDM_MODE_AVERAGE_DISTANCES,
-                        type=analysis.EUCLIDIAN):
+                        type=rdm.EUCLIDIAN):
     if from_file is not None:
         networks = utils.load_objects(from_file, num_networks)
     else:
@@ -217,7 +219,7 @@ def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
             utils.save_object(name, nnet)
             networks.append(nnet)
             # Print some stuff
-            hidden_activation, accuracy_totals, accuracy_fullseqs = test_network_all(nnet)
+            hidden_activation, accuracy_totals, accuracy_fullseqs, properties = test_network_all(nnet)
             print("network {0}: ")
             print(accuracy_totals)
             print(accuracy_fullseqs)
@@ -225,19 +227,22 @@ def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
     # pattern of sequences, for the mds
     pattern = [6]*4 + [6]*4 + [12]*4
     if hrp is None:
-        sum_rdm = None
-        labels = None
+        final_rdm = None
         for net in networks:
-            rdm, labels = generate_rdm_all(net, name=name, from_file=False, mode=mode, rdm_type=type)
-            if sum_rdm is None:
-                sum_rdm = rdm
+            net_rdm = generate_rdm_all(net, name=name, from_file=False, mode=mode, rdm_type=type)
+            if final_rdm is None:
+                final_rdm = rdm.rdm(properties=net_rdm.properties, matrix_values=net_rdm.matrix.copy())
             else:
-                sum_rdm += rdm
-        average_rdm = sum_rdm/num_networks
-
+                final_rdm.matrix += net_rdm.matrix
+        print("max sum")
+        print(np.max(final_rdm.matrix))
+        final_rdm.matrix /= num_networks
+        set_rdm_labels(final_rdm)
+        print("max final")
+        print(np.max(final_rdm.matrix))
         # Save it
-        utils.save_rdm(average_rdm, name, labels,  title="RDM training combined")
-        analysis.make_mds(average_rdm, name, labels=labels, title="MDS training combined", pattern=pattern)
+        final_rdm.save(name, title="RDM training combined")
+        #analysis.make_mds(final_rdm.matrix, name, labels=final_rdm.get_labels(), title="MDS training combined", pattern=pattern)
     else:
         raise NotImplementedError("obsolete")
         sum_rdm_left = sum_rdm_right = None
@@ -257,6 +262,24 @@ def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
         utils.save_rdm(average_rdm_right, name+"right", labels,  title="RDM training combined: right (actions)", fontsize=1.)
         analysis.make_mds(average_rdm_left, name+"left", labels=labels, title="MDS training combined: left (goals)", pattern=pattern)
         analysis.make_mds(average_rdm_right, name+"right", labels=labels, title="MDS training combined: right (actions)", pattern=pattern)
+
+def set_rdm_labels(myrdm):
+    for property in myrdm.properties:
+        timestep = int(property["timestep_seq1"])
+        property["label"] = ""
+
+        if timestep == 0:
+            if property["seq1_type"] == "bev":
+                property["label"] += "Coffee" if property["seq1_bev_tc"] == "c" else "Tea"
+                if property["interleaved"] == "yes":
+                    property["label"] += " (interleaved)"
+            else:
+                property["label"] += "Math ('+' 1st" if property["seq1_ari_op1"] == "+" else "Math ('-' 1st"
+                if property["interleaved"] == "yes":
+                    property["label"] += ", interleaved"
+                property["label"] += ")"
+            property["label"] += " - "
+        property["label"] += str(timestep + 1)
 
 
 def make_targets_ari(seq_ari, blanks):
@@ -434,10 +457,11 @@ def test_network_all(model):
     hidden_activation = []
     accuracy_totals = np.zeros(sequence_length)
     accuracy_fullseqs = 0.
+    properties = []
 
     for start in task.STARTS:
-        for idx, seq_bev in enumerate(task.beverage_seqs):
-            for seq_ari in task.arithmetic_seqs:
+        for seq_bev_id, seq_bev in enumerate(task.beverage_seqs):
+            for seq_ari_id, seq_ari in enumerate(task.arithmetic_seqs):
                 model.new_episode()
                 ff_all(model, seq_bev, seq_ari, start)
                 context = [c.numpy().flatten() for c in model.h_context]
@@ -458,17 +482,61 @@ def test_network_all(model):
                 if not sequence_fail:
                     accuracy_fullseqs += 1
                 accuracy_totals += accuracy_sequence
+                # Record properties
+                for timestep in range(sequence_length):
+                    if start == task.START_ARI:
+                        seq1_type = "ari" if timestep % 2 == 0 else "bev"
+                    else:
+                        seq1_type = "bev" if timestep % 2 == 0 else "ari"
+                    p = {}
+                    p['start_seq'] = "ari" if start == task.START_ARI else "bev"
+                    p['interleaved'] = "yes"
+                    p['timestep'] = str(timestep)
+                    p['timestep_seq1'] = str(timestep // 2)
+                    p['seq1_type'] = seq1_type
+                    op1 = '+' if seq_ari_id < 2 else '-'
+                    op2 = '+' if seq_ari_id % 2 == 0 else '-'
+                    tc = 'c' if seq_bev_id < 2 else 't'
+                    wf = '1' if seq_bev_id % 2 else '2'
+                    if seq1_type == "ari":
+                        p['seq2_type'] = "bev"
+                        p['seq1_ari_op1'] = op1
+                        p['seq1_ari_op2'] = op2
+                        p['seq1_bev_tc'] = None
+                        p['seq1_bev_wf'] = None
+                        p['seq2_ari_op1'] = None
+                        p['seq2_ari_op2'] = None
+                        p['seq2_bev_tc'] = tc
+                        p['seq2_bev_wf'] = wf
+                        p['target'] = task.arithmetic_seqs_easy[seq_ari_id][timestep // 2 + 1]
+                        p['input'] = task.arithmetic_seqs_easy[seq_ari_id][timestep // 2]
+                    else: # seq1_type =="bev"
+                        p['seq2_type'] = "ari"
+                        p['seq1_ari_op1'] = None
+                        p['seq1_ari_op2'] = None
+                        p['seq1_bev_tc'] = tc
+                        p['seq1_bev_wf'] = wf
+                        p['seq2_ari_op1'] = op1
+                        p['seq2_ari_op2'] = op2
+                        p['seq2_bev_tc'] = None
+                        p['seq2_bev_wf'] = None
+                        p['target'] = task.beverage_seqs[seq_bev_id][timestep // 2 + 1]
+                        p['input'] = task.beverage_seqs[seq_bev_id][timestep // 2 + 1]
+                    p['blank'] = "no"  # no blanks
+                    properties.append(p)
+
     accuracy_totals /= len(task.arithmetic_seqs_easy)*len(task.beverage_seqs)*len(task.STARTS)
     accuracy_fullseqs /= len(task.arithmetic_seqs_easy)*len(task.beverage_seqs)*len(task.STARTS)
-    return hidden_activation, accuracy_totals, accuracy_fullseqs
+    return hidden_activation, accuracy_totals, accuracy_fullseqs, properties
 
 
 def test_network_ari(model, blanks):
     sequence_length = len(make_targets_ari(task.arithmetic_seqs[0], blanks))  # wasteful but works
     hidden_activation = []
+    properties = []
     accuracy_totals = np.zeros(sequence_length)
     accuracy_fullseqs = 0.
-    for seq_ari in task.arithmetic_seqs:
+    for seq_ari_id, seq_ari in enumerate(task.arithmetic_seqs):
         model.new_episode()
         ff_ari(model, seq_ari, blanks)
         context = [c.numpy().flatten() for c in model.h_context]
@@ -489,17 +557,38 @@ def test_network_ari(model, blanks):
         if not sequence_fail:
             accuracy_fullseqs += 1
         accuracy_totals += accuracy_sequence
-    accuracy_totals /= 4
+        for timestep in range(sequence_length):
+            p = {}
+            p['start_seq'] = "ari"
+            p['interleaved'] = "no"
+            p['timestep'] = str(timestep)
+            p['timestep_seq1'] = str(timestep // 2)
+            p['seq1_type'] = "ari"
+            p['seq2_type'] = None
+            p['seq1_ari_op1'] = '+' if seq_ari_id < 2 else '-'
+            p['seq1_ari_op2'] = '+' if seq_ari_id % 2 == 0 else '-'
+            p['seq1_bev_tc'] = None
+            p['seq1_bev_wf'] = None
+            p['seq2_ari_op1'] = None
+            p['seq2_ari_op2'] = None
+            p['seq2_bev_tc'] = None
+            p['seq2_bev_wf'] = None
+            p['target'] = task.arithmetic_seqs_easy[seq_ari_id][timestep // 2 + 1]
+            p['input'] = task.arithmetic_seqs_easy[seq_ari_id][timestep // 2]
+            p['blank'] = "no" if timestep in [0, 2, 4, 6, 8, 10] else "yes"
+            properties.append(p)
+
     accuracy_fullseqs /= 4
-    return hidden_activation, accuracy_totals, accuracy_fullseqs
+    return hidden_activation, accuracy_totals, accuracy_fullseqs, properties
 
 
 def test_network_bev(model, blanks):
     sequence_length = len(make_targets_bev(task.beverage_seqs[0], blanks)) # wasteful but works
     hidden_activation = []
+    properties = []
     accuracy_totals = np.zeros(sequence_length)
     accuracy_fullseqs = 0.
-    for idx, seq_bev in enumerate(task.beverage_seqs):
+    for seq_bev_id, seq_bev in enumerate(task.beverage_seqs):
         model.new_episode()
         ff_bev(model, seq_bev, blanks)
         context = [c.numpy().flatten() for c in model.h_context]
@@ -520,7 +609,28 @@ def test_network_bev(model, blanks):
         if not sequence_fail:
             accuracy_fullseqs += 1
         accuracy_totals += accuracy_sequence
+        for timestep in range(sequence_length):
+            p = {}
+            p['start_seq'] = "bev"
+            p['interleaved'] = "no"
+            p['timestep'] = str(timestep)
+            p['timestep_seq1'] = str(timestep // 2)
+            p['seq1_type'] = "bev"
+            p['seq2_type'] = None
+            p['seq1_ari_op1'] = None
+            p['seq1_ari_op2'] = None
+            p['seq1_bev_tc'] = 'c' if seq_bev_id < 2 else 't'
+            p['seq1_bev_wf'] = '1' if seq_bev_id % 2 == 0 else '2'
+            p['seq2_ari_op1'] = None
+            p['seq2_ari_op2'] = None
+            p['seq2_bev_tc'] = None
+            p['seq2_bev_wf'] = None
+            p['target'] = task.beverage_seqs[seq_bev_id][timestep // 2 + 1]
+            p['input'] = task.beverage_seqs[seq_bev_id][timestep // 2]
+            p['blank'] = "no" if timestep in [0, 2, 4, 6, 8, 10] else "yes"
+            properties.append(p)
+
     accuracy_totals /= 4
     accuracy_fullseqs /= 4
 
-    return hidden_activation, accuracy_totals, accuracy_fullseqs
+    return hidden_activation, accuracy_totals, accuracy_fullseqs, properties

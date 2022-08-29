@@ -70,3 +70,15 @@ class RMSPropOptimizer(Optimizer):
         for i in range(len(self.weights_list)):
             self.meansquares[i] = self.beta * self.meansquares[i] + (1 - self.beta) * tf.square(gradients[i])
             self.weights_list[i].assign_sub(learning_rate * gradients[i] / (tf.sqrt(self.meansquares[i]) + self.epsilon))
+
+
+# Reinitialize dead units = units with no activation or with low OUTGOING weights (below some threshold).
+# These units should get new INGOING weights.
+# Problem 1: how to identify units with low outgoing weights? one activation may have multiple output directions.
+# Problem 2: how do we avoid resetting the same units every time
+# Problem 3: how to do this in a layer based way (each layer should do this separately).
+# Problem 4: complex layers (LSTM, GRU)
+# --> each layer keeps track of outgoing layers (layer-local functions based on layer input)
+# --> For each layer, compute sum of outgoing weights in all subsequent matrices.
+# --> But those are not necessarily comparable. A high weight for ReLu is a lot more meaningful than a high weight for sigmoid....
+# urgh this is a nightmare

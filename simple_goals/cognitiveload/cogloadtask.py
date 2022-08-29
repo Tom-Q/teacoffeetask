@@ -112,9 +112,9 @@ label_seqs_ari = [['3->+', '+->2', '2->+', '+->1', '1->=', '=->6'],
 # Model 2: we're training only one network. This network is trained to perform all 3 tasks.
 # To achieve this, when training for bev or ari we train on the same time-steps (=with a blank timestep in between)
 label_seqs_ari_blanks = [['num1', '0', '+', '0', 'num2', '0', '+', '0', 'num3', '0', '='],
-                  ['num1', '0', '+', '0', 'num2', '0', '-', '0', 'num3', '0', '='],
-                  ['num1', '0', '-', '0', 'num2', '0', '+', '0', 'num3', '0', '='],
-                  ['num1', '0', '-', '0', 'num2', '0', '-', '0', 'num3', '0', '=']]
+                        ['num1', '0', '+', '0', 'num2', '0', '-', '0', 'num3', '0', '='],
+                        ['num1', '0', '-', '0', 'num2', '0', '+', '0', 'num3', '0', '='],
+                        ['num1', '0', '-', '0', 'num2', '0', '-', '0', 'num3', '0', '=']]
 label_seqs_bev_blanks = [
     ["coffee", '0', "water", '0', "stir", '0', "cream", '0', "stir", '0', "serve_coffee"],
     ["coffee", '0', "cream", '0', "stir", '0', "water", '0', "stir", '0', "serve_coffee"],

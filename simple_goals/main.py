@@ -1,9 +1,30 @@
 # Entry point of the program. Mostly loads scripts from scripts, which themselves rely on more serious code.
 import utils
 import sys
-from neural import neuralnet as nn, optimizers
+from neural import neuralnet as nn, optimizers, layers
+
 
 import analysis
+
+
+if False: # rdm test
+    import numpy as np
+    import rdm
+    rdm_vals = np.array([[0, 1, 2, 3], [1, 0, 1, 2], [2, 1, 0, 1], [3, 2, 1, 0]])
+    properties = []
+    properties.append({"label": 'seq 1 action 1', "sequence": '1', "action": '1', "order": 'arithmetic first'})
+    properties.append({"label": 'seq 1 action 2', "sequence": '1', "action": '2', "order": 'arithmetic first'})
+    properties.append({"label": 'seq 2 action 1', "sequence": '2', "action": '1', "order": 'beverage first'})
+    properties.append({"label": 'seq 2 action 2', "sequence": '2', "action": '2', "order": 'beverage first'})
+    my_rdm = rdm.rdm(properties, rdm_vals)
+    my_rdm.save('original', 'Original')
+    my_rdm.sort_by('action')
+    my_rdm.save('action', 'Action sorted')
+    my_rdm.sort_by('order')
+    my_rdm.save('order', 'Order sorted')
+    my_rdm.sort_by('sequence')
+    my_rdm.save('sequence', 'sequence sorted') #should be same as order.
+    sys.exit()
 
 if False:
     from reward_task import reward
@@ -35,85 +56,28 @@ if False:
 
 if False:
     from pnas import pnas2018, pnashierarchy
-
-    for i in range(1):
+    for i in range(10):
         print(i)
         #model, _ = pnas2018.train(iterations=5000, learning_rate=0.1, size_hidden=100)
-        model = pnashierarchy.train_with_goals(iterations=1500)
-        pnashierarchy.accuracy_test_with_goals(model)
-        utils.save_object("rdm_lstm", model)
+        model = nn.TripleACCNet(size_observation=7, size_action=8,
+                                layer_sizes=[layers.RCPLayerSizes(input_bottomup=7, output_bottomup=96,
+                                                                  input_topdown=96, output_topdown=96),
+                                             layers.RCPLayerSizes(input_bottomup=96, output_bottomup=96,
+                                                                  input_topdown=8, output_topdown=96)],
+                                output_layer=True)
+        model.learning_rate = 0.001
+        pnas2018.trainACC(model=model, iterations=10000)
+        pnas2018.accuracy_testACC(model)
+        model.delete_tapes()  #can't save tapes
+        utils.save_object("rdm_acc", model)
 
     #gain = [1., 1., .0, 0.0]
-    pnas2018.make_rdm_multiple("rdm_lstm", num_networks=1, with_goals=True, rdm_type=analysis.SPEARMAN, save_name="spearman_lstm")
+    pnas2018.make_rdm_multipleACC("rdm_acc", num_networks=5, rdm_type=analysis.SPEARMAN, save_name="spearman_acc")
     #pnas2018.make_rdm_multiple_gain("rdm_gains", num_networks=25, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_zeroed_goalstea", gain=gain)
     #pnas2018.make_rdm_multiple("rdm_gains", num_networks=25, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_nogain", with_goals=True)
     #pnas2018.make_rdm_multiple("rdm_gains", num_networks=25, rdm_type=analysis.SPEARMAN, save_name="spearman_nogain", with_goals=True)
 
     sys.exit()
-
-
-"""
-rdms=[]
-#num networks should be 10 and 5
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=10, rdm_type=analysis.SPEARMAN, save_name="spearman_1")[0])
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=10, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_1")[0])
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test", num_networks=10, rdm_type=analysis.MAHALANOBIS, save_name="mahalanobis_1")[0])
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=10, noise_after=.1, num_samples=20, save_name="LDt_1_01"))
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=10, noise_after=.5, num_samples=20, save_name="LDt_1_05"))
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test", num_networks=10, noise_after=1., num_samples=20, save_name="LDt_1_1"))
-
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=5, rdm_type=analysis.SPEARMAN, save_name="spearman_2")[0])
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=5, rdm_type=analysis.EUCLIDIAN, save_name="euclidian_2")[0])
-rdms.append(pnas2018.make_rdm_multiple("rdm_measure_test100", num_networks=5, rdm_type=analysis.MAHALANOBIS, save_name="mahalanobis_2")[0])
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=5, noise_after=.1, num_samples=20, save_name="LDt_2_01"))
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=5, noise_after=.5, num_samples=20, save_name="LDt_2_05"))
-rdms.append(pnas2018.make_rdm_multiple_ldt("rdm_measure_test100", num_networks=5, noise_after=1., num_samples=20, save_name="LDt_2_1"))
-
-
-rdm = analysis.rdm_of_rdms(rdms, type=analysis.PEARSON)
-analysis.save_rdm(rdm, filename="rdm_of_rdms", labels=["spearman_1", "euclidian_1", "mahalanobis_1",
-                                                       "LDt_1_01", "LDt_1_05", "LDt_1_1",
-                                                       "spearman_2", "euclidian_2", "mahalanobis_2",
-                                                       "LDt_2_01", "LDt_2_05", "LDt_2_1"])
-sys.exit()
-"""
-#analysis.loss_big_plot()
-#analysis.bargraph_with_without_goalunits("myfile4.png")
-#analysis.barplot_figure_errors("myfile2.png")
-#analysis.barplot_figure_ablations("myfile3.png")
-#analysis.plot_tsne("mds_tsne.txt", "tsne.png")
-#sys.exit()
-# import time
-# from pnas import pnas2018
-# for i in range(20):
-#     model = nn.ElmanGoalNet(size_hidden=100, size_observation=9, size_action=8, size_goal1=0, size_goal2=0,
-#                             #algorithm=nn.SGD, initialization="normal", learning_rate=0.1)
-#                             algorithm=nn.ADAM, nonlinearity=nn.RELU, initialization=nn.HE, learning_rate=0.01, L2_reg=0.00)
-#     model, _ = pnas2018.train(model, noise=0.0, initial_context=pnas2018.ZEROS, iterations=1000)
-#     utils.save_object("pnasoverfittest100_1000", model)
-#pnas2018.make_rdm_multiple_ldt("pnasldttest_0_0_noiseafter_sgd50", noise_during=0.0, noise_after=0.10, num_networks=10,
-#                               num_samples=50, initial_context=pnas2018.ZEROS, log_scale=False)
-#pnas2018.make_rdm_multiple("pnasoverfittest100_1000", num_networks=20, with_goals=False, title="-", save_files=True)
-
-#sys.exit()
-#import tensorflow as tf
-
-# LOAD RDM TXT FILES.
-#rdm1 = np.loadtxt("rdm_goals.txt")
-#rdm2 = np.loadtxt("rdm_nogoals2.txt")
-
-# Reorder to group identical actions.
-
-
-# Reorder to group identical subsequences
-
-
-#diff = rdm1 - rdm2
-#utils.save_rdm(diff, "diff_goalsnogoals", labels=[], title="Diff: goals nogoals", color=analysis.RDM_COLOR_DIVERGING)
-#sys.exit()
-#sys_details = tf.sysconfig.get_build_info()
-#cuda_version = sys_details["cuda_version"]
-#print(cuda_version)
 
 if False:
     from goalenv import goalenv2020
@@ -391,6 +355,7 @@ if True:
     import cognitiveload.model2 as mod2
     mod3.FAST_RDM = True
     import cognitiveload.cogloadtask as task
+    import rdm
     # Use the easy arithmetic sequences :-)
     task.arithmetic_seqs = task.arithmetic_seqs_easy
     hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00001)
@@ -417,15 +382,32 @@ if True:
     #                         blanks=True)
 
     hrp.reg_strength = 0.0
+    # matrix processing test
+    import rdm
+    import numpy as np
+
+    props = []
+    v = ['1', '2', '1', '2', '2', '1']
+    s = ['1', '2', '1', '1', '2', '2']
+    n = ['n', 'n', 'y', 'y', 'y', 'y']
+    for i in range(len(v)):
+        props.append({'v': v[i], 's': s[i], 'n': n[i]})
+
+    mat = np.ones((len(props), len(props)))
+    np.fill_diagonal(mat, 0)
+
+    #test_rdm = rdm.rdm(props, matrix_values=mat)
+    #averaged_rdm = test_rdm.average_values(["v", "n"], ["s"])
+    #averaged_rdm.save(filename="test rdm")
 
     mod3.run_model3_multiple(stopping_params=stopping,
-                             num_networks=7, #from_file="model3_euclidian_activations", #"model3_distances_spearman",
+                             num_networks=2, from_file="model3_euclidian_activations", #"model3_distances_spearman",
                              name="model3_euclidian_activations",
                              hrp=None,
                              nnparams=nnparams,
                              blanks=True,
-                             mode=task.RDM_MODE_AVERAGE_ACTIVATIONS,
-                             type=analysis.EUCLIDIAN)
+                             mode=task.RDM_MODE_AVERAGE_DISTANCES,
+                             type=rdm.EUCLIDIAN)
     sys.exit()
     mod3.run_model3_multiple(stopping_params=stopping,
                              num_networks=25, from_file="model3_plusminus", #"model3_distances_spearman",
@@ -434,7 +416,7 @@ if True:
                              nnparams=nnparams,
                              blanks=True,
                              mode=task.RDM_MODE_AVERAGE_DISTANCES,
-                             type=analysis.EUCLIDIAN)
+                             type=rdm.EUCLIDIAN)
 
     mod3.run_model3_multiple(stopping_params=stopping,
                              num_networks=25, from_file="model3_plusminus",
@@ -443,7 +425,7 @@ if True:
                              nnparams=nnparams,
                              blanks=True,
                              mode=task.RDM_MODE_AVERAGE_DISTANCES,
-                             type=analysis.SPEARMAN)
+                             type=rdm.SPEARMAN)
 
     mod3.run_model3_multiple(stopping_params=stopping,
                              num_networks=25, from_file="model3_plusminus",
@@ -452,7 +434,7 @@ if True:
                              nnparams=nnparams,
                              blanks=True,
                              mode=task.RDM_MODE_AVERAGE_ACTIVATIONS,
-                             type=analysis.SPEARMAN)
+                             type=rdm.SPEARMAN)
 
     mod2.run_model2_multiple(stopping_params=stopping,
                              num_networks=25,  from_file="model2_plusminus",
@@ -460,7 +442,7 @@ if True:
                              nnparams=nnparams,
                              blanks=True,
                              mode=task.RDM_MODE_AVERAGE_DISTANCES,
-                             type=analysis.SPEARMAN)
+                             type=rdm.SPEARMAN)
 
 
     mod2.run_model2_multiple(stopping_params=stopping,
@@ -469,7 +451,7 @@ if True:
                              nnparams=nnparams,
                              blanks=True,
                              mode=task.RDM_MODE_AVERAGE_ACTIVATIONS,
-                             type=analysis.EUCLIDIAN)
+                             type=rdm.EUCLIDIAN)
 
     mod2.run_model2_multiple(stopping_params=stopping,
                              num_networks=25,  from_file="model2_plusminus",
@@ -477,7 +459,7 @@ if True:
                              nnparams=nnparams,
                              blanks=True,
                              mode=task.RDM_MODE_AVERAGE_DISTANCES,
-                             type=analysis.EUCLIDIAN)
+                             type=rdm.EUCLIDIAN)
 
     mod2.run_model2_multiple(stopping_params=stopping,
                              num_networks=25,  from_file="model2_plusminus",
@@ -485,7 +467,7 @@ if True:
                              nnparams=nnparams,
                              blanks=True,
                              mode=task.RDM_MODE_AVERAGE_ACTIVATIONS,
-                             type=analysis.SPEARMAN)
+                             type=rdm.SPEARMAN)
 
     sys.exit()
 

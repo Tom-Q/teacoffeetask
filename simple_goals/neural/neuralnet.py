@@ -231,8 +231,6 @@ class GoalNet(NeuralNet):
             self.goal2_softmax = self.goal2_layer.feedforward(hidden_activation)
             self.goal2 = layers.winner_take_all(self.goal2_softmax)
 
-
-        # The actual chosen action and goal
         self.save_history()
 
     def new_episode(self, initial_context=ZEROS):
@@ -276,7 +274,7 @@ class GoalNet(NeuralNet):
         loss += extra_loss
         gradients = tape.gradient(loss, self.all_weights)
         self.optimizer.update_weights(gradients, self.learning_rate)
-        self.clear_history()
+        self.clear_history()  # History will be used for various other stuff
         return loss
 
     def train_obsolete(self, targets_action, targets_goal1, targets_goal2, tape, extra_loss=0.):
@@ -323,116 +321,188 @@ class GoalNet(NeuralNet):
 
 # Convenience class that contains and manages three ACC Nets
 class TripleACCNet(NeuralNet):
-    def __init__(self, size_observation, size_action, size_hidden1, size_hidden2):
+    def __init__(self, size_observation, size_action, layer_sizes, output_layer=True):
         super().__init__(size_observation, size_action)
-        self.ACCNetPrediction = ACCNet(size_observation, size_action, size_hidden1, size_hidden2)
+        self.ACCNetPrediction = ACCNet(size_observation, size_action, layer_sizes, output_layer)
         self.ACCNetReward = self.ACCNetPrediction.copy_with_same_weights()
         self.ACCNetControl = self.ACCNetPrediction.copy_with_same_weights()
         self.ACCNetPrediction._switch_mode(layers.PREDICT_ONLY)
         self.ACCNetReward._switch_mode(layers.REWARD_ONLY)
         self.ACCNetControl._switch_mode(layers.CONTROL_ONLY)
-        self.PredictionTape = tf.GradientTape()
-        self.RewardTape = tf.GradientTape()
-        self.ControlTape = tf.GradientTape()
-        self.nets = [(self.ACCNetPrediction, self.PredictionTape),
-                     (self.ACCNetReward, self.RewardTape),
-                     (self.ACCNetControl, self.ControlTape)]
+        # Tapes must be initialized in the right context
+        self.PredictionTape = None
+        self.RewardTape = None
+        self.ControlTape = None
+        self.nets = [self.ACCNetPrediction, self.ACCNetReward, self.ACCNetControl]
 
     def feedforward(self, observation):
-        for net, tape in self.nets:
-            with tape:
-                net.feedforward(observation)
+        # Execute each net while only recording with one tape at a time.
+        with self.ControlTape.stop_recording(), self.RewardTape.stop_recording():
+            self.ACCNetPrediction.feedforward(observation)
+        with self.PredictionTape.stop_recording(), self.ControlTape.stop_recording():
+            self.ACCNetReward.feedforward(observation)
+        with self.PredictionTape.stop_recording(), self.RewardTape.stop_recording():
+            self.ACCNetControl.feedforward(observation)
 
-    def new_episode(self):
+    def new_episode(self, initial_context):
         # Note, there should be no stochasticity here.
-        for net, _ in self.nets:
-            net.new_episode()
+        for net in self.nets:
+            net.new_episode(initial_context)
 
     def save_history(self):
-        for net, _ in self.nets:
+        for net in self.nets:
             net.save_history()
 
     def clear_history(self):
-        for net, _ in self.nets:
+        for net in self.nets:
             net.clear_history()
 
     def train(self, dismissed_tape, targets):
         gradients = []
-        total_loss = 0.
-        for net, tape in self.nets:
-            gradient, loss = net.compute_gradients(tape, targets) #TODO: need 3 different tapes, one for each network.
+        ol_total, pl_total, cl_total, l2l_total = 0, 0, 0, 0
+        for net, tape in [(self.ACCNetPrediction, self.PredictionTape),
+                          (self.ACCNetReward, self.RewardTape),
+                          (self.ACCNetControl, self.ControlTape)]:
+            gradient, ol, pl, cl, l2l = net.compute_gradients(tape, targets)
+            ol_total += ol
+            pl_total += pl
+            cl_total += cl
+            l2l_total += l2l
             gradients.append(gradient)
-            total_loss += loss
-        for net, _ in self.nets:
+        for net in self.nets:
             net.update_weights(gradients)
-        return total_loss
+        return ol_total, pl_total, cl_total, l2l_total
 
+    @property
+    def h_action_wta(self):
+        return self.ACCNetPrediction.h_action_wta  # doesn't matter which, all 3 networks should be identical.
+
+    @property
+    def context(self):
+        context = self.ACCNetPrediction.layers[0].representation_layer.h
+        for i in range(len(self.ACCNetPrediction.layers)-1):
+            context = tf.concat((context, self.ACCNetPrediction.layers[i+1].representation_layer.h), axis=1)
+        return context
+
+    def delete_tapes(self):
+        #del self.PredictionTape
+        #del self.RewardTape
+        #del self.ControlTape
+        self.PredictionTape = None
+        self.RewardTape = None
+        self.ControlTape = None
 
 class ACCNet(NeuralNet):
-    def __init__(self, size_observation, size_action, size_hidden1, size_hidden2):
+    def __init__(self, size_observation, size_action, layer_sizes, has_output_layer=False):
         super().__init__(size_observation, size_action)
-        self.size_hidden1 = size_hidden1
-        self.size_hidden2 = size_hidden2
-        self.Layer1 = layers.RewardControlPredLayer(size_input=size_observation, size_output=size_hidden1, size_next=size_hidden2)
-        self.Layer2 = layers.RewardControlPredLayer(size_input=size_hidden1, size_output=size_action, size_next=0,
-                                                    output_nonlinearity=None)
-        self.parameters = self.Layer1.parameters + self.Layer2.parameters
+        self.mode = None
+        self.layers = []
+        self.parameters = []
+        self.layer_sizes = layer_sizes
+        self.has_output_layer = True
+        for i, size in enumerate(layer_sizes):
+            predictive_nonlinearity = tf.nn.sigmoid if i == 0 else tf.nn.tanh  # Corresponds to the LSTM output which is tanh
+            layer = layers.RewardControlPredLayer(size, predictive_nonlinearity=predictive_nonlinearity)
+            self.layers.append(layer)
+            self.parameters += self.layers[-1].parameters
+        if has_output_layer:
+            self.output_layer = layers.BasicLayer(input_size=layer_sizes[-1].output_bottomup,
+                                                  output_size=size_action,
+                                                  nonlinearity=None)
+            self.parameters += self.output_layer.parameters
 
+        self.h_pred_losses = []
+        self.h_ctrl_losses = []
         self.h_action_logits = []
         self.h_action_wta = []
-        self.h_context1 = []
-        self.h_context2 = []
-        self.history = [self.h_action_logits, self.h_action_wta, self.h_context1, self.h_context2]
+        self.h_contexts = []
+        #TODO: Find a more elegant solution
+        for layer in self.layers:
+            self.h_contexts.append([]) # we save the contexts for each layer
+            self.h_pred_losses.append([])
+            self.h_ctrl_losses.append([])
+
+        self.action_logits = None
+        self.action_wta = None
+        self.history = [self.h_action_logits, self.h_action_wta, self.h_pred_losses, self.h_ctrl_losses, self.h_contexts]
         self.optimizer = optimizers.AdamOptimizer(self.parameters)
 
     def feedforward(self, observation):
-        #1. Feedforward
-        bottom_up = self.Layer1.feedforward(observation)
-        self.h_action_logits = self.Layer2.feedforward(bottom_up)
-        self.h_action_wta = layers.winner_take_all(self.h_action_logits)
+        # 1. Feedforward
+        bottomup_activations = observation
+        for layer in self.layers:
+            bottomup_activations = layer.feedforward(bottomup_activations)
+            bottomup_activations = layers.group_normalization(bottomup_activations, 32)  # This does more harm than good
+
+        self.action_logits = self.output_layer.feedforward(bottomup_activations)
+        self.action_wta = layers.winner_take_all(self.action_logits)
 
         #2. Feedbackward
-        top_down = self.Layer2.feedbackward(None)
-        self.Layer1.feedbackward(top_down)
+        topdown_activations = self.action_wta
+        for layer in reversed(self.layers):
+            topdown_activations = layer.feedbackward(topdown_activations)
+            topdown_activations = layers.group_normalization(topdown_activations, 32)
 
-    def new_episode(self):
+        # Keep track of values.
+        self.save_history()
+
+    def new_episode(self, initial_context=None):
         # Note, there should be no stochasticity here.
-        self.Layer1.reset()
-        self.Layer2.reset()
+        for layer in self.layers:
+            layer.reset()
         self.clear_history()
 
     def save_history(self):
-        self.h_action_logits.append(self.h_action_logits)
-        self.h_action_wta.append(copy.deepcopy(self.h_action_wta))
-        self.h_context1.append(self.Layer1.representation_layer.h)
-        self.h_context2.append(self.Layer2.representation_layer.h)
+        self.h_action_logits.append(self.action_logits)
+        self.h_action_wta.append(copy.deepcopy(self.action_wta))
+        for i, layer in enumerate(self.layers):
+            self.h_contexts[i].append(layer.representation_layer.h)
+            self.h_pred_losses[i].append(layer.prediction_loss)
+            self.h_ctrl_losses[i].append(layer.control_loss)
 
     def clear_history(self):
         for data in self.history:
             data.clear()
+        for layer in self.layers: # reinitalize context lists
+            self.h_contexts.append([])
+            self.h_pred_losses.append([])
+            self.h_ctrl_losses.append([])
 
     def _switch_mode(self, mode):
-        self.Layer1.mode = mode
-        self.Layer2.mode = mode
+        for layer in self.layers:
+            layer.mode = mode
+        self.mode = mode
 
     def compute_gradients(self, tape, targets):
-        loss = 0
+        output_loss = 0.
+        prediction_loss = 0.
+        control_loss = 0.
         for i, target in enumerate(targets):
-            if target.action_one_hot is not None:
-                loss += tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, self.h_action_logits[i])
+            if self.mode == None or self.mode == layers.REWARD_ONLY:
+                output_loss += tf.nn.softmax_cross_entropy_with_logits(target, self.h_action_logits[i])  # decision loss
+            for j, _ in enumerate(self.layers):
+                if self.mode == None or self.mode == layers.PREDICT_ONLY:
+                    prediction_loss += self.h_pred_losses[j][i]
+                if self.mode == None or self.mode == layers.CONTROL_ONLY:
+                    control_loss += self.h_ctrl_losses[j][i]
 
-        gradients = tape.gradient(loss, self.parameters)
-        return gradients, loss
+        l2_loss = tf.math.add_n([tf.reduce_sum(tf.abs(parameter)) for parameter in self.parameters]) * 0.00001 # L2 loss.
+        total_loss = output_loss + prediction_loss + control_loss * 0.01 + l2_loss
+        # Can't have L2 loss equal control loss or they cancel each other out
+        gradients = tape.gradient(total_loss, self.parameters, unconnected_gradients=tf.UnconnectedGradients.ZERO)
+        return gradients, output_loss, prediction_loss, control_loss, l2_loss
 
     def update_weights(self, gradients):
         for gradient in gradients:
             self.optimizer.update_weights(gradient, self.learning_rate)
-        self.clear_history()
+
+    def train(self, tape, targets):
+        raise NotImplementedError("Use compute gradients and update weights separately")
 
     def copy_with_same_weights(self):
         # Used to have different gradient updates for the same network
         # Warning, this doesn't copy the hidden state of the recurrent layers (LSTM/GRU).
-        copy = ACCNet(self.size_observation, self.size_action, self.size_hidden1, self.size_hidden2)
+        copy = ACCNet(self.size_observation, self.size_action, self.layer_sizes, self.has_output_layer)
         # Make a deep copy of all network parameters
         for i in range(len(self.parameters)):
             copy.parameters[i].assign(self.parameters[i])
