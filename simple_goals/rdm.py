@@ -84,7 +84,7 @@ class rdm(object):
             return labels
 
     def save(self, filename, title="", labels=None, image=True, csv=True, figsize=None, fontsize=None,
-             color=RDM_COLOR_SEQUENTIAL):
+             color=RDM_COLOR_SEQUENTIAL, dpi=300):
         if figsize is None:
             figsize = 10. * len(self.properties)/48.
         if fontsize is None:
@@ -93,7 +93,7 @@ class rdm(object):
             np.savetxt(filename + '.txt', self.matrix, delimiter="\t", fmt='%.2e')
         if image:
             self.plot_rdm(title, labels, figsize=figsize, fontsize=fontsize, color=color)
-            plt.savefig(filename + '.png', dpi=300, bbox_inches='tight')
+            plt.savefig(filename + '.png', dpi=dpi, bbox_inches='tight')
             plt.clf()
 
     def plot_rdm(self, title, labels=None, show_rdm=False, vmin=None, vmax=None, figsize=None, fontsize=None,
@@ -136,8 +136,6 @@ class rdm(object):
         @param dont_cross_keys: function to identify elements to ignore while averaging
         """
         size_old_mat = len(self.properties)
-        print("max old")
-        print(np.max(self.matrix))
         # 1. Use a hash, based on properties, to form element groups.
         # Elements are grouped together if they have the same preserved keys (same hash of preserved keys).
         # Elements that cross keys are simply discarded.
@@ -242,9 +240,6 @@ class rdm(object):
                     continue
                 else:
                     new_rdm.matrix[j, i] = new_rdm.matrix[i, j]
-
-        print("max new")
-        print(np.max(new_rdm.matrix))
 
         return new_rdm
 

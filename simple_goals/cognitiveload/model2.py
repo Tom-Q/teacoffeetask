@@ -191,7 +191,6 @@ def run_model2_noblanks(from_file=False):
         nnet = nn.GoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
                           size_observation=len(task.symbols), size_action=len(task.symbols),
                           learning_rate=0.005, algorithm=nn.ADAM)
-        nnet.L2_regularization = 0.00001
         train_all_noblanks(nnet, num_training_steps)
         utils.save_object("cogloadtasknet_noblanks", nnet)
     nnet = utils.load_object("cogloadtasknet_noblanks")
@@ -336,10 +335,11 @@ def make_targets_all(seq_bev, seq_ari, start):
 def train_all(stopping_params, nnet, blanks=True): #nnet, num_training_steps = 1000000):
     i=0
     avg_loss = 0.
+
     while not stopping_params.is_time_to_stop(nnet, i): #i < num_training_steps:
         # Pick a random arithmetic seq
         # and a random beverage seq
-        seq_ari = random.choice(task.arithmetic_seqs_easy)
+        seq_ari = random.choice(task.arithmetic_seqs)
         seq_bev = random.choice(task.beverage_seqs)
 
         mode = np.random.choice([task.ONLY_ARI, task.ONLY_BEV, task.BOTH + task.START_BEV, task.BOTH + task.START_ARI])
@@ -376,7 +376,7 @@ def test_network_all(model):
     properties = []
     for start in task.STARTS:
         for seq_bev_id, seq_bev in enumerate(task.beverage_seqs):
-            for seq_ari_id, seq_ari in (task.arithmetic_seqs):
+            for seq_ari_id, seq_ari in enumerate(task.arithmetic_seqs):
                 model.new_episode()
                 ff_all(model, seq_bev, seq_ari, start)
                 context = [c.numpy().flatten() for c in model.h_context]
@@ -398,16 +398,49 @@ def test_network_all(model):
                     accuracy_fullseqs += 1
                 accuracy_totals += accuracy_sequence
                 # Record properties
-                for i in range(sequence_length):
-                    properties.append({'start': start,
-                                       'type': 'both',
-                                       'seq_bev': seq_bev_id,
-                                       'seq_ari': seq_ari_id,
-                                       'timestep': i,
-                                       'timestep_ari': i // 2,
-                                       'timestep_bev': i // 2})
-    accuracy_totals /= 4*4*17
-    accuracy_fullseqs /= 4*4*17
+                for timestep in range(sequence_length):
+                    if start == task.START_ARI:
+                        seq1_type = "ari" if timestep % 2 == 0 else "bev"
+                    else:
+                        seq1_type = "bev" if timestep % 2 == 0 else "ari"
+                    p = {}
+                    p['start_seq'] = "ari" if start == task.START_ARI else "bev"
+                    p['interleaved'] = "yes"
+                    p['timestep'] = str(timestep)
+                    p['timestep_seq1'] = str(timestep // 2)
+                    p['seq1_type'] = seq1_type
+                    op1 = '+' if seq_ari_id < 2 else '-'
+                    op2 = '+' if seq_ari_id % 2 == 0 else '-'
+                    tc = 'c' if seq_bev_id < 2 else 't'
+                    wf = '1' if seq_bev_id % 2 else '2'
+                    if seq1_type == "ari":
+                        p['seq2_type'] = "bev"
+                        p['seq1_ari_op1'] = op1
+                        p['seq1_ari_op2'] = op2
+                        p['seq1_bev_tc'] = None
+                        p['seq1_bev_wf'] = None
+                        p['seq2_ari_op1'] = None
+                        p['seq2_ari_op2'] = None
+                        p['seq2_bev_tc'] = tc
+                        p['seq2_bev_wf'] = wf
+                        p['target'] = task.arithmetic_seqs[seq_ari_id][timestep // 2 + 1]
+                        p['input'] = task.arithmetic_seqs[seq_ari_id][timestep // 2]
+                    else: # seq1_type =="bev"
+                        p['seq2_type'] = "ari"
+                        p['seq1_ari_op1'] = None
+                        p['seq1_ari_op2'] = None
+                        p['seq1_bev_tc'] = tc
+                        p['seq1_bev_wf'] = wf
+                        p['seq2_ari_op1'] = op1
+                        p['seq2_ari_op2'] = op2
+                        p['seq2_bev_tc'] = None
+                        p['seq2_bev_wf'] = None
+                        p['target'] = task.beverage_seqs[seq_bev_id][timestep // 2 + 1]
+                        p['input'] = task.beverage_seqs[seq_bev_id][timestep // 2 + 1]
+                    p['blank'] = "no"  # no blanks
+                    properties.append(p)
+    accuracy_totals /= 32
+    accuracy_fullseqs /= 32
 
     return hidden_activation, accuracy_totals, accuracy_fullseqs, properties
 
@@ -438,16 +471,29 @@ def test_network_ari(model):
         if not sequence_fail:
             accuracy_fullseqs += 1
         accuracy_totals += accuracy_sequence
-        for i in range(sequence_length):
-            properties.append({'start': None,
-                               'type': 'both',
-                               'seq_bev': None,
-                               'seq_ari': seq_ari_id,
-                               'timestep': i,
-                               'timestep_ari': i,
-                               'timestep_bev': None})
-    accuracy_totals /= 4*17
-    accuracy_fullseqs /= 4*17
+        for timestep in range(sequence_length):
+            p = {}
+            p['start_seq'] = "ari"
+            p['interleaved'] = "no"
+            p['timestep'] = str(timestep)
+            p['timestep_seq1'] = str(timestep // 2)
+            p['seq1_type'] = "ari"
+            p['seq2_type'] = None
+            p['seq1_ari_op1'] = '+' if seq_ari_id < 2 else '-'
+            p['seq1_ari_op2'] = '+' if seq_ari_id % 2 == 0 else '-'
+            p['seq1_bev_tc'] = None
+            p['seq1_bev_wf'] = None
+            p['seq2_ari_op1'] = None
+            p['seq2_ari_op2'] = None
+            p['seq2_bev_tc'] = None
+            p['seq2_bev_wf'] = None
+            p['target'] = task.arithmetic_seqs[seq_ari_id][timestep // 2 + 1]
+            p['input'] = task.arithmetic_seqs[seq_ari_id][timestep // 2]
+            p['blank'] = "no" if timestep in [0, 2, 4, 6, 8, 10] else "yes"
+            properties.append(p)
+
+    accuracy_totals /= 4
+    accuracy_fullseqs /= 4
     return hidden_activation, accuracy_totals, accuracy_fullseqs, properties
 
 def test_network_bev(model):
@@ -477,35 +523,34 @@ def test_network_bev(model):
         if not sequence_fail:
             accuracy_fullseqs += 1
         accuracy_totals += accuracy_sequence
-        for i in range(sequence_length):
-            properties.append({'start': None,
-                               'type': 'both',
-                               'seq_bev': seq_bev_id,
-                               'seq_ari': None,
-                               'timestep': i,
-                               'timestep_ari': None,
-                               'timestep_bev': i})
+        for timestep in range(sequence_length):
+            p = {}
+            p['start_seq'] = "bev"
+            p['interleaved'] = "no"
+            p['timestep'] = str(timestep)
+            p['timestep_seq1'] = str(timestep // 2)
+            p['seq1_type'] = "bev"
+            p['seq2_type'] = None
+            p['seq1_ari_op1'] = None
+            p['seq1_ari_op2'] = None
+            p['seq1_bev_tc'] = 'c' if seq_bev_id < 2 else 't'
+            p['seq1_bev_wf'] = '1' if seq_bev_id % 2 == 0 else '2'
+            p['seq2_ari_op1'] = None
+            p['seq2_ari_op2'] = None
+            p['seq2_bev_tc'] = None
+            p['seq2_bev_wf'] = None
+            p['target'] = task.beverage_seqs[seq_bev_id][timestep // 2 + 1]
+            p['input'] = task.beverage_seqs[seq_bev_id][timestep // 2]
+            p['blank'] = "no" if timestep in [0, 2, 4, 6, 8, 10] else "yes"
+            properties.append(p)
     accuracy_totals /= 4
     accuracy_fullseqs /= 4
 
-    return hidden_activation, accuracy_totals, accuracy_fullseqs
+    return hidden_activation, accuracy_totals, accuracy_fullseqs, properties
 
 
-def generate_rdm_all(nnet, rdm_type=rdm.EUCLIDIAN, save_files=True,
-                     from_file=False, delete_blank_states=True, mode=task.RDM_MODE_AVERAGE_DISTANCES):
-    # There's 3 ways to go about this.
-    # 1. AVERAGE THE ACTIVATIONS.
-    # --> First we average activations for a given thing, then we compute distance across those averaged activations.
-    # For instance, activations for tea water first math1 beverage first step 1 is averaged with
-    # activations for tea water first math2 math first step 1.
-    # 2. AVERAGE THE DISTANCES.
-    # The RDM is generated for all steps separately, then distances are averaged. For instance, tea water first math1
-    # beverage first step 1 is averaged with tea water first math2 math first step 1 to produce part of the input for
-    # tea water first step 1. As a result distances on the main diagonal are not equal to zero!
-    # 3. AVERAGE THE DISTANCES BUT WITHOUT THE CROSS-TALK.
-    # Same as above but cross-talk is prevented, such that the diagonal is equal to zero. This is sort of like
-    # controlling for some of the variations caused by ordering or different other task.
-
+def generate_rdm_all(nnet, name, rdm_type=rdm.EUCLIDIAN, save_files=True,
+                     from_file=False, delete_blank_states=True):
     if not from_file:
         hidden_both, accuracy_totals_both, accuracy_fullseqs_both, properties3 = test_network_all(nnet)
         hidden_ari, accuracy_totals_ari, accuracy_fullseqs_ari, properties2 = test_network_ari(nnet)
@@ -519,21 +564,12 @@ def generate_rdm_all(nnet, rdm_type=rdm.EUCLIDIAN, save_files=True,
                  utils.flatten_onelevel(hidden_both)
 
         properties = properties1 + properties2 + properties3
-
-        if mode == task.RDM_MODE_AVERAGE_ACTIVATIONS:
-            hidden = process_activations(hidden, delete_blank_states)
-            np.savetxt('processed_activations' + ".txt", np.stack(hidden, axis=0), delimiter="\t", fmt='%.2e')
-            np.savetxt('average_activations' + ".txt", np.asarray([np.mean(activation) for activation in hidden]), delimiter="\t", fmt='%.2e')
         rdmatrix = rdm.rdm(properties, vectors=hidden, type=rdm_type)
         # save the massive rdm for debug purposes (so that I don't have to generate it all over again everytime).
-        utils.save_object("rdmatrix_test", rdmatrix)
+        utils.save_object(name+"rdmat", rdmatrix)
     else:
-        rdmatrix = utils.load_object("rdmatrix_test")
-    # Labels are always the same in the end
-    labels = utils.flatten_onelevel(task.label_seqs_bev_noblanks) + utils.flatten_onelevel(task.label_seqs_ari)
-    labels *= 2
-    for i in range(len(labels)):
-        rdmatrix.properties[i]['label'] = labels[i]
+        rdmatrix = utils.load_object(name+"rdmat")
+
     return rdmatrix
 
 def process_activations(activations, delete_blank_states):
@@ -600,9 +636,11 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
     # Average over the two starts (math first vs. bev first), while keeping everything else
     preserve = ['interleaved',
                 'timestep_seq1',
-                'seq1_type', #'seq2_type',
-                'seq1_ari_op1', #'seq1_ari_op2',
-                'seq1_bev_tc'] #'seq1_bev_wf',
+                'seq1_type',
+                'seq1_ari_op1',
+                'seq1_bev_tc',
+                'seq1_ari_op2',
+                'seq1_bev_wf'] #'seq1_bev_wf',
                 #'seq2_ari_op1', 'seq2_ari_op2',
                 #'seq2_bev_tc', 'seq2_bev_wf',
                 #'target', 'input']
@@ -625,53 +663,12 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
         return False
 
     rdmatrix = rdmatrix.average_values(preserve_keys=preserve, ignore_func=ignore)
-    rdmatrix.sort_by(("timestep_seq1", False), ("seq1_ari_op1", False),
-                     ("seq1_bev_tc", False), ("seq1_type", True), ("interleaved",False))
+    rdmatrix.sort_by(("timestep_seq1", False),  ("seq1_ari_op2", False), ("seq1_bev_wf", False),
+                     ("seq1_ari_op1", False),
+                     ("seq1_bev_tc", False), ("seq1_type", True), ("interleaved", False))
 
     return rdmatrix
 
-
-CROSSTALK = "crosstalk"
-NOCROSSTALK = "nocrosstalk"
-def process_matrix(rdmatrix, delete_blank_states):
-    # start by deleting blank states. Note, currently this will break the rest of the processing.
-    if delete_blank_states:
-        rdmatrix = delete_blanks(rdmatrix)
-    else:
-        raise NotImplementedError("currently we're just assuming that the blank states are deleted")
-
-    #The best way to do it is I think to set all unwanted values to 0, then do the average distances.
-    # So we zero out all the cross terms - terms which have nothing in common.
-    # etc.
-    # Merge the two different orders (bev first and ari first).
-    start_idx_bev_first = 6*8
-
-    # Here too I should first delete unwanted crosstalk. How could I miss that.
-    # In the bottom right it's again just a diagonal.
-    mask = np.zeros_like(rdmatrix)
-    mask[0:48, :] = 1.
-    mask[:, 0:48] = 1.
-    for i in range(32):
-        start_row=48+i*12
-        end_row=48+(i+1)*12
-        for j in range(16):
-            mask[start_row:end_row, j*48+((i%4)*12):j*48+((i%4)*12)+12] = 1.
-    for i in range(9):
-        mask[i*48:(i+1)*48, i*48:(i+1)*48] = 1.
-    mask[48:48*5, 48*5:48*9] = 0.
-    mask[48 * 5:48 * 9, 48:48 * 5] = 0.
-
-    # Merge:
-    rdmatrix = np.multiply(rdmatrix, mask)
-    # Average out the two orders (bev 1st and ari 1st)
-    rdmatrix = average_orderings(rdmatrix, start_idx_bev_first, crosstalk=NOCROSSTALK)
-    # Re-arrange the matrix
-    rdmatrix = average_combined_nocrosstalk(rdmatrix, start_idx_bev_first)
-    # RDM organization is always the same at the end of processing: beverage, math, bev. combined, math combined.
-    #labels = utils.flatten_onelevel(task.label_seqs_bev_noblanks) + \
-    #         utils.flatten_onelevel(task.label_seqs_ari)
-    #labels *= 2
-    return rdmatrix
 
 def run_model2_multiple(stopping_params, nnparams, blanks, from_file=None,
                         num_networks=1, name="model2", mode=task.RDM_MODE_AVERAGE_DISTANCES,
@@ -693,20 +690,29 @@ def run_model2_multiple(stopping_params, nnparams, blanks, from_file=None,
             utils.save_object(name, nnet)
             networks.append(nnet)
             # Print some stuff
-            hidden_activation, accuracy_totals, accuracy_fullseqs = test_network_all(nnet)
+            hidden_activation, accuracy_totals, accuracy_fullseqs, properties = test_network_all(nnet)
             print("network {0}: ")
             print(accuracy_totals)
             print(accuracy_fullseqs)
-    sum_rdm = None
-    labels = None
+
+    rdms = []
     for net in networks:
-        rdm, labels = generate_rdm_all(net, from_file=False, mode=mode, rdm_type=type)
-        if sum_rdm is None:
-            sum_rdm = rdm
+        rdm1 = generate_rdm_all(net, name=name, from_file=False, rdm_type=type)
+        rdms.append(rdm1)
+        print(np.max(rdm1.matrix))
+
+    final_rdm = None
+    for my_rdm in rdms:
+        if final_rdm is None:
+            final_rdm = process_rdmatrix(rdm.rdm(properties=my_rdm.properties, matrix_values=my_rdm.matrix.copy()), True)
         else:
-            sum_rdm += rdm
-    average_rdm = sum_rdm/num_networks
-    utils.save_rdm(average_rdm, name, labels,  title="RDM training combined " + type + " " + mode)
+            final_rdm.matrix += process_rdmatrix(my_rdm, True).matrix
+    final_rdm.matrix /= num_networks
+
+    set_rdm_labels(final_rdm)
+    # Save it
+    final_rdm.save(name, title="RDM training combined")#, dpi=200, figsize=60, fontsize=0.5)
+
 
 def run_model2(from_file=False):
     if not from_file:
@@ -715,7 +721,7 @@ def run_model2(from_file=False):
         nnet = nn.GoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
                           size_observation=len(task.input_symbols), size_action=len(task.output_symbols),
                           learning_rate=0.01, algorithm=nn.ADAM)
-        nnet.L2_regularization = 0.00001
+        #nnet.L2_regularization = 0.00001
         train_all(nnet, num_training_steps)
         utils.save_object("cogloadtasknet", nnet)
     nnet = utils.load_object("cogloadtasknet")
@@ -728,7 +734,6 @@ def run_model2_deleteblanks(from_file=False):
         nnet = nn.GoalNet(size_hidden=15, initialization=nn.UNIFORM, size_goal1=0, size_goal2=0,
                           size_observation=len(task.input_symbols), size_action=len(task.output_symbols),
                           learning_rate=0.01, algorithm=nn.ADAM)
-        nnet.L2_regularization = 0.00001
         train_all(nnet, num_training_steps)
         utils.save_object("cogloadtasknet_deleteblanks", nnet)
     nnet = utils.load_object("cogloadtasknet")
@@ -742,45 +747,10 @@ def delete_blanks(rdm):
         if property['blank'] == 'yes':
             to_delete.append(idx)
 
-    #to_delete = [1,  3,  5,  7,  9,  # beverage task
-    #             12, 14, 16, 18, 20,
-    #             23, 25, 27, 29, 31,
-    #             34, 36, 38, 40, 42,
-    #             45, 47, 49, 51, 53,  # math task
-    #             56, 58, 60, 62, 64,
-    #             67, 69, 71, 73, 75,
-    #             78, 80, 82, 84, 86]
     for id in reversed(to_delete): # start from the end obviously
         rdm.delete_entry(id)
     return rdm
 
-# The rdmatrix has two orderings, bev first then arithmetic first. This averages distances across the two orders.
-def average_orderings(rdmatrix, start_idx, crosstalk=CROSSTALK):
-    # each order has 12*16 rdm rows.
-    # rows
-    for idx in range(start_idx, start_idx+12*16):
-        if idx % 2 == 0:  # Beverage sequences
-            rdmatrix[idx, :] += rdmatrix[idx + 12 * 16 + 1, :]
-        else:  # arithmetic sequences
-            rdmatrix[idx, :] += rdmatrix[idx + 12 * 16 - 1, :]
-
-        rdmatrix[idx, :] /= 2.
-    # columns
-    for idx in range(start_idx, start_idx+12*16):
-        if idx % 2 == 0:
-            rdmatrix[:, idx] += rdmatrix[:, idx + 12 * 16 + 1]
-        else:
-            rdmatrix[:, idx] += rdmatrix[:, idx + 12 * 16 - 1]
-
-        rdmatrix[:, idx] /= 2.
-
-    # in the case where the matrix was pruned to avoid crosstalk, we end up doing less averaging
-    # and so we've divided out too much
-    if crosstalk == NOCROSSTALK:
-        rdmatrix[start_idx:, start_idx:] *= 2
-
-    # Cut off the part that we've averaged out.
-    return rdmatrix[:start_idx+12*16,:start_idx+12*16]
 
 # The rdmatrix has 4x4 = 16 different combined sequences (after merging the two orderings).
 # This averages distances for all instances of each sequence, e.g. all 4 instances of coffee water first are averaged.
@@ -910,3 +880,23 @@ def stop_condition(nnet, blanks, min_accuracy=1.):
         return np.all(accuracy_both >= [.75, .75, .5, .5, 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
         np.all(accuracy_ari >= [1., .5, 1., 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
         np.all(accuracy_bev >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1.])
+
+
+def set_rdm_labels(myrdm):
+    for property in myrdm.properties:
+        timestep = int(property["timestep_seq1"])
+        property["label"] = ""
+
+        if timestep == 0:
+            if property["seq1_type"] == "bev":
+                property["label"] += "Coffee" if property["seq1_bev_tc"] == "c" else "Tea"
+                if property["interleaved"] == "yes":
+                    property["label"] += " (interleaved)"
+            else:
+                property["label"] += "Math ('+' 1st" if property["seq1_ari_op1"] == "+" else "Math ('-' 1st"
+                if property["interleaved"] == "yes":
+                    property["label"] += ", interleaved"
+                property["label"] += ")"
+            property["label"] += " - "
+        property["label"] += str(timestep + 1)
+        #property["label"] += ": " + property["input"] + ">" + property["target"]

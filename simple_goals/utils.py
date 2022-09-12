@@ -1,5 +1,6 @@
 # A collection of useful snippets of code
 import numpy as np
+import random
 from datetime import datetime
 import pickle
 import os
@@ -9,6 +10,10 @@ from timeit import default_timer as timer
 import matplotlib.pyplot as plt
 import analysis
 import copy
+
+def initialize_random_seeds(seed):
+    np.random.seed(seed)  # Note: This must be done before any other random calls are made.
+    random.seed(seed)
 
 SAVE_FOLDER='models'
 

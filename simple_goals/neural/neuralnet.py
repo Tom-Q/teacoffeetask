@@ -240,7 +240,7 @@ class GoalNet(NeuralNet):
         if initial_context == ZEROS:
             self.hidden_layer.reset()
         elif initial_context == UNIFORM:
-            state = np.float32(np.random.uniform(0.01, 0.99, (1, self.size_hidden)))
+            self.hidden_layer.reset(state=np.float32(np.random.uniform(0.01, 0.99, (1, self.size_hidden))))
         else:
             raise ValueError("Initial context value not implemented")
         if self.size_goal1 > 0:

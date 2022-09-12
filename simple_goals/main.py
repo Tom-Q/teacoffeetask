@@ -3,6 +3,7 @@ import utils
 import sys
 from neural import neuralnet as nn, optimizers, layers
 
+utils.initialize_random_seeds(1)
 
 import analysis
 
@@ -357,8 +358,8 @@ if True:
     import cognitiveload.cogloadtask as task
     import rdm
     # Use the easy arithmetic sequences :-)
-    task.arithmetic_seqs = task.arithmetic_seqs_easy
-    hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00001)
+    task.arithmetic_seqs = task.arithmetic_seqs
+    hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.0)
     nnparams = nn.ParamsGoalNet(algorithm=optimizers.ADAM,
                                 nonlinearity=nn.RELU,
                                 initialization=utils.HE,
@@ -367,66 +368,46 @@ if True:
                                 size_observation=None,  #
                                 size_hidden=25,
                                 L1_reg=0, L2_reg=0.0)
-    stopping = nn.ParamsStopping(max_iterations=150001, min_iterations=1000, check_frequency=1000,
-                                 stop_condition=mod3.stop_condition, blanks=True, min_accuracy=1.0)
+    stopping = nn.ParamsStopping(max_iterations=20000, min_iterations=1000, check_frequency=1000,
+                                 stop_condition=mod3.stop_condition, blanks=True, min_accuracy=1.)
     #i=-1
     #print(i)
     #hrp.reg_strength = 0.001
     #nnparams.L2_reg = 0.0
-
-    #mod3.run_model3_multiple(stopping_params=stopping,
-    #                         num_networks=25, #from_file="model3-bis",
-    #                         name="model3-gradient",
-    #                         hrp=hrp,
-    #                         nnparams=nnparams,
-    #                         blanks=True)
 
     hrp.reg_strength = 0.0
     # matrix processing test
     import rdm
     import numpy as np
 
-    props = []
-    v = ['1', '2', '1', '2', '2', '1']
-    s = ['1', '2', '1', '1', '2', '2']
-    n = ['n', 'n', 'y', 'y', 'y', 'y']
-    for i in range(len(v)):
-        props.append({'v': v[i], 's': s[i], 'n': n[i]})
-
-    mat = np.ones((len(props), len(props)))
-    np.fill_diagonal(mat, 0)
-
     #test_rdm = rdm.rdm(props, matrix_values=mat)
     #averaged_rdm = test_rdm.average_values(["v", "n"], ["s"])
     #averaged_rdm.save(filename="test rdm")
 
+    #mod3.run_model3_multiple(stopping_params=stopping,
+    #                         num_networks=20, from_file="model3_euclidian_activations", #"model3_distances_spearman",
+    #                         name="model3_spearman_avdistances",
+    #                         hrp=None,
+    #                         nnparams=nnparams,
+    #                         blanks=True,
+    #                         type=rdm.EUCLIDIAN)
+    #sys.exit()
+
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=25, #from_file="model2_euclidian_distances",
+                             name="model2_euclidian_distances_96",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN)
+    #sys.exit()
     mod3.run_model3_multiple(stopping_params=stopping,
-                             num_networks=2, from_file="model3_euclidian_activations", #"model3_distances_spearman",
-                             name="model3_euclidian_activations",
+                             num_networks=25, from_file="model3_euclidian_distances",
+                             name="model3_euclidian_distances_96",
                              hrp=None,
                              nnparams=nnparams,
                              blanks=True,
-                             mode=task.RDM_MODE_AVERAGE_DISTANCES,
                              type=rdm.EUCLIDIAN)
     sys.exit()
-    mod3.run_model3_multiple(stopping_params=stopping,
-                             num_networks=25, from_file="model3_plusminus", #"model3_distances_spearman",
-                             name="model3_euclidian_distances",
-                             hrp=None,
-                             nnparams=nnparams,
-                             blanks=True,
-                             mode=task.RDM_MODE_AVERAGE_DISTANCES,
-                             type=rdm.EUCLIDIAN)
-
-    mod3.run_model3_multiple(stopping_params=stopping,
-                             num_networks=25, from_file="model3_plusminus",
-                             name="model3_spearman_distances",
-                             hrp=None,
-                             nnparams=nnparams,
-                             blanks=True,
-                             mode=task.RDM_MODE_AVERAGE_DISTANCES,
-                             type=rdm.SPEARMAN)
-
     mod3.run_model3_multiple(stopping_params=stopping,
                              num_networks=25, from_file="model3_plusminus",
                              name="model3_spearman_activations",
