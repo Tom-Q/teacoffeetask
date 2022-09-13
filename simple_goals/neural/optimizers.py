@@ -23,8 +23,8 @@ class MomentumSGDOptimizer(Optimizer):
         self.t = 0
 
     def update_weights(self, gradients, learning_rate):
+        self.t+=1
         for i in range(len(self.weights_list)):
-            self.t+=1
             self.momentum[i] = self.beta * self.momentum[i] + (1 - self.beta) * gradients[i]
             unbiased_momentum = self.momentum[i] / (1 - self.beta ** self.t)
             self.weights_list[i].assign_sub(learning_rate * unbiased_momentum)
@@ -51,8 +51,8 @@ class AdamOptimizer(Optimizer):
         self.t = 0
 
     def update_weights(self, gradients, learning_rate):
+        self.t += 1
         for i in range(len(self.weights_list)):
-            self.t+=1
             self.firstmoment[i] = self.beta1 * self.firstmoment[i] + (1 - self.beta1) * gradients[i]
             self.secondmoment[i] = self.beta2 * self.secondmoment[i] + (1 - self.beta2) * tf.square(gradients[i])
             unbiased_firstmoment = self.firstmoment[i] / (1 - self.beta1 ** self.t)  # Probably useless for me but that's part of ADAM.

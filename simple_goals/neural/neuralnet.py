@@ -164,16 +164,16 @@ class GoalNet(NeuralNet):
         size_hidden_input = self.size_observation + self.size_action + self.size_goal1 + self.size_goal2
         if recurrent_layer == ELMAN:
             self.hidden_layer = layers.ElmanLayer(size_hidden_input, self.size_hidden, initial_context=None,
-                                                  nonlinearity=self.nonlinearity, initialization=initialization)
+                                                  nonlinearity=self.nonlinearity, initialization=self.initialization)
         elif recurrent_layer == GRU:
             self.hidden_layer = layers.GRULayer(size_hidden_input, self.size_hidden)
         elif recurrent_layer == LSTM:
             self.hidden_layer = layers.LSTMLayer(size_hidden_input, self.size_hidden)
         else:
             raise NotImplementedError("unknown layer type")
-        self.goal1_layer = layers.BasicLayer(utils.initialize([self.size_hidden, self.size_goal1], initialization))
-        self.goal2_layer = layers.BasicLayer(utils.initialize([self.size_hidden, self.size_goal2], initialization))
-        self.action_layer = layers.BasicLayer(utils.initialize([self.size_hidden, self.size_action], initialization))
+        self.goal1_layer = layers.BasicLayer(utils.initialize([self.size_hidden, self.size_goal1], self.initialization))
+        self.goal2_layer = layers.BasicLayer(utils.initialize([self.size_hidden, self.size_goal2], self.initialization))
+        self.action_layer = layers.BasicLayer(utils.initialize([self.size_hidden, self.size_action], self.initialization))
 
         self.all_weights = self.hidden_layer.parameters + self.action_layer.parameters +\
                            self.goal1_layer.parameters + self.goal2_layer.parameters
@@ -188,9 +188,9 @@ class GoalNet(NeuralNet):
         self.history = [self.h_action_softmax, self.h_goal1_softmax, self.h_goal2_softmax,
                         self.h_action_wta, self.h_goal1_wta, self.h_goal2_wta, self.h_context]
 
-        if algorithm == optimizers.SGD: self.optimizer = optimizers.SGDOptimizer(self.all_weights)
-        elif algorithm == optimizers.RMSPROP: self.optimizer = optimizers.RMSPropOptimizer(self.all_weights)
-        elif algorithm == optimizers.ADAM: self.optimizer = optimizers.AdamOptimizer(self.all_weights)
+        if self.algorithm == optimizers.SGD: self.optimizer = optimizers.SGDOptimizer(self.all_weights)
+        elif self.algorithm == optimizers.RMSPROP: self.optimizer = optimizers.RMSPropOptimizer(self.all_weights)
+        elif self.algorithm == optimizers.ADAM: self.optimizer = optimizers.AdamOptimizer(self.all_weights)
         else:
             raise ValueError("Algorithm must be SGD, RMSPROP, or ADAM. Nothing else implemented ATM.")
 

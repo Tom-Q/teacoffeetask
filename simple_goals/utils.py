@@ -52,10 +52,18 @@ def onehot_to_str(onehot, ordered_keys):
     return ordered_keys[index]
 
 
-def rolling_avg(prev_avg, new_val, speed):
+def rolling_avg(prev_avg, new_val, speed, num=None):
     if not (speed > 0. and speed <= 1.):
         raise ValueError("Should have 0 < speed < 1 for a rolling average, you set speed={0}".format(speed))
-    return prev_avg * (1-speed) + new_val * speed
+    if num is None:
+        return prev_avg * (1-speed) + new_val * speed
+    else:  # average of values so far with more weight on latest data.
+        if num == 0:
+            return new_val
+        elif 1./num < speed:
+            return prev_avg * (1-1./num) + new_val * 1./num
+        else:
+            return prev_avg * (1 - speed) + new_val * speed
 
 
 def save_object(name, object):
@@ -148,8 +156,11 @@ def xavier_initialization(dimensions):
 
 def he_initialization(dimensions):
     # higher and lowre bound hidden layer
-    hb = 2. / np.sqrt(dimensions[1])
-    lb = -hb
+    if dimensions[0] * dimensions[1] != 0:
+        hb = 2. / np.sqrt(dimensions[1])
+        lb = -hb
+    else:  # a zero-sized layer is easier to manipulate than dealing with special cases
+        hb = lb = 0.
     return np.random.uniform(lb, hb, size=dimensions)
 
 

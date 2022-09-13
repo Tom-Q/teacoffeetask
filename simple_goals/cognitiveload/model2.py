@@ -361,8 +361,8 @@ def train_all(stopping_params, nnet, blanks=True): #nnet, num_training_steps = 1
 
             loss = nnet.train(tape, targets)
             loss = loss.numpy()[0]
-            avg_loss = 0.999 * avg_loss + 0.001 * loss
-            if i % 1000 == 0: # or i > (num_training_steps - 20):
+            avg_loss = utils.rolling_avg(prev_avg=avg_loss, new_val=loss, speed=0.5, num=i)
+            if i % 100 == 0: # or i > (num_training_steps - 20):
                 print('{0}, avgloss={1}'.format(i, avg_loss))
             i += 1
     nnet.new_episode() # just clear up the network history to avoid any bad surprises
@@ -638,9 +638,9 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
                 'timestep_seq1',
                 'seq1_type',
                 'seq1_ari_op1',
-                'seq1_bev_tc',
-                'seq1_ari_op2',
-                'seq1_bev_wf'] #'seq1_bev_wf',
+                'seq1_bev_tc']#,
+                #'seq1_ari_op2',
+                #'seq1_bev_wf'] #'seq1_bev_wf',
                 #'seq2_ari_op1', 'seq2_ari_op2',
                 #'seq2_bev_tc', 'seq2_bev_wf',
                 #'target', 'input']
@@ -663,7 +663,7 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
         return False
 
     rdmatrix = rdmatrix.average_values(preserve_keys=preserve, ignore_func=ignore)
-    rdmatrix.sort_by(("timestep_seq1", False),  ("seq1_ari_op2", False), ("seq1_bev_wf", False),
+    rdmatrix.sort_by(("timestep_seq1", False),  #("seq1_ari_op2", False), ("seq1_bev_wf", False),
                      ("seq1_ari_op1", False),
                      ("seq1_bev_tc", False), ("seq1_type", True), ("interleaved", False))
 

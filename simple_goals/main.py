@@ -368,7 +368,7 @@ if True:
                                 size_observation=None,  #
                                 size_hidden=25,
                                 L1_reg=0, L2_reg=0.0)
-    stopping = nn.ParamsStopping(max_iterations=20000, min_iterations=1000, check_frequency=1000,
+    stopping = nn.ParamsStopping(max_iterations=20000, min_iterations=1000, check_frequency=100,
                                  stop_condition=mod3.stop_condition, blanks=True, min_accuracy=1.)
     #i=-1
     #print(i)
@@ -394,12 +394,12 @@ if True:
     #sys.exit()
 
     mod2.run_model2_multiple(stopping_params=stopping,
-                             num_networks=25, #from_file="model2_euclidian_distances",
-                             name="model2_euclidian_distances_96",
+                             num_networks=10, #from_file="model2_euclidian_distances_initialization_test",
+                             name="model2_euclidian_distances_initialization_test",
                              nnparams=nnparams,
                              blanks=True,
                              type=rdm.EUCLIDIAN)
-    #sys.exit()
+    sys.exit()
     mod3.run_model3_multiple(stopping_params=stopping,
                              num_networks=25, from_file="model3_euclidian_distances",
                              name="model3_euclidian_distances_96",
