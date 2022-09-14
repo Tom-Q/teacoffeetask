@@ -182,8 +182,8 @@ def stop_condition(nnet, blanks, min_accuracy=1.):
            np.all(accuracy_ari >= [1., .5, 1., 1., 1., min_accuracy]) and \
            np.all(accuracy_bev >= [.5, .5, 1., 1., 1., 1.])
     elif blanks:
-        return np.all(accuracy_both >= [.75, .75, .5, .5, 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
-        np.all(accuracy_ari >= [1., 1., .5, 1., 1., 1., 1., 1., 1., 1., min_accuracy]) and \
+        return np.all(accuracy_both >= [.5, .5, .75, .75, .75, .75, 1., 1., 1., 1., 1., min_accuracy]) and \
+        np.all(accuracy_ari >= [.5, 1., 1., 1., .5, 1., 1., 1., 1., 1., min_accuracy]) and \
         np.all(accuracy_bev >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1.])
 
 

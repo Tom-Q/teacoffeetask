@@ -395,8 +395,8 @@ def test_network_all(model):
                 if not sequence_fail:
                     accuracy_fullseqs += 1
                 accuracy_totals += accuracy_sequence
-    accuracy_totals /= 4*4*17
-    accuracy_fullseqs /= 4*4*17
+    accuracy_totals /= 4*4*2
+    accuracy_fullseqs /= 4*4*2
 
     return hidden_activation, accuracy_totals, accuracy_fullseqs
 
@@ -426,8 +426,8 @@ def test_network_ari(model):
         if not sequence_fail:
             accuracy_fullseqs += 1
         accuracy_totals += accuracy_sequence
-    accuracy_totals /= 4*17
-    accuracy_fullseqs /= 4*17
+    accuracy_totals /= 4
+    accuracy_fullseqs /= 4
     return hidden_activation, accuracy_totals, accuracy_fullseqs
 
 def test_network_bev(model):

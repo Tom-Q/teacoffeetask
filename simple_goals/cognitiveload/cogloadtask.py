@@ -15,10 +15,10 @@ START_BEV = "start_bev"
 START_ARI = "start_ari"
 STARTS = [START_BEV, START_ARI]
 
-output_symbols = ['0', '1', '2', '3', '+', '-', '=',
+output_symbols = ['0', '1', '2', '4', '6', '+', '-', '=',
            "tea", "coffee", "water", "stir", "sugar", "cream", "serve_tea", "serve_coffee"]
 
-input_symbols = ['1', '2', '+', '-', '=',
+input_symbols = ['1', '2', '3', '+', '-', '=',
                  "choose", "tea", "coffee", "water", "stir", "sugar", "cream"]
 
 symbols = list(set(output_symbols + input_symbols))
@@ -92,7 +92,7 @@ for seq in minusminusseqs:
     seq.insert(5, '=')
     arithmetic_seqs.append(seq)
 """
-
+"""
 arithmetic_seqs_easy = [['1', '+', '1', '-', '2', '=', '0'],
                         ['2', '+', '1', '-', '2', '=', '1'],
                         ['1', '+', '2', '-', '1', '=', '2'],
@@ -102,7 +102,7 @@ arithmetic_seqs_easy = [['3', '+', '2', '+', '1', '=', '6'],
                         ['3', '+', '2', '-', '1', '=', '4'],
                         ['3', '-', '2', '+', '1', '=', '2'],
                         ['3', '-', '2', '-', '1', '=', '0']]
-"""
+
 label_seqs_ari = [['1->+', '+->1', '1->-', '-->2', '2->=', '=->0'],
                   ['2->+', '+->1', '1->-', '-->2', '2->=', '=->1'],
                   ['1->+', '+->2', '2->-', '-->1', '1->=', '=->2'],
