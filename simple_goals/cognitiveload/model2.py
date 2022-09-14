@@ -566,11 +566,22 @@ def generate_rdm_all(nnet, name, rdm_type=rdm.EUCLIDIAN, save_files=True,
         properties = properties1 + properties2 + properties3
         rdmatrix = rdm.rdm(properties, vectors=hidden, type=rdm_type)
         # save the massive rdm for debug purposes (so that I don't have to generate it all over again everytime).
+        utils.save_object("properties_file", properties)
         utils.save_object(name+"rdmat", rdmatrix)
     else:
         rdmatrix = utils.load_object(name+"rdmat")
-
     return rdmatrix
+
+
+# just for the sake of this
+def _generate_rdm_from_files(activations_files, properties_files, num_files):
+    hiddens = utils.load_objects(activations_files, num_files)
+    properties = utils.load_object(properties_files)
+    rdmatrixes = []
+    for hidden in hiddens:
+        rdmatrixes.append(rdm.rdm(properties, vectors=hidden, type=rdm.EUCLIDIAN))
+    return rdmatrixes
+
 
 def process_activations(activations, delete_blank_states):
     if delete_blank_states:

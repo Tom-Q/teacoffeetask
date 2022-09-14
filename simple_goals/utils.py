@@ -63,7 +63,7 @@ def rolling_avg(prev_avg, new_val, speed, num=None):
         elif 1./num < speed:
             return prev_avg * (1-1./num) + new_val * 1./num
         else:
-            return prev_avg * (1 - speed) + new_val * speed
+            return prev_avg * (1-speed) + new_val * speed
 
 
 def save_object(name, object):
