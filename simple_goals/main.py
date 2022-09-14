@@ -392,20 +392,20 @@ if True:
     #                         blanks=True,
     #                         type=rdm.EUCLIDIAN)
     #sys.exit()
+    if False:
+        rdms = mod2._generate_rdm_from_files("activations_model2_old", "properties_file", 5)
+        final_rdm = None
+        for my_rdm in rdms:
+            if final_rdm is None:
+                final_rdm = mod2.process_rdmatrix(rdm.rdm(properties=my_rdm.properties, matrix_values=my_rdm.matrix.copy()), True)
+            else:
+                final_rdm.matrix += mod2.process_rdmatrix(my_rdm, True).matrix
+        final_rdm.matrix /= 5
 
-    rdms = mod2._generate_rdm_from_files("activations_model2_old", "properties_file", 5)
-    final_rdm = None
-    for my_rdm in rdms:
-        if final_rdm is None:
-            final_rdm = mod2.process_rdmatrix(rdm.rdm(properties=my_rdm.properties, matrix_values=my_rdm.matrix.copy()), True)
-        else:
-            final_rdm.matrix += mod2.process_rdmatrix(my_rdm, True).matrix
-    final_rdm.matrix /= 5
-
-    mod2.set_rdm_labels(final_rdm)
-    # Save it
-    final_rdm.save("test_rdm", title="RDM training combined")#, dpi=200, figsize=60, fontsize=0.5)
-    sys.exit()
+        mod2.set_rdm_labels(final_rdm)
+        # Save it
+        final_rdm.save("test_rdm", title="RDM training combined")#, dpi=200, figsize=60, fontsize=0.5)
+        sys.exit()
 
     mod2.run_model2_multiple(stopping_params=stopping,
                              num_networks=1, #from_file="model2_euclidian_distances_initialization_test",
@@ -413,6 +413,7 @@ if True:
                              nnparams=nnparams,
                              blanks=True,
                              type=rdm.EUCLIDIAN)
+    sys.exit()
 
     mod3.run_model3_multiple(stopping_params=stopping,
                              num_networks=25, from_file="model3_euclidian_distances",
