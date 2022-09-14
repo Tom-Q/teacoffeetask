@@ -552,9 +552,9 @@ def test_network_bev(model):
 def generate_rdm_all(nnet, name, rdm_type=rdm.EUCLIDIAN, save_files=True,
                      from_file=False, delete_blank_states=True):
     if not from_file:
-        hidden_both, accuracy_totals_both, accuracy_fullseqs_both, properties3 = test_network_all(nnet)
-        hidden_ari, accuracy_totals_ari, accuracy_fullseqs_ari, properties2 = test_network_ari(nnet)
-        hidden_bev, accuracy_totals_bev, accuracy_fullseqs_bev, properties1 = test_network_bev(nnet)
+        hidden_bev, accuracy_totals_bev, accuracy_fullseqs_bev, properties_bev = test_network_bev(nnet)
+        hidden_ari, accuracy_totals_ari, accuracy_fullseqs_ari, properties_ari = test_network_ari(nnet)
+        hidden_both, accuracy_totals_both, accuracy_fullseqs_both, properties_both = test_network_all(nnet)
         print("Both: {0}, {1}".format(accuracy_totals_both, accuracy_fullseqs_both))
         print("Ari: {0}, {1}".format(accuracy_totals_ari, accuracy_fullseqs_ari))
         print("Bev: {0}, {1}".format(accuracy_totals_bev, accuracy_fullseqs_bev))
@@ -563,7 +563,7 @@ def generate_rdm_all(nnet, name, rdm_type=rdm.EUCLIDIAN, save_files=True,
                  utils.flatten_onelevel(hidden_ari) +\
                  utils.flatten_onelevel(hidden_both)
 
-        properties = properties1 + properties2 + properties3
+        properties = properties_bev + properties_ari + properties_both
         rdmatrix = rdm.rdm(properties, vectors=hidden, type=rdm_type)
         # save the massive rdm for debug purposes (so that I don't have to generate it all over again everytime).
         utils.save_object("properties_file", properties)
