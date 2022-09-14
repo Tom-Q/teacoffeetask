@@ -357,7 +357,7 @@ if True:
     import cognitiveload.cogloadtask as task
     # Use the easy arithmetic sequences :-)
     task.arithmetic_seqs = task.arithmetic_seqs_easy
-    hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.00001)
+    hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.0)
     nnparams = nn.ParamsGoalNet(algorithm=nn.ADAM,
                                 nonlinearity=nn.RELU,
                                 initialization=nn.HE,
@@ -389,7 +389,7 @@ if True:
     #                         blanks=True)
 
     mod2.run_model2_multiple(stopping_params=stopping,
-                             num_networks=5,  from_file="model2_",
+                             num_networks=5,  #from_file="model2_",
                              name="model2_",
                              nnparams=nnparams,
                              blanks=True)

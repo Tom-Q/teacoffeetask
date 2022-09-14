@@ -488,6 +488,7 @@ def generate_rdm_all(nnet, name, rdm_type=analysis.EUCLIDIAN, save_files=True, t
         hidden = utils.flatten_onelevel(hidden_bev) +\
                  utils.flatten_onelevel(hidden_ari) +\
                  utils.flatten_onelevel(hidden_both)
+        utils.save_object("activations_model2_old", hidden)
         process_activations(hidden, task.RDM_MODE_AVERAGE_DISTANCES_SMART)
 
         if rdm_type == analysis.SPEARMAN:

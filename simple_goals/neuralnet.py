@@ -31,8 +31,8 @@ class MomentumSGDOptimizer(Optimizer):
         self.t = 0
 
     def update_weights(self, gradients, learning_rate):
+        self.t+=1
         for i in range(len(self.weights_list)):
-            self.t+=1
             self.momentum[i] = self.beta * self.momentum[i] + (1 - self.beta) * gradients[i]
             unbiased_momentum = self.momentum[i] / (1 - self.beta ** self.t)
             self.weights_list[i].assign_sub(learning_rate * unbiased_momentum)
@@ -60,8 +60,8 @@ class AdamOptimizer(Optimizer):
         self.t = 0
 
     def update_weights(self, gradients, learning_rate):
+        self.t+=1
         for i in range(len(self.weights_list)):
-            self.t+=1
             self.firstmoment[i] = self.beta1 * self.firstmoment[i] + (1 - self.beta1) * gradients[i]
             self.secondmoment[i] = self.beta2 * self.secondmoment[i] + (1 - self.beta2) * tf.square(gradients[i])
             unbiased_firstmoment = self.firstmoment[i] / (1 - self.beta1 ** self.t)  # Probably useless for me but that's part of ADAM.
@@ -292,7 +292,7 @@ class ElmanGoalNet(NeuralNet):
         self.goal1 = self.goal2 = self.action = self.context = self.action_softmax =\
             self.goal1_softmax = self.goal2_softmax = None
 
-        if initialization == NORMAL:
+        if self.initialization == NORMAL:
             self.hidden_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden + self.size_observation +
                                                                      self.size_action + self.size_goal1 + self.size_goal2,
                                                                      self.size_hidden]))
@@ -301,7 +301,7 @@ class ElmanGoalNet(NeuralNet):
             self.goal2_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_goal2]))
             self.action_layer = Layer(np.random.normal(0., .1, size=[self.size_hidden, self.size_action]))
 
-        elif initialization == UNIFORM:
+        elif self.initialization == UNIFORM:
             self.hidden_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden + self.size_observation +
                                                                      self.size_action + self.size_goal1 + self.size_goal2,
                                                                      self.size_hidden]))
@@ -309,8 +309,8 @@ class ElmanGoalNet(NeuralNet):
             self.goal1_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, self.size_goal1]))
             self.goal2_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, self.size_goal2]))
             self.action_layer = Layer(np.random.uniform(-1, 1., size=[self.size_hidden, self.size_action]))
-        elif initialization == XAVIER or HE:
-            init_const = 1 if initialization == XAVIER else 2
+        elif self.initialization == XAVIER or HE:
+            init_const = 1 if self.initialization == XAVIER else 2
             # higher and lowre bound hidden layer
             hbh = init_const/np.sqrt(self.size_hidden + self.size_observation + self.size_action + self.size_goal1 + self.size_goal2)
             lbh = -hbh
@@ -341,11 +341,11 @@ class ElmanGoalNet(NeuralNet):
         self.h_context = []
         self.history = [self.h_action_softmax, self.h_goal1_softmax, self.h_goal2_softmax,
                         self.h_action_wta, self.h_goal1_wta, self.h_goal2_wta, self.h_context]
-        if algorithm == SGD:
+        if self.algorithm == SGD:
             self.optimizer = SGDOptimizer(self.all_weights)
-        elif algorithm == RMSPROP:
+        elif self.algorithm == RMSPROP:
             self.optimizer = RMSPropOptimizer(self.all_weights)
-        elif algorithm == ADAM:
+        elif self.algorithm == ADAM:
             self.optimizer = AdamOptimizer(self.all_weights)
         else:
             raise ValueError("Algorithm must be SGD, RMSPROP, or ADAM. Nothing else implemented ATM.")
