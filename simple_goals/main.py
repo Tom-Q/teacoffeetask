@@ -389,7 +389,7 @@ if True:
     #                         blanks=True)
 
     mod2.run_model2_multiple(stopping_params=stopping,
-                             num_networks=5,  #from_file="model2_",
+                             num_networks=1,  #from_file="model2_",
                              name="model2_",
                              nnparams=nnparams,
                              blanks=True)
