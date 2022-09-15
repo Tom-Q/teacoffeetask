@@ -549,8 +549,7 @@ def test_network_bev(model):
     return hidden_activation, accuracy_totals, accuracy_fullseqs, properties
 
 
-def generate_rdm_all(nnet, name, rdm_type=rdm.EUCLIDIAN, save_files=True,
-                     from_file=False, delete_blank_states=True):
+def generate_rdm_all(nnet, name, rdm_type=rdm.EUCLIDIAN, from_file=False):
     if not from_file:
         hidden_bev, accuracy_totals_bev, accuracy_fullseqs_bev, properties_bev = test_network_bev(nnet)
         hidden_ari, accuracy_totals_ari, accuracy_fullseqs_ari, properties_ari = test_network_ari(nnet)

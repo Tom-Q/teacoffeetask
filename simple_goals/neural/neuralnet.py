@@ -50,7 +50,7 @@ class ParamsNeuralNet(object):
         self.L1_reg = L1_reg
         self.L2_reg = L2_reg
 
-RELU = "relu"
+
 class ParamsGoalNet(ParamsNeuralNet):
     def __init__(self, size_observation, size_action, size_hidden, initialization, algorithm, nonlinearity, learning_rate,
                  L1_reg=0, L2_reg=0, last_action_inputs=False, size_goal1=0, size_goal2=0):

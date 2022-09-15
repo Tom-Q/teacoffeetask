@@ -357,11 +357,12 @@ if True:
     mod3.FAST_RDM = True
     import cognitiveload.cogloadtask as task
     import rdm
+    import tensorflow as tf
     # Use the easy arithmetic sequences :-)
     task.arithmetic_seqs = task.arithmetic_seqs
     hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.0)
     nnparams = nn.ParamsGoalNet(algorithm=optimizers.ADAM,
-                                nonlinearity=nn.RELU,
+                                nonlinearity=tf.nn.relu,
                                 initialization=utils.HE,
                                 learning_rate=0.001,
                                 size_action=None,  # these will get filled automatically
@@ -408,7 +409,7 @@ if True:
         sys.exit()
 
     mod2.run_model2_multiple(stopping_params=stopping,
-                             num_networks=1, #from_file="model2_euclidian_distances_initialization_test",
+                             num_networks=1, from_file="model2_euclidian_distances_initialization_test",
                              name="model2_euclidian_distances_initialization_test",
                              nnparams=nnparams,
                              blanks=True,

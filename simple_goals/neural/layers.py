@@ -90,7 +90,7 @@ class RecurrentLayer(Layer):
 class ElmanLayer(RecurrentLayer):
     def __init__(self, size_input, size_output, initial_context=None, nonlinearity=tf.nn.relu, initialization=utils.HE):
         super().__init__()
-        self.layer = BasicLayer(self._make_weights(size_input, size_output, initialization), nonlinearity)
+        self.layer = BasicLayer(self._make_weights(size_input, size_output, initialization), nonlinearity=nonlinearity)
         if initial_context is None:
             self.h = np.zeros((1, size_output), dtype = np.float32)
         else:
