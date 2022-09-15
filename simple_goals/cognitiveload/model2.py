@@ -572,13 +572,14 @@ def generate_rdm_all(nnet, name, rdm_type=rdm.EUCLIDIAN, from_file=False):
     return rdmatrix
 
 
+import copy
 # just for the sake of this
 def _generate_rdm_from_files(activations_files, properties_files, num_files):
     hiddens = utils.load_objects(activations_files, num_files)
     properties = utils.load_object(properties_files)
     rdmatrixes = []
     for hidden in hiddens:
-        rdmatrixes.append(rdm.rdm(properties, vectors=hidden, type=rdm.EUCLIDIAN))
+        rdmatrixes.append(rdm.rdm(copy.deepcopy(properties), vectors=hidden, type=rdm.EUCLIDIAN))
     return rdmatrixes
 
 
