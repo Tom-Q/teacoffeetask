@@ -649,18 +649,18 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
                 'timestep_seq1',
                 'seq1_type',
                 'seq1_ari_op1',
-                'seq1_bev_tc',
-                'seq1_ari_op2',
-                'seq1_bev_wf'] #'seq1_bev_wf',
+                'seq1_bev_tc']#,
+                #'seq1_ari_op2',
+                #'seq1_bev_wf'] #'seq1_bev_wf',
                 #'seq2_ari_op1', 'seq2_ari_op2',
                 #'seq2_bev_tc', 'seq2_bev_wf',
                 #'target', 'input']
 
     def ignore(prop1, prop2):
-        #if prop1["seq1_type"] == prop2["seq1_type"]:
-        #    for key in ['seq1_ari_op2', 'seq1_bev_wf']:
-        #        if prop1[key] != prop2[key]:
-        #             return True
+        if prop1["seq1_type"] == prop2["seq1_type"]:
+            for key in ['seq1_ari_op2', 'seq1_bev_wf']:
+                if prop1[key] != prop2[key]:
+                     return True
 
         if prop1["interleaved"] == "yes" or prop2["interleaved"] == "yes":
             if prop1["start_seq"] != prop2["start_seq"]:
@@ -674,7 +674,7 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
         return False
 
     rdmatrix = rdmatrix.average_values(preserve_keys=preserve, ignore_func=ignore)
-    rdmatrix.sort_by(("timestep_seq1", False),  ("seq1_ari_op2", False), ("seq1_bev_wf", False),
+    rdmatrix.sort_by(("timestep_seq1", False),  #("seq1_ari_op2", False), ("seq1_bev_wf", False),
                      ("seq1_ari_op1", False),
                      ("seq1_bev_tc", False), ("seq1_type", True), ("interleaved", False))
 
@@ -702,7 +702,7 @@ def run_model2_multiple(stopping_params, nnparams, blanks, from_file=None,
             networks.append(nnet)
             # Print some stuff
             hidden_activation, accuracy_totals, accuracy_fullseqs, properties = test_network_all(nnet)
-            print("network {0}: ")
+            print("network {0}: ".format(i))
             print(accuracy_totals)
             print(accuracy_fullseqs)
 

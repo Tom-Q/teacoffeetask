@@ -162,7 +162,7 @@ def train_all(stopping_params, nnet, hrp=None, blanks=True):
             loss = nnet.train(tape, targets, apply_extra_loss(nnet, hrp))
             loss = loss.numpy()[0]
             avg_loss = 0.999 * avg_loss + 0.001 * loss
-            if i % 1000 == 0:
+            if i % 100 == 0:
                 _, accuracy_both, _, _ = test_network_all(nnet)
                 _, accuracy_ari, _, _ = test_network_ari(nnet, blanks)
                 _, accuracy_bev, _, _ = test_network_bev(nnet, blanks)
@@ -203,7 +203,7 @@ def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
             networks.append(nnet)
             # Print some stuff
             hidden_activation, accuracy_totals, accuracy_fullseqs, properties = test_network_all(nnet)
-            print("network {0}: ")
+            print("network {0}: ".format(i))
             print(accuracy_totals)
             print(accuracy_fullseqs)
 

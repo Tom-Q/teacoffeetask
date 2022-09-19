@@ -409,16 +409,16 @@ if True:
         sys.exit()
 
     mod2.run_model2_multiple(stopping_params=stopping,
-                             num_networks=25, #from_file="model2_euclidian_distances_initialization_test",
-                             name="model2_euclidian_distances",
+                             num_networks=25, from_file="model2_rdm",
+                             name="model2_rdm",
                              nnparams=nnparams,
                              blanks=True,
                              type=rdm.EUCLIDIAN)
-    #sys.exit()
+    sys.exit()
 
-    mod3.run_model3_multiple(stopping_params=stopping,
+    mod3.run_model2_multiple(stopping_params=stopping,
                              num_networks=25, #from_file="model3_euclidian_distances",
-                             name="model3_euclidian_distances",
+                             name="model3_rdm",
                              hrp=None,
                              nnparams=nnparams,
                              blanks=True,
