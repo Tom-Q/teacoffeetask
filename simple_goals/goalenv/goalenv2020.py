@@ -987,7 +987,7 @@ NUM_TIMESTEPS = 899
 # used to identify perfect accuracy to stop the training
 def stop_condition(model, noise=0., goal1_noise=0., goal2_noise=0., goals=True, num_tests=10,
                    sequence_ids=range(21), noise_per_step=False,
-                   disruption_per_step=False, initialization=nn.SEMINORMAL, do_rdm=False):
+                   disruption_per_step=False, initialization=utils.SEMINORMAL, do_rdm=False):
     test_data = generate_test_data(model, noise=noise,
                                    goal1_noise=goal1_noise, goal2_noise=goal2_noise,
                                    goals=goals, num_tests=num_tests,

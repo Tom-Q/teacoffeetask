@@ -364,7 +364,15 @@ def train_all(stopping_params, nnet, blanks=True): #nnet, num_training_steps = 1
             avg_loss = utils.rolling_avg(prev_avg=avg_loss, new_val=loss, speed=0.5, num=i)
             if i % 100 == 0: # or i > (num_training_steps - 20):
                 print('{0}, avgloss={1}'.format(i, avg_loss))
+            if i == 0 or i == 5 or i == 50 or i == 200 or i == 500 or i == 1000:
+                    my_rdm = generate_rdm_all(nnet, name="mynetrelu"+ str(i), from_file=False, rdm_type=rdm.EUCLIDIAN)
+                    my_rdm = process_rdmatrix(rdm.rdm(properties=my_rdm.properties, matrix_values=my_rdm.matrix.copy()), True)
+                    set_rdm_labels(my_rdm)
+                    my_rdm.save(filename="mynetrelu"+str(i), title="mynetrelu" + str(i))  # , dpi=200, figsize=60, fontsize=0.5)
+
             i += 1
+
+
     nnet.new_episode() # just clear up the network history to avoid any bad surprises
 
 
@@ -649,18 +657,18 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
                 'timestep_seq1',
                 'seq1_type',
                 'seq1_ari_op1',
-                'seq1_bev_tc']#,
-                #'seq1_ari_op2',
-                #'seq1_bev_wf'] #'seq1_bev_wf',
+                'seq1_bev_tc',
+                'seq1_ari_op2',
+                'seq1_bev_wf'] #'seq1_bev_wf',
                 #'seq2_ari_op1', 'seq2_ari_op2',
                 #'seq2_bev_tc', 'seq2_bev_wf',
                 #'target', 'input']
 
     def ignore(prop1, prop2):
-        if prop1["seq1_type"] == prop2["seq1_type"]:
-            for key in ['seq1_ari_op2', 'seq1_bev_wf']:
-                if prop1[key] != prop2[key]:
-                     return True
+        #if prop1["seq1_type"] == prop2["seq1_type"]:
+        #    for key in ['seq1_ari_op1', 'seq1_bev_wf']:
+        #        if prop1[key] != prop2[key]:
+        #             return True
 
         if prop1["interleaved"] == "yes" or prop2["interleaved"] == "yes":
             if prop1["start_seq"] != prop2["start_seq"]:
@@ -674,8 +682,8 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
         return False
 
     rdmatrix = rdmatrix.average_values(preserve_keys=preserve, ignore_func=ignore)
-    rdmatrix.sort_by(("timestep_seq1", False),  #("seq1_ari_op2", False), ("seq1_bev_wf", False),
-                     ("seq1_ari_op1", False),
+    rdmatrix.sort_by(("timestep_seq1", False),  ("seq1_ari_op1", False), ("seq1_bev_wf", False),
+                     ("seq1_ari_op2", False),
                      ("seq1_bev_tc", False), ("seq1_type", True), ("interleaved", False))
 
     return rdmatrix
@@ -700,7 +708,7 @@ def run_model2_multiple(stopping_params, nnparams, blanks, from_file=None,
             train_all(stopping_params, nnet, blanks=blanks) #nnet, num_training_steps=200000)
             utils.save_object(name, nnet)
             networks.append(nnet)
-            # Print some stuff
+            # Print some fluff
             hidden_activation, accuracy_totals, accuracy_fullseqs, properties = test_network_all(nnet)
             print("network {0}: ".format(i))
             print(accuracy_totals)

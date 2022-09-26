@@ -2,11 +2,33 @@
 import utils
 import sys
 from neural import neuralnet as nn, optimizers, layers
+import analysis
+import goalenv
+from goalenv import environment as env, goalenv2020
+import tensorflow as tf
 
 utils.initialize_random_seeds(1)
 
-import analysis
 
+# Redoing the goal environment figures.
+
+if False:
+    model = nn.GoalNet(size_hidden=50, size_observation=29, size_action=19,
+                            size_goal1=len(env.GoalEnvData.goals1_list),
+                            size_goal2=len(env.GoalEnvData.goals2_list),
+                            algorithm=optimizers.ADAM, learning_rate=0.001,
+                            L2_reg=0.0001,
+                            initialization=utils.HE,
+                            nonlinearity=tf.nn.relu,
+                            last_action_inputs=True)
+
+    stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=3010, check_frequency=1000,
+                                 stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
+    model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
+                              noise=0.0, sequences=range(21), context_initialization=nn.ZEROS)
+    utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise", model)
+
+    sys.exit()
 
 if False: # rdm test
     import numpy as np
@@ -27,31 +49,32 @@ if False: # rdm test
     my_rdm.save('sequence', 'sequence sorted') #should be same as order.
     sys.exit()
 
-if False:
+if True:
     from reward_task import reward
+    import rdm
     for i in range(0):
         print(i)
-        model = reward.train_with_goals(nonlinearity=nn.RELU, learning_rate = 0.02)
+        model = reward.train_with_goals(nonlinearity=tf.nn.relu, learning_rate = 0.02)
         #utils.save_object("reward_task_with_goals", model)
         utils.save_object("reward_task_with_goals_relu", model)
     cond="relu"
     nets = "reward_task_with_goals_relu"
     #nets = "reward_task_with_4goals"
-    num_nets =10
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_1111"+cond, gain=[1,1,1,1], skips=[0])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_0022"+cond, gain=[0,0,2,2])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_2200"+cond, gain=[2,2,0,0])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_0044"+cond, gain=[0,0,4,4])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_4400"+cond, gain=[4,4,0,0])
+    num_nets =2
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_1111"+cond, gain=[1,1,1,1])#, skips=[0])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_0022"+cond, gain=[0,0,2,2])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_2200"+cond, gain=[2,2,0,0])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_0044"+cond, gain=[0,0,4,4])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_4400"+cond, gain=[4,4,0,0])
 
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_0000"+cond, gain=[0,0,0,0])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_0011"+cond, gain=[0,0,1,1])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_1100"+cond, gain=[1,1,0,0])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_1122"+cond, gain=[1,1,2,2])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_1110"+cond, gain=[1,1,1,0])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_0001"+cond, gain=[0,0,0,1])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_1112"+cond, gain=[1,1,1,2])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=analysis.EUCLIDIAN, save_name="reward_5_5_52"+cond, gain=[.5,.5,.5,2])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_0000"+cond, gain=[0,0,0,0])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_0011"+cond, gain=[0,0,1,1])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_1100"+cond, gain=[1,1,0,0])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_1122"+cond, gain=[1,1,2,2])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_1110"+cond, gain=[1,1,1,0])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_0001"+cond, gain=[0,0,0,1])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_1112"+cond, gain=[1,1,1,2])
+    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_5_5_52"+cond, gain=[.5,.5,.5,2])
 
     sys.exit()
 
@@ -230,6 +253,8 @@ if False:
 if False:
     from goalenv import goalenv2020
 
+
+
     error_data_list = []
     print("ONLY GOALS")
     for model_type in ["goals"]:
@@ -310,22 +335,22 @@ if False:
             print("\n\n\n" + str(noise))
             for i in range(10):
                 print(i)
-                #model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
-                #                        size_goal1=len(environment.GoalEnvData.goals1_list),
-                #                        size_goal2=len(environment.GoalEnvData.goals2_list),
-                #                        algorithm=nn.ADAM, learning_rate=0.001,
-                #                        L2_reg=0.0001,
-                #                        initialization=nn.HE,
-                #                        nonlinearity=nn.RELU,
-                #                        last_action_inputs=True)
+                model = nn.ElmanGoalNet(size_hidden=50, size_observation=29, size_action=19,
+                                        size_goal1=len(environment.GoalEnvData.goals1_list),
+                                        size_goal2=len(environment.GoalEnvData.goals2_list),
+                                        algorithm=nn.ADAM, learning_rate=0.001,
+                                        L2_reg=0.0001,
+                                        initialization=nn.HE,
+                                        nonlinearity=nn.RELU,
+                                        last_action_inputs=True)
         
-                #stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=3010, check_frequency=1000,
-                #                             stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
-                #model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
-                #                          noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL)
-                #utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise", model)
+                stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=3010, check_frequency=1000,
+                                             stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
+                model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
+                                          noise=0.0, sequences=range(21), context_initialization=nn.SEMINORMAL)
+                utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise", model)
 
-                #model = utils.load_object(model_files, i)  #"bigmodel1_nogoals_relu_adam_nonoise", i)
+                model = utils.load_object(model_files, i)  #"bigmodel1_nogoals_relu_adam_nonoise", i)
 
                 test_data = goalenv2020.generate_test_data(model, noise=noise,
                                                            goal1_noise=0., goal2_noise=0.,
@@ -358,9 +383,9 @@ if True:
     import cognitiveload.cogloadtask as task
     import rdm
     import tensorflow as tf
-    # Use the easy arithmetic sequences :-)
-    task.arithmetic_seqs = task.arithmetic_seqs
-    hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.0)
+
+    # 1. one network with tanh. Make RDMs at 1, 10, 100, 1000
+    hrp = mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.0)
     nnparams = nn.ParamsGoalNet(algorithm=optimizers.ADAM,
                                 nonlinearity=tf.nn.relu,
                                 initialization=utils.HE,
@@ -368,9 +393,56 @@ if True:
                                 size_action=None,  # these will get filled automatically
                                 size_observation=None,  #
                                 size_hidden=25,
-                                L1_reg=0, L2_reg=0.0)
-    stopping = nn.ParamsStopping(max_iterations=20000, min_iterations=1000, check_frequency=100,
+                                L1_reg=0, L2_reg=0)
+
+    stopping = nn.ParamsStopping(max_iterations=10000, min_iterations=200, check_frequency=200,
                                  stop_condition=mod3.stop_condition, blanks=True, min_accuracy=1.)
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=1,  # from_file=initialization + "_l2"+str(L2_reg) + str_nl + optimizer[0],
+                             name="relu_evolution_over_time",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN)
+    sys.exit()
+    # Use the easy arithmetic sequences :-)
+    for optimizer in [optimizers.SGD]:#, optimizers.ADAM]:
+        for initialization in [utils.NORMAL]:#, utils.HE]:
+            for nonlinearity in [tf.nn.relu]:#[tf.nn.sigmoid, tf.nn.tanh, tf.nn.relu]:
+                for L2_reg in [0.001]:#, 0.0]:
+                    if optimizer == optimizers.SGD:
+                        if nonlinearity == tf.nn.sigmoid:
+                            lr = 0.1 # sigmoid is super slow to learn
+                        else:
+                            lr = 0.005
+                    else: # ADAM
+                        if nonlinearity == tf.nn.sigmoid:
+                            lr = 0.01
+                        else:
+                            lr = 0.001
+                    hrp=mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.0)
+                    nnparams = nn.ParamsGoalNet(algorithm=optimizer,
+                                                nonlinearity=nonlinearity,
+                                                initialization=initialization,
+                                                learning_rate=lr,
+                                                size_action=None,  # these will get filled automatically
+                                                size_observation=None,  #
+                                                size_hidden=25,
+                                                L1_reg=0, L2_reg=L2_reg)
+                    stopping = nn.ParamsStopping(max_iterations=15000, min_iterations=200, check_frequency=200,
+                                                 stop_condition=mod3.stop_condition, blanks=True, min_accuracy=1.)
+                    if nonlinearity == tf.nn.sigmoid:
+                        str_nl = "_sig_"
+                    elif nonlinearity == tf.nn.tanh:
+                        str_nl = "_tanh_"
+                    else:
+                        str_nl = "_relu_"
+                    mod2.run_model2_multiple(stopping_params=stopping,
+                                             num_networks=2, #from_file=initialization + "_l2"+str(L2_reg) + str_nl + optimizer[0],
+                                             name=initialization + "_l2"+str(L2_reg) + str_nl + optimizer[0],
+                                             nnparams=nnparams,
+                                             blanks=True,
+                                             type=rdm.EUCLIDIAN)
+    sys.exit()
     #i=-1
     #print(i)
     #hrp.reg_strength = 0.001
@@ -409,8 +481,8 @@ if True:
         sys.exit()
 
     mod2.run_model2_multiple(stopping_params=stopping,
-                             num_networks=25, from_file="model2_rdm",
-                             name="model2_rdm",
+                             num_networks=25, from_file="model2_rdm_rich",
+                             name="model2_rdm_rich",
                              nnparams=nnparams,
                              blanks=True,
                              type=rdm.EUCLIDIAN)

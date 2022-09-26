@@ -153,7 +153,7 @@ class rdm(object):
                     dont_cross_count += 1
                     continue
 
-                # 2. b also discard elements that would go straight to the diagonal.
+                # 2. b also discard elements that would go straight to the diagonal (identical keys).
                 group_key_r = ""
                 group_key_c = ""
                 for key in preserve_keys:
@@ -162,7 +162,7 @@ class rdm(object):
                 if group_key_r == group_key_c:
                     continue
 
-                # 2.c If not crossed, and not diagonal make a hash key from the relevant properties,
+                # 2.c If not crossed, and not diagonal, make a hash key from the relevant properties,
                 # and add to the corresponding group, or create it if needed
                 sorted_keys = sorted([group_key_r, group_key_c])  #2A 1A is the same as 1A 2A. It feels like this shouldn't matter but it does!!
                 group_key = sorted_keys[0] + sorted_keys[1]

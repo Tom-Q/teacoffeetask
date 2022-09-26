@@ -1,7 +1,7 @@
 # This is extremely similar to PNAS. This is mostly copy-pasted code with minor changes; not worth the effort to
 # factorize that code!
 from pnas import pnas2018, pnashierarchy
-from neural import neuralnet as nn
+from neural import neuralnet as nn, optimizers
 import utils
 from reward_task import rewardtask
 import numpy as np
@@ -9,7 +9,7 @@ import tensorflow as tf
 import scripts
 import analysis
 import matplotlib.pyplot as plt
-
+import rdm
 
 def train_multiple(number, filename, from_file=False):
     # train the models
@@ -23,7 +23,7 @@ def train_multiple(number, filename, from_file=False):
     # make the rdms
     make_rdm_multiple(filename, number)
 
-def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorithm=nn.SGD,
+def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorithm=optimizers.SGD,
           size_hidden=15, learning_rate=None, loss_type='cross_entropy',
           initial_context=pnas2018.ZEROS, with_goals=True):
     if model is None:
@@ -85,7 +85,7 @@ def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorith
 
 
 def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True, skips=[],
-                      rdm_type=analysis.SPEARMAN, noise=0., save_name=None):
+                      rdm_type=rdm.SPEARMAN, noise=0., save_name=None):
     # Make one rdm for each network
     hidden_activations = []
     rdmatrices = []
@@ -102,15 +102,15 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
         for k, tensor in enumerate(hidden):
             hidden[k] = tensor.numpy().reshape(-1)
 
-        if rdm_type == analysis.SPEARMAN:
-            rdmatrix = analysis.rdm_spearman(hidden)
-        elif rdm_type == analysis.MAHALANOBIS:
-            rdmatrix = analysis.rdm_mahalanobis(hidden)
+        if rdm_type == rdm.SPEARMAN:
+            rdmatrix = rdm.rdm_spearman(hidden)
+        elif rdm_type == rdm.MAHALANOBIS:
+            rdmatrix = rdm.rdm_mahalanobis(hidden)
             #rdmatrix = analysis.rdm_noisy2_mahalanobis(hidden)
-        elif rdm_type == analysis.EUCLIDIAN:
-            rdmatrix = analysis.rdm_euclidian(hidden)
-        elif rdm_type ==analysis.CRAPPYNOBIS:
-            rdmatrix = analysis.rdm_crappynobis(hidden)
+        elif rdm_type == rdm.EUCLIDIAN:
+            rdmatrix = rdm.rdm_euclidian(hidden)
+        elif rdm_type == rdm.CRAPPYNOBIS:
+            rdmatrix = rdm.rdm_crappynobis(hidden)
         else:
             raise ValueError("Only implemented rdm types are mahalanobis, spearman, euclidian")
         rdmatrices.append(rdmatrix)
@@ -191,7 +191,7 @@ def accuracy_test(model, name=None, noise=0., initial_context=pnas2018.ZEROS):
 
 
 
-def train_with_goals(noise=0, iterations=5000, learning_rate=0.1, nonlinearity=nn.SIGMOID):
+def train_with_goals(noise=0, iterations=5000, learning_rate=0.1, nonlinearity=tf.nn.sigmoid):
     model = nn.GoalNet(size_hidden=15, size_observation=8, size_action=8, size_goal1=2, size_goal2=0, nonlinearity=nonlinearity)
     num_episodes = iterations
     model.learning_rate = learning_rate
@@ -241,7 +241,7 @@ def train_with_goals(noise=0, iterations=5000, learning_rate=0.1, nonlinearity=n
 
 import copy
 def make_rdm_multiple_gain(name, num_networks, title="-", save_files=True, skips=[],
-                      rdm_type=analysis.SPEARMAN, noise=0., save_name=None, gain=[1, 1, 1, 1.]):
+                      rdm_type=rdm.SPEARMAN, noise=0., save_name=None, gain=[1, 1, 1, 1.]):
     with_goals = True
     # Make one rdm for each network
     hidden_activations = []
@@ -259,15 +259,15 @@ def make_rdm_multiple_gain(name, num_networks, title="-", save_files=True, skips
         for k, tensor in enumerate(hidden):
             hidden[k] = tensor.numpy().reshape(-1)
 
-        if rdm_type == analysis.SPEARMAN:
-            rdmatrix = analysis.rdm_spearman(hidden)
-        elif rdm_type == analysis.MAHALANOBIS:
-            rdmatrix = analysis.rdm_mahalanobis(hidden)
+        if rdm_type == rdm.SPEARMAN:
+            rdmatrix = rdm.rdm_spearman(hidden)
+        elif rdm_type == rdm.MAHALANOBIS:
+            rdmatrix = rdm.rdm_mahalanobis(hidden)
             #rdmatrix = analysis.rdm_noisy2_mahalanobis(hidden)
-        elif rdm_type == analysis.EUCLIDIAN:
-            rdmatrix = analysis.rdm_euclidian(hidden)
-        elif rdm_type ==analysis.CRAPPYNOBIS:
-            rdmatrix = analysis.rdm_crappynobis(hidden)
+        elif rdm_type == rdm.EUCLIDIAN:
+            rdmatrix = rdm.rdm_euclidian(hidden)
+        elif rdm_type == rdm.CRAPPYNOBIS:
+            rdmatrix = rdm.rdm_crappynobis(hidden)
         else:
             raise ValueError("Only implemented rdm types are mahalanobis, spearman, euclidian")
         rdmatrices.append(rdmatrix)
@@ -289,7 +289,8 @@ def make_rdm_multiple_gain(name, num_networks, title="-", save_files=True, skips
     for i, sequence in enumerate(rewardtask.seqs):
         for action in sequence[1:]:
             labels.append(str(i)+'_'+action)
-    analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
+    rdmat = rdm.rdm(properties=[],matrix_values=avg_matrix)
+    rdmat.plot_rdm(title + " spearman rho matrix", labels=labels)
     if save_files:
         plt.savefig(save_name+'_rdm')
     plt.clf()

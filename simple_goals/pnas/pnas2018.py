@@ -7,6 +7,7 @@ import analysis
 import matplotlib.pyplot as plt
 from pnas import pnashierarchy, pnas2018task
 import random
+import rdm
 
 MSE='mse'
 CROSS_ENTROPY='cross_entropy'
@@ -220,7 +221,7 @@ def make_rdm_and_mds(name, with_goals=False):
 
 
 def make_rdm_noisy(name, num_networks, noise, num_runs_per_network=10, title="-", save_files=True, skips=[],
-                      rdm_type=analysis.SPEARMAN):
+                      rdm_type=rdm.EUCLIDIAN):
     # Make one rdm for each network
     rdmatrices = []
     for i in range(num_networks + len(skips)):
@@ -233,7 +234,7 @@ def make_rdm_noisy(name, num_networks, noise, num_runs_per_network=10, title="-"
             for k, tensor in enumerate(hidden):
                 hidden[k] = tensor.numpy().reshape(-1)
             hiddens.append(hidden)
-        rdmatrix = analysis.rdm_noisy_mahalanobis(hiddens)
+        rdmatrix = rdm.rdm_noisy_mahalanobis(hiddens)
         rdmatrices.append(rdmatrix)
 
     # Now average over all matrices
@@ -266,7 +267,7 @@ def make_rdm_noisy(name, num_networks, noise, num_runs_per_network=10, title="-"
 
 
 def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_files=True, skips=[],
-                      rdm_type=analysis.SPEARMAN, noise=0., save_name=None):
+                      rdm_type=rdm.EUCLIDIAN, noise=0., save_name=None):
     # Make one rdm for each network
     hidden_activations = []
     rdmatrices = []
@@ -283,15 +284,15 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
         for k, tensor in enumerate(hidden):
             hidden[k] = tensor.numpy().reshape(-1)
 
-        if rdm_type == analysis.SPEARMAN:
-            rdmatrix = analysis.rdm_spearman(hidden)
-        elif rdm_type == analysis.MAHALANOBIS:
-            rdmatrix = analysis.rdm_mahalanobis(hidden)
+        if rdm_type == rdm.SPEARMAN:
+            rdmatrix = rdm.rdm_spearman(hidden)
+        elif rdm_type == rdm.MAHALANOBIS:
+            rdmatrix = rdm.rdm_mahalanobis(hidden)
             #rdmatrix = analysis.rdm_noisy2_mahalanobis(hidden)
-        elif rdm_type == analysis.EUCLIDIAN:
-            rdmatrix = analysis.rdm_euclidian(hidden)
-        elif rdm_type ==analysis.CRAPPYNOBIS:
-            rdmatrix = analysis.rdm_crappynobis(hidden)
+        elif rdm_type == rdm.EUCLIDIAN:
+            rdmatrix = rdm.rdm_euclidian(hidden)
+        elif rdm_type == rdm.CRAPPYNOBIS:
+            rdmatrix = rdm.rdm_crappynobis(hidden)
         else:
             raise ValueError("Only implemented rdm types are mahalanobis, spearman, euclidian")
         rdmatrices.append(rdmatrix)
@@ -329,7 +330,7 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
 
 
 def make_rdm_multiple_ldt(name, num_networks, with_goals=False, title="-", save_files=True, skips=[],
-                          rdm_type=analysis.SPEARMAN, noise_during=0., noise_after=0., num_samples=2,
+                          rdm_type=rdm.SPEARMAN, noise_during=0., noise_after=0., num_samples=2,
                           initial_context=ZEROS, log_scale=False, save_name=None):
     # Make one rdm for each network
     #hidden_activations = []
@@ -393,7 +394,7 @@ def make_rdm_multiple_ldt(name, num_networks, with_goals=False, title="-", save_
 
 
 def make_rdm_multiple_gain(name, num_networks, title="-", save_files=True, skips=[],
-                      rdm_type=analysis.SPEARMAN, noise=0., save_name=None, gain=[1, 1, 2, 2.]):
+                      rdm_type=rdm.SPEARMAN, noise=0., save_name=None, gain=[1, 1, 2, 2.]):
     with_goals = True
     # Make one rdm for each network
     hidden_activations = []
@@ -411,15 +412,15 @@ def make_rdm_multiple_gain(name, num_networks, title="-", save_files=True, skips
         for k, tensor in enumerate(hidden):
             hidden[k] = tensor.numpy().reshape(-1)
 
-        if rdm_type == analysis.SPEARMAN:
-            rdmatrix = analysis.rdm_spearman(hidden)
-        elif rdm_type == analysis.MAHALANOBIS:
-            rdmatrix = analysis.rdm_mahalanobis(hidden)
+        if rdm_type == rdm.SPEARMAN:
+            rdmatrix = rdm.rdm_spearman(hidden)
+        elif rdm_type == rdm.MAHALANOBIS:
+            rdmatrix = rdm.rdm_mahalanobis(hidden)
             #rdmatrix = analysis.rdm_noisy2_mahalanobis(hidden)
-        elif rdm_type == analysis.EUCLIDIAN:
-            rdmatrix = analysis.rdm_euclidian(hidden)
-        elif rdm_type ==analysis.CRAPPYNOBIS:
-            rdmatrix = analysis.rdm_crappynobis(hidden)
+        elif rdm_type == rdm.EUCLIDIAN:
+            rdmatrix = rdm.rdm_euclidian(hidden)
+        elif rdm_type == rdm.CRAPPYNOBIS:
+            rdmatrix = rdm.rdm_crappynobis(hidden)
         else:
             raise ValueError("Only implemented rdm types are mahalanobis, spearman, euclidian")
         rdmatrices.append(rdmatrix)
@@ -515,7 +516,7 @@ def accuracy_test_keepcontext(model, name=None, num_samples=100):
 
 
 def make_rdm_multiple_keepcontext(name, num_networks, with_goals=False, title="-", save_files=True, skips=[],
-                      rdm_type=analysis.SPEARMAN):
+                      rdm_type=rdm.SPEARMAN):
     # Make one rdm for each network
     hidden_activations = []
     rdmatrices = []
@@ -532,14 +533,14 @@ def make_rdm_multiple_keepcontext(name, num_networks, with_goals=False, title="-
         for i, vector in enumerate(hidden):
             hidden[i] = vector.reshape(-1)
 
-        if rdm_type==analysis.SPEARMAN:
-            rdmatrix = analysis.rdm_spearman(hidden)
-        elif rdm_type==analysis.MAHALANOBIS:
-            rdmatrix = analysis.rdm_mahalanobis(hidden)
-        elif rdm_type ==analysis.EUCLIDIAN:
-            rdmatrix = analysis.rdm_euclidian(hidden)
-        elif rdm_type ==analysis.CRAPPYNOBIS:
-            rdmatrix = analysis.rdm_crappynobis(hidden)
+        if rdm_type == rdm.SPEARMAN:
+            rdmatrix = rdm.rdm_spearman(hidden)
+        elif rdm_type == rdm.MAHALANOBIS:
+            rdmatrix = rdm.rdm_mahalanobis(hidden)
+        elif rdm_type == rdm.EUCLIDIAN:
+            rdmatrix = rdm.rdm_euclidian(hidden)
+        elif rdm_type == rdm.CRAPPYNOBIS:
+            rdmatrix = rdm.rdm_crappynobis(hidden)
         else:
             raise ValueError("Only implemented rdm types are mahalanobis, spearman, euclidian")
         rdmatrices.append(rdmatrix)
@@ -629,7 +630,7 @@ def trainACC(model, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorithm=
     return model, rng_avg_sequence
 
 def make_rdm_multipleACC(name, num_networks, title="-", save_files=True, skips=[],
-                      rdm_type=analysis.SPEARMAN, noise=0., save_name=None):
+                      rdm_type=rdm.SPEARMAN, noise=0., save_name=None):
     # Make one rdm for each network
     hidden_activations = []
     rdmatrices = []
@@ -643,15 +644,15 @@ def make_rdm_multipleACC(name, num_networks, title="-", save_files=True, skips=[
         for k, tensor in enumerate(hidden):
             hidden[k] = tensor.numpy().reshape(-1)
 
-        if rdm_type == analysis.SPEARMAN:
-            rdmatrix = analysis.rdm_spearman(hidden)
-        elif rdm_type == analysis.MAHALANOBIS:
-            rdmatrix = analysis.rdm_mahalanobis(hidden)
+        if rdm_type == rdm.SPEARMAN:
+            rdmatrix = rdm.rdm_spearman(hidden)
+        elif rdm_type == rdm.MAHALANOBIS:
+            rdmatrix = rdm.rdm_mahalanobis(hidden)
             #rdmatrix = analysis.rdm_noisy2_mahalanobis(hidden)
-        elif rdm_type == analysis.EUCLIDIAN:
-            rdmatrix = analysis.rdm_euclidian(hidden)
-        elif rdm_type ==analysis.CRAPPYNOBIS:
-            rdmatrix = analysis.rdm_crappynobis(hidden)
+        elif rdm_type == rdm.EUCLIDIAN:
+            rdmatrix = rdm.rdm_euclidian(hidden)
+        elif rdm_type == rdm.CRAPPYNOBIS:
+            rdmatrix = rdm.rdm_crappynobis(hidden)
         else:
             raise ValueError("Only implemented rdm types are mahalanobis, spearman, euclidian")
         rdmatrices.append(rdmatrix)
