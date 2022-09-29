@@ -7,7 +7,7 @@ import goalenv
 from goalenv import environment as env, goalenv2020
 import tensorflow as tf
 
-utils.initialize_random_seeds(1)
+utils.initialize_random_seeds(4)
 
 
 # Redoing the goal environment figures.
@@ -49,33 +49,35 @@ if False: # rdm test
     my_rdm.save('sequence', 'sequence sorted') #should be same as order.
     sys.exit()
 
-if True:
+if False:
     from reward_task import reward
     import rdm
-    for i in range(0):
+    for i in range(5):
         print(i)
         model = reward.train_with_goals(nonlinearity=tf.nn.relu, learning_rate = 0.02)
         #utils.save_object("reward_task_with_goals", model)
-        utils.save_object("reward_task_with_goals_relu", model)
-    cond="relu"
-    nets = "reward_task_with_goals_relu"
+        utils.save_object("reward_task_with_goals_sigmoid", model)
+    cond="none"
+    nets = "reward_task_with_goals_sigmoid"
     #nets = "reward_task_with_4goals"
-    num_nets =2
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_1111"+cond, gain=[1,1,1,1])#, skips=[0])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_0022"+cond, gain=[0,0,2,2])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_2200"+cond, gain=[2,2,0,0])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_0044"+cond, gain=[0,0,4,4])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_4400"+cond, gain=[4,4,0,0])
-
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_0000"+cond, gain=[0,0,0,0])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_0011"+cond, gain=[0,0,1,1])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_1100"+cond, gain=[1,1,0,0])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_1122"+cond, gain=[1,1,2,2])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_1110"+cond, gain=[1,1,1,0])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_0001"+cond, gain=[0,0,0,1])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_1112"+cond, gain=[1,1,1,2])
-    reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=rdm.EUCLIDIAN, save_name="reward_5_5_52"+cond, gain=[.5,.5,.5,2])
-
+    num_nets =5
+    for type in [rdm.SPEARMAN, rdm.EUCLIDIAN]:
+        cond = type
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_1111"+cond, gain=[1,1,1,1])#, skips=[0])
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_0022"+cond, gain=[0,0,2,2])
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_2200"+cond, gain=[2,2,0,0])
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_0044"+cond, gain=[0,0,4,4])
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_4400"+cond, gain=[4,4,0,0])
+        """
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_0000"+cond, gain=[0,0,0,0])
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_0011"+cond, gain=[0,0,1,1])
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_1100"+cond, gain=[1,1,0,0])
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_1122"+cond, gain=[1,1,2,2])
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_1110"+cond, gain=[1,1,1,0])
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_0001"+cond, gain=[0,0,0,1])
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_1112"+cond, gain=[1,1,1,2])
+        reward.make_rdm_multiple_gain(nets, num_nets, rdm_type=type, save_name="reward_5_5_52"+cond, gain=[.5,.5,.5,2])
+        """
     sys.exit()
 
 if False:
@@ -201,7 +203,7 @@ if False:
                         #goal2 = utils.str_to_onehot("g_2_add_milk", env.GoalEnvData.goals2_list) * 2. # np.zeros((1, 9), np.float32)
                         goal2 = utils.str_to_onehot("g_2_add_cream", env.GoalEnvData.goals2_list) * 4
 
-                        if True:
+                        if False:
                             with tf.device('/cpu:0'):
                                 #print("time elapsed: {0}s".format(time.time() - start))
                                 test_data = goalenv2020.generate_test_data(model, noise=noise,
@@ -386,20 +388,179 @@ if True:
 
     # 1. one network with tanh. Make RDMs at 1, 10, 100, 1000
     hrp = mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.0)
-    nnparams = nn.ParamsGoalNet(algorithm=optimizers.ADAM,
-                                nonlinearity=tf.nn.relu,
-                                initialization=utils.HE,
-                                learning_rate=0.001,
+    nnparams = nn.ParamsGoalNet(algorithm=optimizers.SGD,
+                                nonlinearity=tf.nn.tanh,
+                                initialization=utils.NORMAL,
+                                learning_rate=0.01,
                                 size_action=None,  # these will get filled automatically
                                 size_observation=None,  #
                                 size_hidden=25,
                                 L1_reg=0, L2_reg=0)
 
-    stopping = nn.ParamsStopping(max_iterations=10000, min_iterations=200, check_frequency=200,
+    stopping = nn.ParamsStopping(max_iterations=20000, min_iterations=1000, check_frequency=200,
                                  stop_condition=mod3.stop_condition, blanks=True, min_accuracy=1.)
+    #
+    #nnparams.algorithm = optimizers.SGD
+    #nnparams.initialization = utils.NORMAL
+    #nnparams.nonlinearity = tf.nn.sigmoid
+    #nnparams.learning_rate = 0.03
+    #nnparams.size_hidden = 100
+    #mod2.run_model2_multiple(stopping_params=stopping,
+    #                         num_networks=5,  #from_file="normal_l20.0_sig_sgd",
+    #                         name="normal_sig_100_sgd_005_48",
+    #                         nnparams=nnparams,
+    #                         blanks=True,
+    #                         type=rdm.EUCLIDIAN)
+
+    # works but doesn't look very good
+    #nnparams.algorithm = optimizers.SGD
+    #nnparams.initialization = utils.NORMAL
+    #nnparams.nonlinearity = tf.nn.tanh
+    #nnparams.learning_rate = 0.01
+    #nnparams.size_hidden = 50
+    #mod2.run_model2_multiple(stopping_params=stopping,
+    #                             num_networks=5,  #from_file="normal_l20.0_sig_sgd",
+    #                             name="normal_tanh_50_sgd_001_48",
+    #                             nnparams=nnparams,
+    #                             blanks=True,
+    #                             type=rdm.EUCLIDIAN)
+
+    # doesnt work.
+    #nnparams.algorithm = optimizers.ADAM
+    #nnparams.initialization = utils.NORMAL
+    #nnparams.nonlinearity = tf.nn.sigmoid
+    #nnparams.learning_rate = 0.001
+    #nnparams.size_hidden = 25
+    #mod2.run_model2_multiple(stopping_params=stopping,
+    #                         num_networks=5,  # from_file="normal_l20.0_sig_sgd",
+    #                         name="normal_tanh_25_adam_0001_48",
+    #                         nnparams=nnparams,
+    #                         blanks=True,
+    #                         type=rdm.EUCLIDIAN)
+
+    # works
+    #nnparams.algorithm = optimizers.SGD
+    #nnparams.initialization = utils.NORMAL
+    #nnparams.nonlinearity = tf.nn.sigmoid
+    #nnparams.learning_rate = 0.03
+    #nnparams.size_hidden = 100
+    #mod2.run_model2_multiple(stopping_params=stopping,
+    #                         num_networks=5, #from_file="normal_sig_25_sgd_001_48",
+    #                         name="normal_sig_100_sgd_003_96",
+    #                         nnparams=nnparams,
+    #                         blanks=True,
+    #                         type=rdm.EUCLIDIAN)
+
+    # doesn't work : sgd norm sig 0.01 100
+    # works : sgd norm sig 0.03 100  ~bit longer than 0.05
+    # works : sgd norm sig 0.05 100 - 6100 7100 5300 6300 5900
+    # works : sgd norm sig 0.1 100 - 5500 11300 7900 7900 7300
+    # works : sgd norm sig 0.05 75 - 8100 6300 8900 10100 7900
+    # works : sgd norm sig 0.05 50 - 8100 10500 9300 10900 9900
+    # works : sgd norm sig 0.05 40 - 13300 13500 10500 12100 14700
+    # works : sgd norm sig 0.1 50 - 13300 9700 10700 7100 12700
+    # doesn't work : sgd norm sig 0.03 50 - 18500 20000 - discontinued.
+
+    nnparams.algorithm = optimizers.SGD
+    nnparams.initialization = utils.NORMAL
+    nnparams.nonlinearity = tf.nn.sigmoid
+    nnparams.learning_rate = 0.05
+    nnparams.size_hidden = 50
     mod2.run_model2_multiple(stopping_params=stopping,
-                             num_networks=1,  # from_file=initialization + "_l2"+str(L2_reg) + str_nl + optimizer[0],
-                             name="relu_evolution_over_time",
+                             num_networks=50,  from_file="normal_sig_50_sgd_005_48",
+                             name="normal_sig_50_sgd_005_96_resorted",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN,
+                             skips=[13])
+
+    sys.exit()
+
+    # works well and fast
+    # tanh
+    nnparams.algorithm = optimizers.ADAM
+    nnparams.initialization = utils.XAVIER
+    nnparams.learning_rate = 0.001
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=25,  #from_file="normal_l20.0_sig_sgd",
+                             name="xavier_l20.0_tanh25_adam_48",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN)
+
+    # works but learning is slow (~10,000 or so)
+    nnparams.algorithm = optimizers.SGD
+    nnparams.initialization = utils.NORMAL
+    nnparams.learning_rate = 0.01
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=25,  #from_file="normal_l20.0_sig_sgd",
+                             name="normal_l20.0_tanh25_sgd_48",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN)
+
+    # works but learning is slow (~15,000 or so)
+    nnparams.learning_rate = 0.005
+    nnparams.initialization = utils.XAVIER
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=25,  #from_file="normal_l20.0_sig_sgd",
+                             name="xavier_l20.0_tanh25_sgd_48",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN)
+
+    # works well and fast
+    # tanh
+    nnparams.size_hidden = 40
+    nnparams.learning_rate = 0.02
+    nnparams.initialization = utils.NORMAL
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=5,  #from_file="normal_l20.0_sig_sgd",
+                             name="normal_l20.0_sig40_sgd_48",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN)
+
+    # works well and fast
+    # tanh
+    nnparams.size_hidden = 50
+    nnparams.learning_rate = 0.01
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=5,  #from_file="normal_l20.0_sig_sgd",
+                             name="normal_l20.0_sig50_sgd_48",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN)
+
+    nnparams.size_hidden = 60
+    nnparams.learning_rate = 0.005
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=5,  #from_file="normal_l20.0_sig_sgd",
+                             name="normal_l20.0_sig60_sgd_48",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN)
+
+    # Doesn't work (slow convergence and/or diverges)
+    # tanh
+    nnparams.size_hidden = 25
+    nnparams.learning_rate = 0.02
+    nnparams.initialization = utils.XAVIER
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=5,  #from_file="normal_l20.0_sig_sgd",
+                             name="xavier002_l20.0_sig25_sgd_48",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN)
+
+    # Doesnt work (diverges)
+    # tanh
+    nnparams.size_hidden = 25
+    nnparams.learning_rate = 0.1
+    nnparams.initialization = utils.XAVIER
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=5,  #from_file="normal_l20.0_sig_sgd",
+                             name="xavier01_l20.0_sig25_sgd_48",
                              nnparams=nnparams,
                              blanks=True,
                              type=rdm.EUCLIDIAN)

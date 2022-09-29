@@ -364,11 +364,11 @@ def train_all(stopping_params, nnet, blanks=True): #nnet, num_training_steps = 1
             avg_loss = utils.rolling_avg(prev_avg=avg_loss, new_val=loss, speed=0.5, num=i)
             if i % 100 == 0: # or i > (num_training_steps - 20):
                 print('{0}, avgloss={1}'.format(i, avg_loss))
-            if i == 0 or i == 5 or i == 50 or i == 200 or i == 500 or i == 1000:
-                    my_rdm = generate_rdm_all(nnet, name="mynetrelu"+ str(i), from_file=False, rdm_type=rdm.EUCLIDIAN)
-                    my_rdm = process_rdmatrix(rdm.rdm(properties=my_rdm.properties, matrix_values=my_rdm.matrix.copy()), True)
-                    set_rdm_labels(my_rdm)
-                    my_rdm.save(filename="mynetrelu"+str(i), title="mynetrelu" + str(i))  # , dpi=200, figsize=60, fontsize=0.5)
+            #if i == 0 or i == 5 or i == 50 or i == 200 or i == 500 or i == 1000:
+            #        my_rdm = generate_rdm_all(nnet, name="mynetrelu"+ str(i), from_file=False, rdm_type=rdm.EUCLIDIAN)
+            #        my_rdm = process_rdmatrix(rdm.rdm(properties=my_rdm.properties, matrix_values=my_rdm.matrix.copy()), True)
+            #        set_rdm_labels(my_rdm)
+            #        my_rdm.save(filename="mynetrelu"+str(i), title="mynetrelu" + str(i))  # , dpi=200, figsize=60, fontsize=0.5)
 
             i += 1
 
@@ -659,18 +659,15 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
                 'seq1_ari_op1',
                 'seq1_bev_tc',
                 'seq1_ari_op2',
-                'seq1_bev_wf'] #'seq1_bev_wf',
-                #'seq2_ari_op1', 'seq2_ari_op2',
-                #'seq2_bev_tc', 'seq2_bev_wf',
-                #'target', 'input']
+                'seq1_bev_wf']
 
     def ignore(prop1, prop2):
         #if prop1["seq1_type"] == prop2["seq1_type"]:
-        #    for key in ['seq1_ari_op1', 'seq1_bev_wf']:
+        #    for key in ['seq1_ari_op2', 'seq1_bev_wf']:
         #        if prop1[key] != prop2[key]:
         #             return True
 
-        if prop1["interleaved"] == "yes" or prop2["interleaved"] == "yes":
+        if prop1["interleaved"] == "yes" and prop2["interleaved"] == "yes":
             if prop1["start_seq"] != prop2["start_seq"]:
                 return True
 
@@ -682,19 +679,23 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
         return False
 
     rdmatrix = rdmatrix.average_values(preserve_keys=preserve, ignore_func=ignore)
-    rdmatrix.sort_by(("timestep_seq1", False),  ("seq1_ari_op1", False), ("seq1_bev_wf", False),
-                     ("seq1_ari_op2", False),
-                     ("seq1_bev_tc", False), ("seq1_type", True), ("interleaved", False))
+    rdmatrix.sort_by(("timestep_seq1", False),  ("seq1_ari_op1", False),
+                     ("seq1_bev_wf", False), ("seq1_ari_op2", False),
+                     ("seq1_bev_tc", False), ("seq1_type", True), ("interleaved", False), ("timestep_seq1", False))
 
     return rdmatrix
 
 
 def run_model2_multiple(stopping_params, nnparams, blanks, from_file=None,
                         num_networks=1, name="model2", mode=task.RDM_MODE_AVERAGE_DISTANCES,
-                        type=rdm.EUCLIDIAN):
+                        type=rdm.EUCLIDIAN, skips=None):
     #    from_file=None, num_networks=1):
     if from_file is not None:
-        networks = utils.load_objects(from_file, num_networks)
+        networks = []
+        len_skips = 0 if skips is None else len(skips)
+        for i in range(num_networks + len_skips):
+            if skips is None or (skips is not None and i not in skips):
+                networks.append(utils.load_object(from_file, i))
     else:
         networks = []
         for i in range(num_networks):
@@ -715,10 +716,10 @@ def run_model2_multiple(stopping_params, nnparams, blanks, from_file=None,
             print(accuracy_fullseqs)
 
     rdms = []
-    for net in networks:
+    for i, net in enumerate(networks):
+        print(i)
         rdm1 = generate_rdm_all(net, name=name, from_file=False, rdm_type=type)
         rdms.append(rdm1)
-        print(np.max(rdm1.matrix))
 
     final_rdm = None
     for my_rdm in rdms:
@@ -909,10 +910,12 @@ def set_rdm_labels(myrdm):
         if timestep == 0:
             if property["seq1_type"] == "bev":
                 property["label"] += "Coffee" if property["seq1_bev_tc"] == "c" else "Tea"
+                #property["label"] += "water 1st" if property["seq1_bev_wf"] == "1" else "water 2nd"  # remove
                 if property["interleaved"] == "yes":
                     property["label"] += " (interleaved)"
             else:
                 property["label"] += "Math ('+' 1st" if property["seq1_ari_op1"] == "+" else "Math ('-' 1st"
+                #property["label"] += ", '+' 2nd" if property["seq1_ari_op2"] == "+" else ", '-' 2nd"  # rechange
                 if property["interleaved"] == "yes":
                     property["label"] += ", interleaved"
                 property["label"] += ")"
