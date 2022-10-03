@@ -188,9 +188,14 @@ def stop_condition(nnet, blanks, min_accuracy=1.):
 
 def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
                         num_networks=1, name="model3", hrp=None,
-                        type=rdm.EUCLIDIAN):
+                        type=rdm.EUCLIDIAN, skips=None):
     if from_file is not None:
-        networks = utils.load_objects(from_file, num_networks)
+        networks = []
+        if skips is None:
+            skips = []
+        for i in range(num_networks + len(skips)):
+            if i not in skips:
+                networks.append(utils.load_object(from_file, i))
     else:
         networks = []
         for i in range(num_networks):
@@ -211,7 +216,8 @@ def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
     pattern = [6]*4 + [6]*4 + [12]*4
     if hrp is None:
         final_rdm = None
-        for net in networks:
+        for i, net in enumerate(networks):
+            print(i)
             net_rdm = generate_rdm_all(net, name=name, from_file=False, rdm_type=type)
             if final_rdm is None:
                 final_rdm = rdm.rdm(properties=net_rdm.properties, matrix_values=net_rdm.matrix.copy())

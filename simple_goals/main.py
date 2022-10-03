@@ -7,7 +7,7 @@ import goalenv
 from goalenv import environment as env, goalenv2020
 import tensorflow as tf
 
-utils.initialize_random_seeds(4)
+utils.initialize_random_seeds(5)
 
 
 # Redoing the goal environment figures.
@@ -461,18 +461,31 @@ if True:
     # works : sgd norm sig 0.1 50 - 13300 9700 10700 7100 12700
     # doesn't work : sgd norm sig 0.03 50 - 18500 20000 - discontinued.
 
+    nnparams.algorithm = optimizers.ADAM
+    nnparams.initialization = utils.HE
+    nnparams.nonlinearity = tf.nn.relu
+    nnparams.learning_rate = 0.001
+    nnparams.size_hidden = 25
+    #mod3.run_model3_multiple(stopping_params=stopping,
+    #                             num_networks=50,  from_file="he_relu_25_adam_0001_48",
+    #                             name="he_relu_25_adam_0001_48",
+    #                             nnparams=nnparams,
+    #                             blanks=True,
+    #                             type=rdm.EUCLIDIAN)
+
+
     nnparams.algorithm = optimizers.SGD
     nnparams.initialization = utils.NORMAL
-    nnparams.nonlinearity = tf.nn.sigmoid
-    nnparams.learning_rate = 0.05
-    nnparams.size_hidden = 50
-    mod2.run_model2_multiple(stopping_params=stopping,
-                             num_networks=50,  from_file="normal_sig_50_sgd_005_48",
-                             name="normal_sig_50_sgd_005_96_resorted",
+    nnparams.nonlinearity = tf.nn.tanh
+    nnparams.learning_rate = 0.01
+    nnparams.size_hidden = 30
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=50,  from_file="goals_normal_tanh_30_sgd_001_48",
+                             name="goals_normal_tanh_30_sgd_001_48",
                              nnparams=nnparams,
                              blanks=True,
                              type=rdm.EUCLIDIAN,
-                             skips=[13])
+                             skips=[11, 30])
 
     sys.exit()
 
