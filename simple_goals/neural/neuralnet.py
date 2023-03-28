@@ -158,8 +158,8 @@ class GoalNet(NeuralNet):
             self.L1_regularization = params.L1_reg
             self.L2_regularization = params.L2_reg
 
-        self.goal1 = self.goal2 = self.action = self.action_softmax =\
-            self.goal1_softmax = self.goal2_softmax = None
+        self.goal1 = self.goal2 = self.action = self.action_activation =\
+            self.goal1_activation = self.goal2_activation = None
 
         size_hidden_input = self.size_observation + self.size_action + self.size_goal1 + self.size_goal2
         if recurrent_layer == ELMAN:
@@ -178,15 +178,15 @@ class GoalNet(NeuralNet):
         self.all_weights = self.hidden_layer.parameters + self.action_layer.parameters +\
                            self.goal1_layer.parameters + self.goal2_layer.parameters
 
-        self.h_action_softmax = []
-        self.h_goal1_softmax = []
-        self.h_goal2_softmax = []
-        self.h_action_wta = []
-        self.h_goal1_wta = []
-        self.h_goal2_wta = []
+        self.h_action_activation = []
+        self.h_goal1_activation = []
+        self.h_goal2_activation = []
+        self.h_action_collapsed = []
+        self.h_goal1_collapsed = []
+        self.h_goal2_collapsed = []
         self.h_context = []
-        self.history = [self.h_action_softmax, self.h_goal1_softmax, self.h_goal2_softmax,
-                        self.h_action_wta, self.h_goal1_wta, self.h_goal2_wta, self.h_context]
+        self.history = [self.h_action_activation, self.h_goal1_activation, self.h_goal2_activation,
+                        self.h_action_collapsed, self.h_goal1_collapsed, self.h_goal2_collapsed, self.h_context]
 
         if self.algorithm == optimizers.SGD: self.optimizer = optimizers.SGDOptimizer(self.all_weights)
         elif self.algorithm == optimizers.RMSPROP: self.optimizer = optimizers.RMSPropOptimizer(self.all_weights)
@@ -202,7 +202,7 @@ class GoalNet(NeuralNet):
                              size_goal1=self.size_goal1, size_goal2=self.size_goal2,
                              last_action_inputs=self.last_action_inputs)
 
-    def feedforward(self, observation): #, gain_multiplier=1., gain_multiplier_from=0, gain_multiplier_to=None):
+    def feedforward(self, observation, softmax=True, noise_to_hidden=0.): #, gain_multiplier=1., gain_multiplier_from=0, gain_multiplier_to=None):
         network_input = observation
         if not self.last_action_inputs: # cancel out actions
             self.action *= 0.
@@ -212,7 +212,7 @@ class GoalNet(NeuralNet):
                 inputs = tf.stop_gradient(inputs)
                 network_input = tf.concat([network_input, inputs], 1)
 
-        hidden_activation = self.hidden_layer.feedforward(network_input)
+        hidden_activation = self.hidden_layer.feedforward(network_input, noise_to_hidden)
 
         #if gain_multiplier != 1:
         #    if gain_multiplier_to is None:
@@ -222,14 +222,27 @@ class GoalNet(NeuralNet):
         #    hidden_activation[0, gain_multiplier_to:] *= 1./gain_multiplier
 
         # Three separate softmaxes for the action and the goal
-        self.action_softmax = self.action_layer.feedforward(hidden_activation)
-        self.action = layers.winner_take_all(self.action_softmax)
+
+        if self.action_layer.nonlinearity == layers.BasicLayer._identity:  # Then it's a softmax.
+            self.action_activation = self.action_layer.feedforward(hidden_activation)
+            self.action = layers.winner_take_all(self.action_activation)
+        else:  # Then no softmax. Replace winner take all by just rounding (=<0.5 --> 0, > 0.5 --> 1)
+            self.action_activation = self.action_layer.feedforward(hidden_activation) # This
+            self.action = layers.rounding(self.action_activation)
         if self.size_goal1 > 0:
-            self.goal1_softmax = self.goal1_layer.feedforward(hidden_activation)
-            self.goal1 = layers.winner_take_all(self.goal1_softmax)
+            if self.goal1_layer.nonlinearity == layers.BasicLayer._identity:
+                self.goal1_activation = self.goal1_layer.feedforward(hidden_activation)
+                self.goal1 = layers.winner_take_all(self.goal1_activation)
+            else:
+                self.goal1_activation = self.goal1_layer.feedforward(hidden_activation)
+                self.goal1 = layers.rounding(self.goal1_activation)
         if self.size_goal2 > 0:
-            self.goal2_softmax = self.goal2_layer.feedforward(hidden_activation)
-            self.goal2 = layers.winner_take_all(self.goal2_softmax)
+            if self.goal2_layer.nonlinearity == layers.BasicLayer._identity:
+                self.goal2_activation = self.goal2_layer.feedforward(hidden_activation)
+                self.goal2 = layers.winner_take_all(self.goal2_activation)
+            else:
+                self.goal2_activation = self.goal2_layer.feedforward(hidden_activation)
+                self.goal2 = layers.rounding(self.goal2_activation)
 
         self.save_history()
 
@@ -253,23 +266,23 @@ class GoalNet(NeuralNet):
             data.clear()
 
     def save_history(self):
-        self.h_action_softmax.append(self.action_softmax)
-        self.h_goal1_softmax.append(self.goal1_softmax)
-        self.h_goal2_softmax.append(self.goal2_softmax)
-        self.h_action_wta.append(copy.deepcopy(self.action))
-        self.h_goal1_wta.append(self.goal1)
-        self.h_goal2_wta.append(self.goal2)
-        self.h_context.append(self.hidden_layer.h)
+        self.h_action_activation.append(copy.deepcopy(self.action_activation))
+        self.h_goal1_activation.append(copy.deepcopy(self.goal1_activation))
+        self.h_goal2_activation.append(copy.deepcopy(self.goal2_activation))
+        self.h_action_collapsed.append(copy.deepcopy(self.action))
+        self.h_goal1_collapsed.append(copy.deepcopy(self.goal1))
+        self.h_goal2_collapsed.append(copy.deepcopy(self.goal2))
+        self.h_context.append(copy.deepcopy(self.hidden_layer.h)) #why was this not deepcopies.
 
     def train(self, tape, targets, extra_loss=0.):
         loss = 0
         for i, target in enumerate(targets):
             if target.action_one_hot is not None:
-                loss += tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, self.h_action_softmax[i])
+                loss += tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, self.h_action_activation[i])
             if target.goal1_one_hot is not None:
-                loss += tf.nn.softmax_cross_entropy_with_logits(target.goal1_one_hot, self.h_goal1_softmax[i])
+                loss += tf.nn.softmax_cross_entropy_with_logits(target.goal1_one_hot, self.h_goal1_activation[i])
             if target.goal2_one_hot is not None:
-                loss += tf.nn.softmax_cross_entropy_with_logits(target.goal2_one_hot, self.h_goal2_softmax[i])
+                loss += tf.nn.softmax_cross_entropy_with_logits(target.goal2_one_hot, self.h_goal2_activation[i])
         loss += self.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in self.all_weights])
         loss += extra_loss
         gradients = tape.gradient(loss, self.all_weights)
@@ -281,11 +294,11 @@ class GoalNet(NeuralNet):
         # Compute error + backprop.
         loss = 0.
         for i in range(len(targets_action)):
-            loss += tf.nn.softmax_cross_entropy_with_logits(targets_action[i], self.h_action_softmax[i])
+            loss += tf.nn.softmax_cross_entropy_with_logits(targets_action[i], self.h_action_activation[i])
             if targets_goal1 is not None:
-                loss += tf.nn.softmax_cross_entropy_with_logits(targets_goal1[i], self.h_goal1_softmax[i])
+                loss += tf.nn.softmax_cross_entropy_with_logits(targets_goal1[i], self.h_goal1_activation[i])
             if targets_goal2 is not None:
-                loss += tf.nn.softmax_cross_entropy_with_logits(targets_goal2[i], self.h_goal2_softmax[i])
+                loss += tf.nn.softmax_cross_entropy_with_logits(targets_goal2[i], self.h_goal2_activation[i])
         loss += self.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in self.all_weights])
         loss += extra_loss
         gradients = tape.gradient(loss, self.all_weights)
@@ -293,22 +306,24 @@ class GoalNet(NeuralNet):
         self.clear_history()
         return loss, gradients
 
-    def train_MSE(self, targets_action, targets_goal1, targets_goal2, tape):
+    def train_MSE(self, tape, targets, extra_loss=0.):
         # Compute error + backprop.
         loss = 0.
-        for i in range(len(targets_action)):
-            loss += tf.reduce_sum((targets_action[i] - tf.nn.sigmoid(self.h_action_softmax[i]))**2)
-            if targets_goal1 is not None:
-                loss += tf.reduce_sum((targets_goal1[i] - tf.nn.sigmoid(self.h_goal1_softmax[i])) ** 2)
-            if targets_goal2 is not None:
-                loss += tf.reduce_sum((targets_goal2[i] - tf.nn.sigmoid(self.h_goal2_softmax[i])) ** 2)
+        for i, target in enumerate(targets):
+            if target.action_one_hot is not None:
+                loss += tf.reduce_sum((target.action_one_hot - self.h_action_activation[i]) ** 2)
+            if target.goal1_one_hot is not None:
+                loss += tf.reduce_sum((target.goal1_one_hot - self.h_goal1_activation[i]) ** 2)
+            if target.goal2_one_hot is not None:
+                loss += tf.reduce_sum((target.goal2_one_hot - self.h_goal2_activation[i]) ** 2)
         # I'm going to assume that "weight persistence 0.999999" means L1 regularization. Multiplying by
         # the learning rate too.
         loss += self.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in self.all_weights])
+        loss += extra_loss
         gradients = tape.gradient(loss, self.all_weights)
         self.optimizer.update_weights(gradients, self.learning_rate)
         self.clear_history()
-        return loss, gradients
+        return loss #, gradients
 
     @property
     def context(self):

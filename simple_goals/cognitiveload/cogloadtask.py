@@ -70,6 +70,17 @@ class Target(object):
         self.goal1_one_hot = goal1
         self.goal2_one_hot = None
 
+
+goal_symbols_mod4 = ["math", "beverage", "combined", "single"]
+class TargetMod4(object):
+    def __init__(self, action, goals=None):
+        self.action_one_hot = action
+        if goals is not None:
+            self.goal1_one_hot = utils.str_to_multihot(goals, goal_symbols_mod4)
+        else:
+            self.goal1_one_hot = None
+        self.goal2_one_hot =None
+
 # 2 goals option
 goal_target_bev = ['beverage']*6
 goal_target_ari = ['math']*6

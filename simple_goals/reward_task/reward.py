@@ -57,7 +57,7 @@ def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorith
 
             #if episode % 2 == 0:
                 # Get some statistics about what was correct and what wasn't
-            tchoices = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
+            tchoices = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
             ratios = scripts.evaluate([tchoices], [targets])
             # Train model, record loss.
             if loss_type==pnas2018.MSE:
@@ -171,8 +171,8 @@ def accuracy_test(model, name=None, noise=0., initial_context=pnas2018.ZEROS):
                 model.feedforward(observation)
                 hidden_activation.append(model.context)
             # Get some statistics about what was correct and what wasn't
-            choice = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
-            model.h_action_wta.clear()
+            choice = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
+            model.h_action_collapsed.clear()
             seq_choices.append(choice)
 
     # Now evaluate accuracy:
@@ -222,7 +222,7 @@ def train_with_goals(noise=0, iterations=5000, learning_rate=0.1, nonlinearity=t
                 model.feedforward(observation)
 
             # Get some statistics about what was correct and what wasn't
-            tchoices = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
+            tchoices = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
             ratios = scripts.evaluate([tchoices], [targets])
             loss, _ = model.train_obsolete(targets, goal, None, tape)
         # Monitor progress using rolling averages.
@@ -327,8 +327,8 @@ def accuracy_test_with_goals(model, gain=[1, 1, 1, 1]):
                 model.feedforward(observation)
                 hidden_activation.append(model.context)
             # Get some statistics about what was correct and what wasn't
-            choice = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
-            model.h_action_wta.clear()
+            choice = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
+            model.h_action_collapsed.clear()
             seq_choices.append(choice)
 
     # Now evaluate accuracy:

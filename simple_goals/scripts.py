@@ -69,9 +69,9 @@ def train_supervised_teacoffeeenv(model, environment, num_episodes):
                 env.do_action(target[0])  # Transition the MDP according to the *target* action, not the chosen action!
 
             # Get some statistics about what was correct and what wasn't
-            ratios = evaluate([model.h_action_wta, model.h_goal1_wta, model.h_goal2_wta],
+            ratios = evaluate([model.h_action_collapsed, model.h_goal1_collapsed, model.h_goal2_collapsed],
                               targets_onehot)
-            rng_avg_action1 = utils.rolling_avg(rng_avg_action1, ratio_correct([model.h_action_wta[0]], [targets_onehot[0][0]]), 2./(episode+2) if episode < 1000 else 0.001)
+            rng_avg_action1 = utils.rolling_avg(rng_avg_action1, ratio_correct([model.h_action_collapsed[0]], [targets_onehot[0][0]]), 2. / (episode + 2) if episode < 1000 else 0.001)
             # Train model, record loss.
             loss = model.train_obsolete(targets_onehot[0], targets_onehot[1], targets_onehot[2], tape)
 
@@ -118,9 +118,9 @@ def train_supervised(model, env, num_episodes):
                 env.do_action(target[0])  # Transition the MDP according to the *target* action, not the chosen action!
 
             # Get some statistics about what was correct and what wasn't
-            ratios = evaluate([model.h_action_wta, model.h_goal1_wta, model.h_goal2_wta],
+            ratios = evaluate([model.h_action_collapsed, model.h_goal1_collapsed, model.h_goal2_collapsed],
                               targets_onehot)
-            rng_avg_action1 = utils.rolling_avg(rng_avg_action1, ratio_correct([model.h_action_wta[0]], [targets_onehot[0][0]]), 2./(episode+2) if episode < 1000 else 0.001)
+            rng_avg_action1 = utils.rolling_avg(rng_avg_action1, ratio_correct([model.h_action_collapsed[0]], [targets_onehot[0][0]]), 2. / (episode + 2) if episode < 1000 else 0.001)
             # Train model, record loss.
             loss = model.train_obsolete(targets_onehot[0], targets_onehot[1], targets_onehot[2], tape)
 

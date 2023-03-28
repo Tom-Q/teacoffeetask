@@ -1,8 +1,9 @@
 import utils
 import numpy as np
+from numpy import linalg
 import tensorflow as tf
 from goalenv import environment, task
-from neural import neuralnet as nn
+from neural import neuralnet as nn, layers
 import scripts
 import copy
 import analysis
@@ -13,7 +14,7 @@ import matplotlib.lines as mlines
 from sklearn.manifold import TSNE
 import time
 import random
-
+import rdm
 
 def _sequence_to_text(seq):
     top_goal_line = '\tGoals 1: '
@@ -147,15 +148,15 @@ def stats_per_sequence(sequence_ids, outputs_per_sequence, goals=True):
 
 def compute_last_step_loss(model, target, include_regularization=False):
     # action loss
-    action_loss = tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, model.h_action_softmax[-1])
+    action_loss = tf.nn.softmax_cross_entropy_with_logits(target.action_one_hot, model.h_action_activation[-1])
     total_loss = action_loss
     goal_loss = action_loss * 0. #just so it's
     if target.goal1_one_hot is not None:
-        goal1_loss = tf.nn.softmax_cross_entropy_with_logits(target.goal1_one_hot, model.h_goal1_softmax[-1])
+        goal1_loss = tf.nn.softmax_cross_entropy_with_logits(target.goal1_one_hot, model.h_goal1_activation[-1])
         total_loss += goal1_loss
         goal_loss += goal1_loss
     if target.goal2_one_hot is not None:
-        goal2_loss = tf.nn.softmax_cross_entropy_with_logits(target.goal2_one_hot, model.h_goal2_softmax[-1])
+        goal2_loss = tf.nn.softmax_cross_entropy_with_logits(target.goal2_one_hot, model.h_goal2_activation[-1])
         total_loss += goal2_loss
         goal_loss += goal2_loss
     if include_regularization:
@@ -166,9 +167,9 @@ def compute_last_step_loss(model, target, include_regularization=False):
 
 
 def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_noise=0., num_tests=10, goals=False,
-                       initialization="uniform", verbose=False,
+                       initialization=utils.SEMINORMAL, verbose=False,
                        goal_multiplier=1,
-                       noise_per_step=True, 
+                       noise_per_step=True,
                        disruption_per_step=False,
                        noise_per_step_to_input=False,
                        switch_sequence=None,
@@ -180,6 +181,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                        lesion_observation_units=False,
                        single_step_noise=None,
                        clamped_goals=False,
+                       constant_noise=0.,
                        hidden_goal_multiplier=1,
                        gain_multiplier = 1.,
                        gain_multiplier_from=0,
@@ -230,15 +232,21 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                 with tf.GradientTape() as tape:
                     model.new_episode()
                     # Initialize context with random/uniform values.
-                    if initialization == 'uniform':
+                    if initialization == utils.UNIFORM:
                         model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
                         model.action = np.zeros_like(sequence.targets[0].action_one_hot)
                         if goals:
                             model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
                             model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
-                    elif initialization == 'seminormal':
+                    elif initialization == utils.SEMINORMAL:
                         model.context = np.random.normal(0.0, 0.1, (1, model.size_hidden)).astype(dtype=np.float32)
                         model.context[model.context < 0.0] = 0.  # it's impossible for a sigmoid/relu activation to be <0
+                        model.action = np.zeros_like(sequence.targets[0].action_one_hot)
+                        if goals:
+                            model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
+                            model.goal2 = np.zeros_like(sequence.targets[0].goal2_one_hot)
+                    elif initialization == utils.ZERO_INIT:
+                        model.context = np.zeros((1, model.size_hidden), dtype=np.float32)
                         model.action = np.zeros_like(sequence.targets[0].action_one_hot)
                         if goals:
                             model.goal1 = np.zeros_like(sequence.targets[0].goal1_one_hot)
@@ -257,8 +265,9 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                         #if not isinstance(model.context, np.ndarray):
                         #    model.context = model.context.numpy()  # Doesn't matter here, we're not going to backpropagate thru that.
                         #model.context[0, :model.context.shape[1]//2] *= hidden_goal_multiplier
-                        #model.goal1 *= goal_multiplier
-                        #model.goal2 *= goal_multiplier
+                        if goals:
+                            model.goal1 *= goal_multiplier
+                            model.goal2 *= goal_multiplier
 
                         # Add noise to context layer
                         if j == noise_step:
@@ -276,6 +285,9 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                                                           mode=FLASHBANG)
                                                           #mode=REINITIALIZE)
                                                           #mode=HOLD_RANDOM_OBJECT)
+                        # constant level of noise
+                        # model.context += np.float32(np.random.normal(0., constant_noise, size=(1, model.size_hidden)))
+
                         if seq_to_test == switch_sequence or switch_sequence is None:
                             if switch_goal1 is not None and j in switch_goal1[0]:
                                 model.goal1 = copy.deepcopy(switch_goal1[1]) * goal_multiplier
@@ -313,7 +325,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                         if lesion_observation_units:
                             observation *= 0.
 
-                        model.feedforward(observation)#, gain_multiplier=gain_multiplier,
+                        model.feedforward(observation, noise_to_hidden=constant_noise)#, gain_multiplier=gain_multiplier,
                                           #gain_multiplier_from=gain_multiplier_from,
                                           #gain_multiplier_to=gain_multiplier_to)
 
@@ -332,20 +344,20 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                         # if there's an impossible action, ignore it and continue.
                         next_state = copy.deepcopy(env.state.next)
                         try:
-                            env.do_action(model.h_action_wta[-1])
+                            env.do_action(model.h_action_collapsed[-1])
 
                         except environment.ActionException as error:  # The action doesn't make sense and cannot be executed in the environment.
                             if verbose:
                                 print(error)
                             # maintain the current state when an impossible action is attempted
                             env.state.next = next_state
-                        action_str = utils.onehot_to_str(model.h_action_wta[-1], environment.GoalEnvData.actions_list)
+                        action_str = utils.onehot_to_str(model.h_action_collapsed[-1], environment.GoalEnvData.actions_list)
                         if action_str in environment.TERMINAL_ACTIONS:
                             break  # we said "done", we're done.
 
                     # Get some statistics about the sequences actually observed. Is it a recognized sequence? If not,
                     # What kind of mistake appeared?
-                    output_sequence.set_targets(model.h_goal1_wta, model.h_goal2_wta, model.h_action_wta)
+                    output_sequence.set_targets(model.h_goal1_collapsed, model.h_goal2_collapsed, model.h_action_collapsed)
                     output_sequence.id = seq_counter
                     output_sequence.target_seq_id = seqid
                     output_sequence.noise_step = noise_step
@@ -429,8 +441,15 @@ NONE = "none"
 GOAL = "goal"
 SUBGOAL = "subgoal"
 ACTION = "action"
-def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsne=False, do_loss=False, mds_sequences=None, mds_range=None, noise_steps=None, one_rdm=True):
+def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsne=False, do_loss=False,
+                      mds_sequences=None, mds_range=None, noise_steps=None, one_rdm=True,
+                      do_special_representations=True, do_dimensionality=True,
+                      verbose=False, append_to_file=None):
     sequence_ids = range(len(test_data))
+
+
+    if append_to_file is not None:
+        myfile = open(append_to_file, "a")
 
     ######################################################################################
     # Analysis 1: for each sequence, how many were right/wrong and print wrong sequences #
@@ -551,20 +570,34 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
     total_subseq_error = num_replaced
     total_action_errors = total_error - total_subseq_error
     # There's still a bug in the error counts.
-    print(
-        "Overall totals: {0}/{1} correct. {2} errors, of which:\n Action errors:{3}\n Subsequence errors: {4}\n Full sequence errors {5},\n Goal errors {6}\n".format(
-            total_correct_seq,
-            total_trials,
-            total_trials - total_correct_seq,
-            total_action_errors, # action errors.
-            total_subseq_error - total_fullseq_errors, # Are all full sequence errors ALSO subsequence errors?
-            total_fullseq_errors,
-            goal_errors
-        ))
+    if verbose:
+        print(
+            "Overall totals: {0}/{1} correct. {2} errors, of which:\n Action errors:{3}\n Subsequence errors: {4}\n Full sequence errors {5},\n Goal errors {6}\n".format(
+                total_correct_seq,
+                total_trials,
+                total_trials - total_correct_seq,
+                total_action_errors, # action errors.
+                total_subseq_error - total_fullseq_errors, # Are all full sequence errors ALSO subsequence errors?
+                total_fullseq_errors,
+                goal_errors
+            ))
 
-    print("Overall stats:\n errors on noise step: {0}\n errors on transition: {1}\n average steps noise->error: {2}\n".format(
-        error_on_noise, error_on_transition, steps_noise_to_error/num_errors if num_errors>0 else -1
-    ))
+        print("Overall stats:\n errors on noise step: {0}\n errors on transition: {1}\n average steps noise->error: {2}\n".format(
+            error_on_noise, error_on_transition, steps_noise_to_error/num_errors if num_errors>0 else -1
+        ))
+    else:
+        print("Overall totals: {0}/{1} correct, goal errors={2}.".format(total_correct_seq, total_trials, goal_errors))
+    if append_to_file is not None:
+        myfile.write("{0};{2};{3};{4};{5};{6};\n".format(
+                total_correct_seq,
+                total_trials - total_correct_seq,
+                total_action_errors, # action errors.
+                total_subseq_error - total_fullseq_errors, # Are all full sequence errors ALSO subsequence errors?
+                total_fullseq_errors,
+                goal_errors,
+                error_on_transition
+            ))
+        myfile.close()
 
     error_testing_results = None
     if do_loss:
@@ -738,27 +771,38 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
     outputs_sequences_flat = utils.flatten_onelevel(outputs_no_noise_step_distinction)
     activations = [seq.activations for seq in outputs_sequences_flat]
     activations_flat = utils.flatten_onelevel(activations)  # all this list wrangling is ugly as hell
+    activations_flat_rdm = []
+    properties_rdm = []
     if do_rdm:  # Do the RDM and MDS
         labels = []
         for seqid, seq in enumerate(outputs_sequences_flat):
+            error = "true" if seq.first_error is not None else "false"
             for targetid, target in enumerate(seq.targets):
                 label = ""
                 label += "Seq: " + str(seqid)
                 label += " - " + str(targetid + 1)
                 label += ": " + target.goal1_str + '-' + target.goal2_str + '-' + target.action_str
                 labels.append(label)
+                dict = {
+                       "seq":str(seqid),
+                       "step": str(targetid+1),
+                       "goal1":target.goal1_str,
+                       "goal2":target.goal2_str,
+                       "action":target.action_str,
+                       "error": error}
+                properties_rdm.append(dict)
 
         if one_rdm:
-            activations_flat_rdm = []
             for i, tensor in enumerate(activations_flat):
                 activations_flat_rdm.append(tensor.numpy().reshape(-1))
 
             # Generate the RDM... That's actually very expensive computationally
-            rdmatrix = analysis.rdm_euclidian(activations_flat_rdm)
-            targets = utils.flatten_onelevel([sequence.targets for sequence in outputs_sequences_flat])
-            rdmatrix, labels, _ = reorder_rdm(rdmatrix, labels, targets, mode=rdm_sort)
+            #rdmatrix = rdm.rdm_euclidian(activations_flat_rdm)
+            my_rdm = rdm.rdm(properties_rdm, vectors=activations_flat_rdm, type=rdm.EUCLIDIAN)
+            #targets = utils.flatten_onelevel([sequence.targets for sequence in outputs_sequences_flat])
+            #rdmatrix, labels, _ = reorder_rdm(rdmatrix, labels, targets, mode=rdm_sort)
 
-            analysis.save_rdm(rdmatrix, labels=labels, filename="rdm_goals", title="kitchen env goals: euclidian matrix", image=True, csv=True, figsize=50, fontsize=0.5)
+            my_rdm.save(labels=labels, filename="rdm_goals", title="kitchen env goals: euclidian matrix", image=True, csv=True, figsize=50, fontsize=0.5)
             plt.clf()
         else: #two rdms
             activations_goals = []
@@ -770,16 +814,16 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
 
             for x in [(activations_goals, "goals"), (activations_actions, "actions")]:
                 # Generate the RDM... That's actually very expensive computationally
-                rdmatrix = analysis.rdm_euclidian(x[0])
+                rdmatrix = rdm.rdm_euclidian(x[0])
                 targets = utils.flatten_onelevel([sequence.targets for sequence in outputs_sequences_flat])
                 rdmatrix, labels, _ = reorder_rdm(rdmatrix, labels, targets, rdm_sort)
-                analysis.save_rdm(rdmatrix, labels=labels, filename="rdm_side"+x[1],
+                rdm.save(rdmatrix, labels=labels, filename="rdm_side"+x[1],
                                   title="kitchen env goals gradient: euclidian matrix - "+x[1], image=True, csv=True, figsize=50,
                                   fontsize=0.5)
                 plt.clf()
         print("rdm done")
         # Generate the MDS from the RDM.
-        mdsy = analysis.mds(rdmatrix)
+        mdsy = analysis.mds(my_rdm.matrix)
         # Display the MDS! Ugh!
         # Make labels!!
         print("mds done")
@@ -795,11 +839,44 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
                 for j in range(length):
                     labels.append("seq "+ str(i) + ": " + str(j+1))
                 analysis.plot_mds_points(mdsy[mdsy_idx:mdsy_idx + length], range(length), labels=None,#labels,
-                                         style=list(colors.values())[(i)%len(colors)])
+                                         style=list(colors.values())[(i)%len(colors)], fontsize=32)
                 mdsy_idx += length
         plt.title("MDS")
         #plt.show()
+        plt.savefig("mds")
         plt.clf()
+
+    if do_dimensionality:
+        # Turn activations into a matrix or matrices
+        matrices = []
+        for tensor_list in activations:
+            vect_list = []
+            # Stack those as vectors into a numpy matrix
+            for tensor in tensor_list:
+                vect_list.append(tensor.numpy())
+            matrix = np.concatenate(vect_list, axis=0)
+            matrices.append(matrix)  #matrix = matrix[:, 0:10]
+            #matrix = np.transpose(matrix)
+            #print(matrix)
+            # compute the rank with various tolerances
+            #print("rank per tolerance:")
+            #for tolerance in [0.01, 0.1, 1.0, 1.5, 3, 5, 10., 15, 30, 100]:
+            #    print("tol={0}, rank={1}".format(tolerance, np.linalg.matrix_rank(matrix, tol=tolerance)))
+        # Now do this for all the sequences combined
+        matrix = np.concatenate(matrices, axis=0)
+        average = np.average(matrix)
+        #print("rank per tolerance (combined):")
+        #for tolerance in [0.01, 0.1, 1.0, 1.5, 3, 5, 10., 15, 30, 100]:
+        #    print("tol={0}, rank={1}".format(tolerance*average, np.linalg.matrix_rank(matrix, tol=tolerance*average)))
+        #print("average activation value")
+        #print(average)
+        #np.
+        # Compute rank of activation matrix for a given sequence.
+        #np.linalg.matrix_rank(mat, tol=0.1)
+        #print dimensionality
+        # Total - all sequences
+        # Per sequence
+        # Over a specific subsequence??
 
     if do_tsne:
         #T-SNE:
@@ -819,7 +896,8 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
         #y = tsne_results[:, 1]
     else:
         tsne_results = None
-    return tsne_results, test_data, num_errors, error_testing_results, goal_errors  # Test data is enriched during analysis (first error step)
+
+    return tsne_results, test_data, num_errors, error_testing_results, goal_errors, activations_flat_rdm, properties_rdm  # Test data is enriched during analysis (first error step)
 
 
 def reorder_rdm(rdm, labels, targets, mode=ACTION):
@@ -985,20 +1063,30 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
 
 NUM_TIMESTEPS = 899
 # used to identify perfect accuracy to stop the training
-def stop_condition(model, noise=0., goal1_noise=0., goal2_noise=0., goals=True, num_tests=10,
+BONUS_ITERATIONS = 0
+def stop_condition(model, noise=0., goal1_noise=0., goal2_noise=0., goals=True, num_tests=1,
                    sequence_ids=range(21), noise_per_step=False,
-                   disruption_per_step=False, initialization=utils.SEMINORMAL, do_rdm=False):
+                   disruption_per_step=False, context_initialization=utils.SEMINORMAL, do_rdm=False):
+    global BONUS_ITERATIONS
     test_data = generate_test_data(model, noise=noise,
                                    goal1_noise=goal1_noise, goal2_noise=goal2_noise,
                                    goals=goals, num_tests=num_tests,
                                    sequence_ids=sequence_ids,
                                    noise_per_step=noise_per_step,
                                    disruption_per_step=disruption_per_step,
-                                   initialization=initialization)
-    tsne_results, test_data, total_errors, _, goal_errors = analyse_test_data(test_data, do_rdm=do_rdm, goals=goals)
+                                   initialization=context_initialization,
+                                   verbose=False)
+    tsne_results, test_data, total_errors, _, goal_errors, _, _ = analyse_test_data(test_data, do_rdm=do_rdm, goals=goals, verbose=False)
     #return total_errors + goal_errors < NUM_TIMESTEPS / 100  # (8 errors or less, or 1% of errors). TODO triple check
-    return total_errors + goal_errors == 0
-
+    no_errors = total_errors + goal_errors == 0
+    if no_errors and BONUS_ITERATIONS == 1:
+        BONUS_ITERATIONS = 0
+        return True
+    elif no_errors:
+        BONUS_ITERATIONS = 1
+    else:
+        BONUS_ITERATIONS = 0
+    return False
 
 def train(stop_params, model, goals=False,
           noise=0., sequences=None,
@@ -1036,22 +1124,22 @@ def train(stop_params, model, goals=False,
         with tf.GradientTape() as tape:
             model.new_episode()
             # Initialize context with random/uniform values.
-            if model.nonlinearity not in [nn.SIGMOID, nn.TANH, nn.RELU]:
+            if model.nonlinearity not in [tf.nn.sigmoid, tf.nn.tanh, tf.nn.relu]:
                 raise(NotImplementedError("Only sigmoid, tanh, and ReLu activation functions are supported"))
             if context_initialization == nn.UNIFORM:
-                if model.nonlinearity == nn.SIGMOID:
+                if model.nonlinearity == tf.nn.sigmoid:
                     model.context = np.random.uniform(0.01, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
-                elif model.nonlinearity == nn.TANH:
+                elif model.nonlinearity == tf.nn.tanh:
                     model.context = np.random.uniform(-0.99, 0.99, (1, model.size_hidden)).astype(dtype=np.float32)
-                elif model.nonlinearity == nn.RELU:
+                elif model.nonlinearity == tf.nn.relu:
                     # 1.0 is an arbitrary limit, but we can't be uniform over infty
                     model.context = np.random.uniform(0.0, 1., (1, model.size_hidden)).astype(dtype=np.float32)
-            elif context_initialization == nn.NORMAL:
-                if model.nonlinearity == nn.SIGMOID or model.nonlinearity == nn.RELU:
+            elif context_initialization == utils.NORMAL:
+                if model.nonlinearity == tf.nn.sigmoid or model.nonlinearity == tf.nn.relu:
                     raise(Exception("Normal initialization incompatible with SIGMOID or RELU nonlinearity"))
                 model.context = np.random.normal(0.01, 0.1, (1, model.size_hidden)).astype(dtype=np.float32)
-            elif context_initialization == nn.SEMINORMAL:
-                if model.nonlinearity == nn.TANH:
+            elif context_initialization == utils.SEMINORMAL:
+                if model.nonlinearity == tf.nn.tanh:
                     raise(Exception("seminormal initialization incompatible with tanh nonlinearity"))
                 model.context = np.random.normal(0.0, 0.1, (1, model.size_hidden)).astype(dtype=np.float32)
                 model.context[model.context < 0.01] = 0.  # it's impossible for a sigmoid activation to be <0
@@ -1079,15 +1167,15 @@ def train(stop_params, model, goals=False,
                 model.action = copy.deepcopy(target.action_one_hot)
 
             # Get some statistics about the percentage of correct behavior
-            actions = np.array(model.h_action_wta).reshape((-1, environment.GoalEnvData.num_actions))
+            actions = np.array(model.h_action_collapsed).reshape((-1, environment.GoalEnvData.num_actions))
             target_actions = sequence.get_actions_one_hot()
             ratio_actions = scripts.ratio_correct(actions, target_actions)
             if goals:
-                goals1 = np.array(model.h_goal1_wta).reshape((-1, environment.GoalEnvData.num_goals1))
+                goals1 = np.array(model.h_goal1_collapsed).reshape((-1, environment.GoalEnvData.num_goals1))
                 target_goals1 = sequence.get_goals1_one_hot()
                 ratio_goals1 = scripts.ratio_correct(goals1, target_goals1)
 
-                goals2 = np.array(model.h_goal2_wta).reshape((-1, environment.GoalEnvData.num_goals2))
+                goals2 = np.array(model.h_goal2_collapsed).reshape((-1, environment.GoalEnvData.num_goals2))
                 target_goals2 = sequence.get_goals2_one_hot()
                 ratio_goals2 = scripts.ratio_correct(goals2, target_goals2)
                 targets = sequence.targets

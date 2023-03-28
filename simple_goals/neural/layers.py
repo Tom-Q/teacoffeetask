@@ -10,6 +10,9 @@ def winner_take_all(a):
     b[range(len(a)), a.argmax(1)] = 1
     return b
 
+def rounding(a):
+    return np.rint(a.numpy())
+
 class Layer(ABC):
     def __init__(self):
         pass
@@ -54,13 +57,22 @@ class BasicLayer(Layer):
     def _identity(x):
         return x
 
-    def feedforward(self, x):
-        return self.nonlinearity(utils.dense_linear(x, self.w, self.b))
+    def feedforward(self, x, noise=0.):
+        # TODO: remove this after recovering data
+        pre_activation = utils.dense_linear(x, self.w, self.b)
+        # adding noise before non-linearity.
+        pre_activation += np.random.normal(loc=0.0, scale=noise, size=np.shape(pre_activation))
+        return self.nonlinearity(pre_activation)
 
     @property
     def parameters(self):
         return [self.w, self.b]
 
+    # Best defined here because it's incorrect to do this within ADAM
+    def l1_reg(self):
+        pass
+    def l2_reg(self):
+        pass
 
 def group_normalization(x, group_size):
     """
@@ -101,8 +113,8 @@ class ElmanLayer(RecurrentLayer):
         dimensions = [size_input + size_output, size_output]
         return utils.initialize(dimensions, initialization_mode)
 
-    def feedforward(self, x):
-        self.h = self.layer.feedforward(tf.concat([x, self.h], axis=1))
+    def feedforward(self, x, noise=0.):
+        self.h = self.layer.feedforward(tf.concat([x, self.h], axis=1), noise)
         return self.h
 
     def reset(self, state=None):
@@ -168,6 +180,7 @@ class LSTMLayer(RecurrentLayer):
         self.updatecellgate_layer = BasicLayer(input_size=input_size+output_size, output_size=output_size, nonlinearity=tf.sigmoid)
         self.updatecell_layer = BasicLayer(input_size=input_size+output_size, output_size=output_size, nonlinearity=tf.tanh)
         self.output_layer = BasicLayer(input_size=input_size+output_size, output_size=output_size, nonlinearity=tf.sigmoid)
+        self.output_size = output_size
 
         if initial_context is None:
             self.h = np.zeros((1, output_size), dtype=np.float32)
@@ -195,8 +208,8 @@ class LSTMLayer(RecurrentLayer):
 
     def reset(self, state=None):
         if state is None:
-            self.h *= 0.
-            self.c *= 0.
+            self.h = np.zeros((1, self.output_size), dtype=np.float32)
+            self.c = np.zeros((1, self.output_size), dtype=np.float32)
         else:
             raise NotImplementedError("figure this out later")
 

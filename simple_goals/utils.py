@@ -51,6 +51,13 @@ def onehot_to_str(onehot, ordered_keys):
     index = np.argmax(onehot)
     return ordered_keys[index]
 
+def str_to_multihot(str_keys, ordered_keys):
+    multihot = np.zeros((1, len(ordered_keys)), dtype=np.float32)
+    for key in str_keys:
+        for key in str_keys:
+            multihot[0, ordered_keys.index(key)] = 1.
+    return multihot
+
 
 def rolling_avg(prev_avg, new_val, speed, num=None):
     if not (speed > 0. and speed <= 1.):

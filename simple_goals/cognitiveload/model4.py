@@ -1,4 +1,4 @@
-# This is like model 2 but with goal units.
+# This is like model 3 but with different goal units.
 
 import utils
 import cognitiveload.cogloadtask as task
@@ -10,13 +10,16 @@ import numpy as np
 from neural import neuralnet as nn
 import rdm
 
+RDM_PERCENT = 50
+BEV_GOAL_MULTIPLIER = 1.0
+
 class HierarchyGradientParams(object):
     def __init__(self, regstrength=0.001, regincrease="linear"):
         self.reg_strength = regstrength
         self.reg_increase = regincrease
 
 
-# Model 3: with goals units.
+# Model 4: with goals units.
 
 def generate_rdm_all(nnet, name, rdm_type=rdm.EUCLIDIAN, save_files=True, title="RDM training combined",
                      from_file=False, delete_blank_states=True, collapse_rdm=True):
@@ -41,18 +44,18 @@ def generate_rdm_all(nnet, name, rdm_type=rdm.EUCLIDIAN, save_files=True, title=
     rdmatrix = model2.process_rdmatrix(rdmatrix, delete_blank_states)
     return rdmatrix
 
+import copy
 def generate_rdm_all_gradient(nnet, name, blanks, rdm_type=rdm.SPEARMAN, save_files=True, title="RDM training combined",
                      from_file=False, delete_blank_states=True):
     if not from_file:
-        if rdm_type != rdm.SPEARMAN:
-            raise Exception("not implemented")
-        hidden_both, accuracy_totals_both, accuracy_fullseqs_both = test_network_all(nnet)
-        hidden_ari, accuracy_totals_ari, accuracy_fullseqs_ari = test_network_ari(nnet, blanks)
-        hidden_bev, accuracy_totals_bev, accuracy_fullseqs_bev = test_network_bev(nnet, blanks)
+        hidden_both, accuracy_totals_both, accuracy_fullseqs_both, properties_both = test_network_all(nnet)
+        hidden_ari, accuracy_totals_ari, accuracy_fullseqs_ari, properties_ari = test_network_ari(nnet, blanks)
+        hidden_bev, accuracy_totals_bev, accuracy_fullseqs_bev, properties_bev = test_network_bev(nnet, blanks)
         print("Both: {0}, {1}".format(accuracy_totals_both, accuracy_fullseqs_both))
         print("Ari: {0}, {1}".format(accuracy_totals_ari, accuracy_fullseqs_ari))
         print("Bev: {0}, {1}".format(accuracy_totals_bev, accuracy_fullseqs_bev))
 
+        properties = properties_bev + properties_ari + properties_both
         hidden = utils.flatten_onelevel(hidden_bev) +\
                  utils.flatten_onelevel(hidden_ari) +\
                  utils.flatten_onelevel(hidden_both)
@@ -60,23 +63,24 @@ def generate_rdm_all_gradient(nnet, name, blanks, rdm_type=rdm.SPEARMAN, save_fi
         hidden_left = []
         hidden_right = []
         for vector in hidden:
-            hidden_left.append(vector[:len(vector)//2])
-            hidden_right.append(vector[len(vector)//2:])
-
-        # Now cut the hidden layer in two.
-        rdmatrix_left = rdm.rdm_spearman(hidden_left)
-        rdmatrix_right = rdm.rdm_spearman(hidden_right)
+            hidden_left.append(vector[:RDM_PERCENT*len(vector)//100])
+            hidden_right.append(vector[(100-RDM_PERCENT)*len(vector)//100:])
+        properties_right = copy.deepcopy(properties)
         # save the massive rdm for debug purposes (so that I don't have to generate it all over again everytime).
+        rdmatrix_left = rdm.rdm(properties, type=rdm_type, vectors=hidden_left)
+        rdmatrix_right = rdm.rdm(properties_right, type=rdm_type, vectors=hidden_right)
+
         utils.save_object(name+"rdmatright", rdmatrix_right)
         utils.save_object(name+"rdmatleft", rdmatrix_left)
     else:
         rdmatrix_left = utils.load_object(name+"rdmatleft")
         rdmatrix_right = utils.load_object(name+"rdmatright")
 
-    rdmatrix_left, labels = model2.process_matrix(rdmatrix_left, delete_blank_states)
-    rdmatrix_right, _ = model2.process_matrix(rdmatrix_right, delete_blank_states)
-
-    return rdmatrix_left, rdmatrix_right, labels
+    #rdmatrix_left.save(filename="unprocessed_left", dpi=100, fontsize=2, figsize=40)
+    #rdmatrix_right.save(filename="unprocessed_right", dpi=100, fontsize=2, figsize=40)
+    rdmatrix_left = model2.process_rdmatrix(rdmatrix_left, delete_blank_states)
+    rdmatrix_right = model2.process_rdmatrix(rdmatrix_right, delete_blank_states)
+    return rdmatrix_left, rdmatrix_right
 
 
 def apply_extra_loss(network, hrp):
@@ -91,40 +95,40 @@ def apply_extra_loss(network, hrp):
     extra_loss = 0.
 
     # Recurrent
-    extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
+    extra_loss += utils.weight_regularization_calculator(model.hidden_layer.layer.w,
                                                          [0, model.size_hidden], [0, model.size_hidden],
                                                          hrp.reg_strength, reg_type="recurrent", reg_increase=hrp.reg_increase)
 
     # Prev action to hidden
     # print("action-->hidden")
-    extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
+    extra_loss += utils.weight_regularization_calculator(model.hidden_layer.layer.w,
                                                          [model.size_hidden + model.size_observation,
                                                           model.size_hidden + model.size_observation + model.size_action],
                                                          [0, model.size_hidden],
-                                                         hrp.reg_strength, reg_type="input_right",
+                                                         hrp.reg_strength, reg_type="input_left",
                                                          reg_increase=hrp.reg_increase)
 
     # middle=0.25)
     # Prev goal to hidden
     # print("goal-->hidden")
-    extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
+    extra_loss += utils.weight_regularization_calculator(model.hidden_layer.layer.w,
                                                          [model.size_hidden + model.size_observation + model.size_action,
                                                           model.size_hidden + model.size_observation + model.size_action + model.size_goal1],
                                                          [0, model.size_hidden],
-                                                         hrp.reg_strength, reg_type="input_left", reg_increase=hrp.reg_increase)
+                                                         hrp.reg_strength, reg_type="input_right", reg_increase=hrp.reg_increase)
 
     # Regularization in the output layers (goals and actions) weights
     # hidden to next action
     extra_loss += utils.weight_regularization_calculator(model.action_layer.w,
                                                          [0, model.size_hidden], [0, model.size_action],
-                                                         hrp.reg_strength, reg_type="output_right",
+                                                         hrp.reg_strength, reg_type="output_left",
                                                          reg_increase=hrp.reg_increase)
 
     # Hidden to next goal
     # print("hidden->goal")
     extra_loss += utils.weight_regularization_calculator(model.goal1_layer.w,
                                                          [0, model.size_hidden], [0, model.size_goal1],
-                                                         hrp.reg_strength, reg_type="output_left",
+                                                         hrp.reg_strength, reg_type="output_right",
                                                          reg_increase=hrp.reg_increase)
 
     return extra_loss
@@ -140,7 +144,6 @@ def train_all(stopping_params, nnet, hrp=None, blanks=True):
         seq_ari = task.arithmetic_seqs[seq_ari_id]
         seq_bev_id = random.randint(0, len(task.beverage_seqs)-1)
         seq_bev = task.beverage_seqs[seq_bev_id]
-
         mode = np.random.choice([task.ONLY_ARI, task.ONLY_BEV, task.BOTH + task.START_BEV, task.BOTH + task.START_ARI])
 
         with tf.GradientTape() as tape:
@@ -157,10 +160,9 @@ def train_all(stopping_params, nnet, hrp=None, blanks=True):
             elif mode == task.BOTH+task.START_ARI:
                 targets = make_targets_all(seq_bev, seq_ari, task.START_ARI)
                 ff_all(nnet, seq_bev, seq_ari, task.START_ARI)
-
-
-            loss = nnet.train(tape, targets, apply_extra_loss(nnet, hrp))
-            loss = loss.numpy()[0]
+            extra_loss = apply_extra_loss(nnet, hrp)
+            loss = nnet.train_MSE(tape, targets, extra_loss)
+            loss = loss.numpy() #[0]
             avg_loss = 0.999 * avg_loss + 0.001 * loss
             if i % 100 == 0:
                 _, accuracy_both, _, _ = test_network_all(nnet)
@@ -186,10 +188,10 @@ def stop_condition(nnet, blanks, min_accuracy=1.):
         np.all(accuracy_bev >= [.5, 1., .5, 1., 1., 1., 1., 1., 1., 1., 1.])
 
 
-def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
-                        num_networks=1, name="model3", hrp=None,
+def run_model4_multiple(stopping_params, nnparams, blanks, from_file=False,
+                        num_networks=1, name="model4", hrp=None,
                         type=rdm.EUCLIDIAN, skips=None):
-    if from_file is not None:
+    if from_file:
         networks = []
         if skips is None:
             skips = []
@@ -199,10 +201,12 @@ def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
     else:
         networks = []
         for i in range(num_networks):
-            nnparams.size_goal1=2
+            nnparams.size_goal1=4
             nnparams.size_action=len(task.output_symbols)
             nnparams.size_observation=len(task.input_symbols)
             nnet = nn.GoalNet(params=nnparams)
+            nnet.action_layer.nonlinearity = tf.nn.sigmoid  # Sigmoid layers for goal outputs make the best sense.
+            nnet.goal1_layer.nonlinearity = tf.nn.sigmoid  # Sigmoid layers for goal outputs make the best sense.
             train_all(stopping_params, nnet, hrp=hrp, blanks=blanks)
             utils.save_object(name, nnet)
             networks.append(nnet)
@@ -213,12 +217,11 @@ def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
             print(accuracy_fullseqs)
 
     # pattern of sequences, for the mds
-    pattern = [6]*4 + [6]*4 + [12]*4
     if hrp is None:
         final_rdm = None
         for i, net in enumerate(networks):
             print(i)
-            net_rdm = generate_rdm_all(net, name=name, from_file=False, rdm_type=type)
+            net_rdm = generate_rdm_all(net, name=name, from_file=from_file, rdm_type=type)
             if final_rdm is None:
                 final_rdm = rdm.rdm(properties=net_rdm.properties, matrix_values=net_rdm.matrix.copy())
             else:
@@ -231,28 +234,37 @@ def run_model3_multiple(stopping_params, nnparams, blanks, from_file=None,
         final_rdm.save(name, title="RDM training combined")#, dpi=200, figsize=60, fontsize=0.5)
         #analysis.make_mds(final_rdm.matrix, name, labels=final_rdm.get_labels(), title="MDS training combined", pattern=pattern)
     else:
-        raise NotImplementedError("obsolete")
+        #raise NotImplementedError("obsolete")
         sum_rdm_left = sum_rdm_right = None
         labels = None
-        for net in networks:
-            rdmleft, rdmright, labels = generate_rdm_all_gradient(net, name=name, blanks=blanks, from_file=False, delete_blank_states=True)
+        for idx, net in enumerate(networks):
+            print(idx)
+            rdmleft, rdmright = generate_rdm_all_gradient(net, name=name, blanks=blanks, from_file=False, delete_blank_states=True,
+                                                          rdm_type=type)
             if sum_rdm_left is None:
                 sum_rdm_left = rdmleft
                 sum_rdm_right = rdmright
             else:
-                sum_rdm_left += rdmleft
-                sum_rdm_right += rdmright
-        average_rdm_left = sum_rdm_left/num_networks
-        average_rdm_right = sum_rdm_right/num_networks
+                sum_rdm_left.matrix += rdmleft.matrix
+                sum_rdm_right.matrix += rdmright.matrix
+        sum_rdm_left.matrix /= num_networks
+        sum_rdm_right.matrix /= num_networks
 
-        utils.save_rdm(average_rdm_left, name+"left", labels,  title="RDM training combined: left (goals)", fontsize=1.)
-        utils.save_rdm(average_rdm_right, name+"right", labels,  title="RDM training combined: right (actions)", fontsize=1.)
-        analysis.make_mds(average_rdm_left, name+"left", labels=labels, title="MDS training combined: left (goals)", pattern=pattern)
-        analysis.make_mds(average_rdm_right, name+"right", labels=labels, title="MDS training combined: right (actions)", pattern=pattern)
+        model2.set_rdm_labels(sum_rdm_left)
+        model2.set_rdm_labels(sum_rdm_right)
+
+        sum_rdm_left.save(name+"left", title="RDM training combined - left")
+        sum_rdm_right.save(name+"right", title="RDM training combined - right")
+
+        #analysis.make_mds(average_rdm_left, name+"left", labels=labels, title="MDS training combined: left (goals)", pattern=pattern)
+        #analysis.make_mds(average_rdm_right, name+"right", labels=labels, title="MDS training combined: right (actions)", pattern=pattern)
+
 
 
 
 def make_targets_ari(seq_ari, blanks):
+    # Goal target is always: single, math.
+    goal_target = ["single", "math"]
     target0 = utils.str_to_onehot(seq_ari[1], task.output_symbols)
     target1 = utils.str_to_onehot(seq_ari[2], task.output_symbols)
     target2 = utils.str_to_onehot(seq_ari[3], task.output_symbols)
@@ -262,129 +274,86 @@ def make_targets_ari(seq_ari, blanks):
 
     targets = []
     if blanks:
-        targets.append(task.Target(target0, None))
-        targets.append(task.Target(None, task.goal_target_ari[0]))
-        targets.append(task.Target(target1, None))
-        targets.append(task.Target(None, task.goal_target_ari[1]))
-        targets.append(task.Target(target2, None))
-        targets.append(task.Target(None, task.goal_target_ari[2]))
-        targets.append(task.Target(target3, None))
-        targets.append(task.Target(None, task.goal_target_ari[3]))
-        targets.append(task.Target(target4, None))
-        targets.append(task.Target(None, task.goal_target_ari[4]))
-        targets.append(task.Target(target5, None))
+        targets.append(task.TargetMod4(target0, goal_target))
+        targets.append(task.TargetMod4(None, goal_target))
+        targets.append(task.TargetMod4(target1, goal_target))
+        targets.append(task.TargetMod4(None, goal_target))
+        targets.append(task.TargetMod4(target2, goal_target))
+        targets.append(task.TargetMod4(None, goal_target))
+        targets.append(task.TargetMod4(target3, goal_target))
+        targets.append(task.TargetMod4(None, goal_target))
+        targets.append(task.TargetMod4(target4, goal_target))
+        targets.append(task.TargetMod4(None, goal_target))
+        targets.append(task.TargetMod4(target5, goal_target))
     else:
-        targets.append(task.Target(target0, task.goal_target_ari[0]))
-        targets.append(task.Target(target1, task.goal_target_ari[1]))
-        targets.append(task.Target(target2, task.goal_target_ari[2]))
-        targets.append(task.Target(target3, task.goal_target_ari[3]))
-        targets.append(task.Target(target4, task.goal_target_ari[4]))
-        targets.append(task.Target(utils.str_to_onehot(seq_ari[6], task.output_symbols), None))
+        targets.append(task.TargetMod4(target0, goal_target))
+        targets.append(task.TargetMod4(target1, goal_target))
+        targets.append(task.TargetMod4(target2, goal_target))
+        targets.append(task.TargetMod4(target3, goal_target))
+        targets.append(task.TargetMod4(target4, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_ari[6], task.output_symbols), goal_target))
     return targets
 
 
 # Blanks
 def ff_ari(nnet, seq_ari, blanks):
-    if blanks:
-        zeros = np.zeros_like(utils.str_to_onehot(seq_ari[0], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.input_symbols))
-        nnet.feedforward(zeros)
-        nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.input_symbols))
-        nnet.feedforward(zeros)
-        nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.input_symbols))
-        nnet.feedforward(zeros)
-        nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.input_symbols))
-        nnet.feedforward(zeros)
-        nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.input_symbols))
-        nnet.feedforward(zeros)
-        nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.input_symbols))
-    else:
-        nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.input_symbols))
+    zeros = np.zeros_like(utils.str_to_onehot(seq_ari[0], task.input_symbols))
+    for i in range(6):
+        nnet.feedforward(utils.str_to_onehot(seq_ari[i], task.input_symbols))
+        if i < 5 and blanks:
+            nnet.feedforward(zeros)
 
-
+import warnings
 def ff_bev(nnet, seq_bev, blanks):
-    if blanks:
-        zeros = np.zeros_like(utils.str_to_onehot(seq_bev[0], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.input_symbols))
-        nnet.feedforward(zeros)
-        nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.input_symbols))
-        nnet.feedforward(zeros)
-        nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.input_symbols))
-        nnet.feedforward(zeros)
-        nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.input_symbols))
-        nnet.feedforward(zeros)
-        nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.input_symbols))
-        nnet.feedforward(zeros)
-        nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.input_symbols))
-    else:
-        nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.input_symbols))
-
+    warnings.warn("Bev goal multiplication is on")
+    zeros = np.zeros_like(utils.str_to_onehot(seq_bev[0], task.input_symbols))
+    for i in range(6):
+        nnet.goal1[0, 1] *= BEV_GOAL_MULTIPLIER
+        nnet.feedforward(utils.str_to_onehot(seq_bev[i], task.input_symbols))
+        if i < 5 and blanks:
+            nnet.feedforward(zeros)
 
 def make_targets_bev(seq_bev, blanks):
+    goal_target = ["single", "beverage"]
     targets = []
     if blanks:
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.output_symbols), None))
-        targets.append(task.Target(None, task.goal_target_bev[0]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.output_symbols), None))
-        targets.append(task.Target(None, task.goal_target_bev[1]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.output_symbols), None))
-        targets.append(task.Target(None, task.goal_target_bev[2]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.output_symbols), None))
-        targets.append(task.Target(None, task.goal_target_bev[3]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.output_symbols), None))
-        targets.append(task.Target(None, task.goal_target_bev[4]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.output_symbols), None))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[1], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(None, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[2], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(None, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[3], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(None, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[4], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(None, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[5], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(None, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[6], task.output_symbols), goal_target))
     else:
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.output_symbols), task.goal_target_bev[0]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.output_symbols), task.goal_target_bev[1]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.output_symbols), task.goal_target_bev[2]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.output_symbols), task.goal_target_bev[3]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.output_symbols), task.goal_target_bev[4]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.output_symbols), None))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[1], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[2], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[3], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[4], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[5], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[6], task.output_symbols), goal_target))
     return targets
 
 
 def ff_all(nnet, seq_bev, seq_ari, start):
-    if start == task.START_BEV:
-        nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.input_symbols))
-    elif start == task.START_ARI:
-        nnet.feedforward(utils.str_to_onehot(seq_ari[0], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[0], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[1], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[1], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[2], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[2], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[3], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[3], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[4], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[4], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_ari[5], task.input_symbols))
-        nnet.feedforward(utils.str_to_onehot(seq_bev[5], task.input_symbols))
-    else:
-        raise NotImplementedError("only starts are ari and bev")
+    warnings.warn("Bev goal multiplication is on")
+    for i in range(12//2):
+        if start == task.START_BEV:
+            nnet.goal1[0, 1] *= BEV_GOAL_MULTIPLIER
+            nnet.feedforward(utils.str_to_onehot(seq_bev[i], task.input_symbols))
+            nnet.feedforward(utils.str_to_onehot(seq_ari[i], task.input_symbols))
+        elif start == task.START_ARI:
+            nnet.feedforward(utils.str_to_onehot(seq_ari[i], task.input_symbols))
+            nnet.goal1[0, 1] *= BEV_GOAL_MULTIPLIER
+            nnet.feedforward(utils.str_to_onehot(seq_bev[i], task.input_symbols))
+        else:
+            raise NotImplementedError("only starts are ari and bev")
 
 def make_targets_all(seq_bev, seq_ari, start):
+    goal_target = ["combined", "beverage", "math"]
     target0 = utils.str_to_onehot(seq_ari[1], task.output_symbols)
     target1 = utils.str_to_onehot(seq_ari[2], task.output_symbols)
     target2 = utils.str_to_onehot(seq_ari[3], task.output_symbols)
@@ -394,31 +363,31 @@ def make_targets_all(seq_bev, seq_ari, start):
 
     targets = []
     if start == task.START_BEV:
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.output_symbols), task.goal_target_ari[0]))
-        targets.append(task.Target(target0, task.goal_target_bev[0]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.output_symbols), task.goal_target_ari[1]))
-        targets.append(task.Target(target1, task.goal_target_bev[1]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.output_symbols), task.goal_target_ari[2]))
-        targets.append(task.Target(target2, task.goal_target_bev[2]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.output_symbols), task.goal_target_ari[3]))
-        targets.append(task.Target(target3, task.goal_target_bev[3]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.output_symbols), task.goal_target_ari[4]))
-        targets.append(task.Target(target4, task.goal_target_bev[4]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.output_symbols), task.goal_target_ari[5]))
-        targets.append(task.Target(target5, None))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[1], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(target0, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[2], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(target1, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[3], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(target2, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[4], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(target3, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[5], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(target4, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[6], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(target5, goal_target))
     elif start == task.START_ARI:
-        targets.append(task.Target(target0, task.goal_target_bev[0]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[1], task.output_symbols), task.goal_target_ari[0]))
-        targets.append(task.Target(target1, task.goal_target_bev[1]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[2], task.output_symbols), task.goal_target_ari[1]))
-        targets.append(task.Target(target2, task.goal_target_bev[2]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[3], task.output_symbols), task.goal_target_ari[2]))
-        targets.append(task.Target(target3, task.goal_target_bev[3]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[4], task.output_symbols), task.goal_target_ari[3]))
-        targets.append(task.Target(target4, task.goal_target_bev[4]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[5], task.output_symbols), task.goal_target_ari[4]))
-        targets.append(task.Target(target5, task.goal_target_bev[5]))
-        targets.append(task.Target(utils.str_to_onehot(seq_bev[6], task.output_symbols), None))
+        targets.append(task.TargetMod4(target0, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[1], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(target1, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[2], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(target2, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[3], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(target3, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[4], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(target4, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[5], task.output_symbols), goal_target))
+        targets.append(task.TargetMod4(target5, goal_target))
+        targets.append(task.TargetMod4(utils.str_to_onehot(seq_bev[6], task.output_symbols), goal_target))
     return targets
 
 

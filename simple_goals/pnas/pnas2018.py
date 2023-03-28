@@ -53,7 +53,7 @@ def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorith
 
             #if episode % 2 == 0:
                 # Get some statistics about what was correct and what wasn't
-            tchoices = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
+            tchoices = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
             ratios = scripts.evaluate([tchoices], [targets])
             # Train model, record loss.
             if loss_type==MSE:
@@ -110,7 +110,7 @@ def test_one_sequence(model, sequence_num, turn_goal_step=None, goal_to_turn=Non
                 model.feedforward(observation)
                 hidden_activation.append(model.context)
             # Get some statistics about what was correct and what wasn't
-            choice = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
+            choice = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
             model.clear_history()
             results.append(choice)
 
@@ -176,8 +176,8 @@ def accuracy_test(model, name=None, noise=0., initial_context=ZEROS):
                 model.feedforward(observation)
                 hidden_activation.append(model.context)
             # Get some statistics about what was correct and what wasn't
-            choice = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
-            model.h_action_wta.clear()
+            choice = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
+            model.h_action_collapsed.clear()
             seq_choices.append(choice)
 
     # Now evaluate accuracy:
@@ -486,8 +486,8 @@ def accuracy_test_keepcontext(model, name=None, num_samples=100):
                 model.feedforward(observation)
                 hidden_activation[seq_id][i].append(model.context.numpy())
             # Get some statistics about what was correct and what wasn't
-            choice = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
-            model.h_action_wta.clear()
+            choice = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
+            model.h_action_collapsed.clear()
             seq_choices.append(choice)
 
     hidden_activations_averaged = []
@@ -606,7 +606,7 @@ def trainACC(model, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorithm=
                 observation = inputs[i].reshape(1, -1)
                 model.feedforward(observation)
 
-            tchoices = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
+            tchoices = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
             ratios = scripts.evaluate([tchoices], [targets])
             # Train model, record loss.
             ol, pl, cl, l2l = model.train(None, targets)
@@ -713,8 +713,8 @@ def accuracy_testACC(model, name=None, noise=0., initial_context=ZEROS):
                 model.feedforward(observation)
                 hidden_activation.append(model.context)
             # Get some statistics about what was correct and what wasn't
-            choice = np.array(model.h_action_wta).reshape((-1, len(targets[0])))
-            model.h_action_wta.clear()
+            choice = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
+            model.h_action_collapsed.clear()
             seq_choices.append(choice)
 
     # Now evaluate accuracy:

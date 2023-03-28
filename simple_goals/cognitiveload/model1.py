@@ -82,7 +82,7 @@ def test_network_all(model):
 
             # Now also test whether the model was correct or not: compare targets with actual outputs
             targets = make_targets_all(seq_bev, seq_ari)
-            outputs = [a.flatten() for a in model.h_action_wta]
+            outputs = [a.flatten() for a in model.h_action_collapsed]
             accuracy_sequence = np.zeros_like(accuracy_totals)
             sequence_fail = False
             for i in range(sequence_length):
@@ -187,7 +187,7 @@ def test_network_ari(model):
 
         # Now also test whether the model was correct or not: compare targets with actual outputs
         targets = make_targets_ari(seq_ari)
-        outputs = [a.flatten() for a in model.h_action_wta]
+        outputs = [a.flatten() for a in model.h_action_collapsed]
         accuracy_sequence = np.zeros_like(accuracy_totals)
         sequence_fail = False
         for i in range(sequence_length):
@@ -279,7 +279,7 @@ def test_network_bev(model):
 
         # Now also test whether the model was correct or not: compare targets with actual outputs
         targets = make_targets_bev(seq_bev)
-        outputs = [a.flatten() for a in model.h_action_wta]
+        outputs = [a.flatten() for a in model.h_action_collapsed]
         accuracy_sequence = np.zeros_like(accuracy_totals)
         sequence_fail = False
         for i in range(sequence_length):

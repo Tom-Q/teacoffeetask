@@ -7,28 +7,263 @@ import goalenv
 from goalenv import environment as env, goalenv2020
 import tensorflow as tf
 
-utils.initialize_random_seeds(5)
+utils.initialize_random_seeds(1)
+
+# Free energy tutorial
+
+import matplotlib.pyplot as plt
+import math
 
 
-# Redoing the goal environment figures.
+if True:  # TRAINING NETWORKS
+    for i in range(50):
+        for g in [0, 1]:
+            model = nn.GoalNet(size_hidden=50, size_observation=29, size_action=19, # 50
+                               size_goal1=len(env.GoalEnvData.goals1_list) * g,
+                               size_goal2=len(env.GoalEnvData.goals2_list) * g,
+                               algorithm=optimizers.ADAM, learning_rate=0.001,  # 0.001
+                               L2_reg=0., #0.0001,
+                               initialization=utils.HE,   # HE
+                               nonlinearity=tf.nn.relu,     # relu
+                               last_action_inputs=True)
 
-if False:
-    model = nn.GoalNet(size_hidden=50, size_observation=29, size_action=19,
-                            size_goal1=len(env.GoalEnvData.goals1_list),
-                            size_goal2=len(env.GoalEnvData.goals2_list),
-                            algorithm=optimizers.ADAM, learning_rate=0.001,
-                            L2_reg=0.0001,
-                            initialization=utils.HE,
-                            nonlinearity=tf.nn.relu,
-                            last_action_inputs=True)
-
-    stopping = nn.ParamsStopping(max_iterations=25000, min_iterations=3010, check_frequency=1000,
-                                 stop_condition=goalenv2020.stop_condition, goals=True, noise=0.0)
-    model = goalenv2020.train(stop_params=stopping, model=model, goals=True,
-                              noise=0.0, sequences=range(21), context_initialization=nn.ZEROS)
-    utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise", model)
+            stopping = nn.ParamsStopping(max_iterations=20000, min_iterations=0, check_frequency=1000,
+                                         stop_condition=goalenv2020.stop_condition, goals=bool(g), noise=0.0,
+                                         context_initialization=utils.ZERO_INIT)
+            goalenv2020.BONUS_ITERATIONS = 0
+            model = goalenv2020.train(stop_params=stopping, model=model, goals=bool(g),
+                                      noise=0.0, sequences=range(21), context_initialization=utils.ZERO_INIT) # normal context initialization to try and improve learning?
+            utils.save_object("bigmodel1_"+str(g)+"goals_relu_adam_nonoise", model)
 
     sys.exit()
+
+# 25 networks with goals
+# 25 networks without goals
+# Todo: take a sequence and a network.
+# For this sequence, compare:
+# 1. With goals. (a) RDM (b) MDS (c) t-SNE
+
+if True: # Regenerate all data.
+    for constant_noise in [1.]:
+        myfile = open("results.csv", "a")
+        myfile.write("Noise "+ str(constant_noise) +"\n")
+        myfile.close()
+        for goals in [True]:
+            for network_id in range(20):
+                #print(network_id)
+                #print(goals)
+                #network_id=10
+                print("\nNETWORK:" + str(network_id+1))
+                goal_str = "1" if goals else "0"
+                model = utils.load_object("bigmodel1_"+ goal_str + "goals_relu_adam_nonoise", network_id)
+                test_data = goalenv2020.generate_test_data(model, noise=0.,
+                                                           goal1_noise=0., goal2_noise=0.,
+                                                           goals=goals, num_tests=1,
+                                                           goal_multiplier=2.0,
+                                                           sequence_ids=range(21),
+                                                           ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
+                                                           # switch_goal1= (range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
+                                                           # switch_goal2= (range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
+                                                           # switch_sequence=2,
+                                                           #lesion_observation_units=True,
+                                                           #lesion_action_units=True,
+                                                           lesion_goal2_units=False,
+                                                           lesion_goal1_units=False,
+                                                           noise_per_step=False,
+                                                           noise_per_step_to_input=False,
+                                                           disruption_per_step=False,
+                                                           constant_noise=constant_noise,
+                                                           initialization=utils.ZERO_INIT,
+                                                           clamped_goals=False,
+                                                           verbose=False)
+                #utils.save_object("test_data_1", test_data)
+
+                test_data = goalenv2020.analyse_test_data(test_data, goals=goals,
+                                                          do_special_representations=False,
+                                                          do_tsne=False,
+                                                          do_rdm=False,
+                                                          mds_range=50,
+                                                          mds_sequences=range(21),
+                                                          verbose=True,
+                                                          append_to_file="results.csv")
+    sys.exit(0)
+if True:  # New Cognitive Load model.
+    #a) Load network. Just the last one.
+    #b) Generate test data
+
+    """
+    test_data = goalenv2020.generate_test_data(model, noise=0.,
+                   goal1_noise=0., goal2_noise=0.,
+                   goals=True, num_tests=1,
+                   goal_multiplier=1,
+                   sequence_ids=range(21), ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
+                   #switch_goal1= (range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
+                   #switch_goal2= (range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
+                   switch_sequence=2,
+                   noise_per_step=False,
+                   noise_per_step_to_input=False,
+                   disruption_per_step=False,
+                   initialization=utils.SEMINORMAL,
+                   clamped_goals=False,
+                   hidden_goal_multiplier=1.)
+                   #gain_multiplier = goal_multiplier,
+                   #gain_multiplier_from=0,
+                   #gain_multiplier_to=50)
+    #c) Analyze test data:
+    test_data = goalenv2020.analyse_test_data(test_data, goals=True, do_special_representations=True, do_tsne=True, do_rdm=True,
+                                              mds_range=50, mds_sequences=[0, 1, 2, 3])
+
+    """
+    m1_eqgs_avg = 0
+    m2_eqgs_avg = 0
+    m1_digeqs_avg = 0
+    m2_digeqs_avg = 0
+    m1_eqgdiss_avg = 0
+    m2_eqgdiss_avg = 0
+    m1_m2_avg = 0
+    m1_eqgs_cnt = 0
+    m2_eqgs_cnt = 0
+    m1_digeqs_cnt = 0
+    m2_digeqs_cnt = 0
+    m1_eqgdiss_cnt = 0
+    m2_eqgdiss_cnt = 0
+    m1_m2_cnt = 0
+    for network_id in range(21):
+        model = utils.load_object("bigmodel1_1goals_relu_adam_nonoise", network_id)
+        #b) Generate test data
+        test_data = goalenv2020.generate_test_data(model, noise=0.0,
+                       goal1_noise=0., goal2_noise=0.,
+                       goals=True, num_tests=1,
+                       goal_multiplier=1,
+                       sequence_ids=range(21), ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
+                       #switch_goal1= (range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
+                       #switch_goal2= (range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
+                       #switch_sequence=2,
+                       noise_per_step=False,
+                       noise_per_step_to_input=False,
+                       disruption_per_step=False,
+                       initialization=utils.SEMINORMAL,
+                       clamped_goals=False)
+                       #hidden_goal_multiplier=1.)
+                       #gain_multiplier = goal_multiplier,
+                       #gain_multiplier_from=0,
+                       #gain_multiplier_to=50)
+        #c) Analyze test data:
+        test_data = goalenv2020.analyse_test_data(test_data, goals=True, do_special_representations=True, do_tsne=True, do_rdm=True,
+                                                  mds_range=50, mds_sequences=range(21))
+        activations1 = test_data[-2]
+        properties1 = test_data[-1]
+
+        test_data = goalenv2020.generate_test_data(model, noise=0.,
+                       goal1_noise=0., goal2_noise=0.,
+                       goals=True, num_tests=1,
+                       goal_multiplier=3,
+                       sequence_ids=range(21), ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
+                       #switch_goal1= (range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
+                       #switch_goal2= (range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
+                       #switch_sequence=2,
+                       noise_per_step=False,
+                       noise_per_step_to_input=False,
+                       disruption_per_step=False,
+                       initialization=utils.SEMINORMAL,
+                       clamped_goals=False)
+                       #hidden_goal_multiplier=1.)
+                       #gain_multiplier = goal_multiplier,
+                       #gain_multiplier_from=0,
+                       #gain_multiplier_to=50)
+        #c) Analyze test data:
+        test_data = goalenv2020.analyse_test_data(test_data, goals=True, do_special_representations=True, do_tsne=True, do_rdm=True,
+                                                  mds_range=50, mds_sequences=range(21))
+        activations2 = test_data[-2]
+        properties2 = test_data[-1]
+
+        for property in properties1:
+            property["multiplier"] = "1"
+        for property in properties2:
+            property["multiplier"] = "2"
+
+        # mark as erroneous the properties1 equivalents of properties2.
+        for idx, property2 in enumerate(properties2):
+            if property2["error"] == "true":
+                # look for corresponding property1
+                for property1 in properties1:
+                    if property1["seq"] == property2["seq"]:
+                        property1["error"] = "true"
+
+
+        # Now make an RDM with activations 1 and activations 2
+        import rdm
+
+        my_rdm = rdm.rdm(properties=properties1 + properties2, vectors=activations1 + activations2,
+                         type=rdm.EUCLIDIAN)
+
+        # my_rdm.plot_rdm("goal comparison")
+        #my_rdm.save("goal_comparison", figsize=50, fontsize=0.5)
+
+        print("\n\n----------------\nNETWORK "+str(network_id))
+        m1_eqgs = my_rdm.get_average_key(
+            keys_values={"multiplier": "1", "error": "false"},
+            equals=["goal1", "goal2", "seq"])
+        print("multiplier 1 - equal goals and sequence: \n{0}".format(m1_eqgs))
+        m1_eqgs_avg += m1_eqgs
+        m1_eqgs_cnt += 1
+
+        m2_eqgs = my_rdm.get_average_key(
+            keys_values={"multiplier": "2", "error": "false"},
+            equals=["goal1", "goal2", "seq"])
+        print("multiplier 2 - equal goals and sequence: \n{0}".format(m2_eqgs))
+        m2_eqgs_avg += m2_eqgs
+        m2_eqgs_cnt += 1
+
+        m1_digeqs = my_rdm.get_average_key(
+                                    keys_values={"multiplier": "1", "error": "false"},
+                                    equals=["seq"], unequals=["goal2"])
+        print("multiplier 1 - different goals and same sequence: \n{0}".format(m1_digeqs))
+        m1_digeqs_avg += m1_digeqs
+        m1_digeqs_cnt += 1
+
+        m2_digeqs = my_rdm.get_average_key(
+                                    keys_values={"multiplier": "2", "error": "false"},
+                                    equals=["seq"], unequals=["goal2"])
+        print("multiplier 2 - different goals and same sequence: \n{0}".format(m2_digeqs))
+        m2_digeqs_avg += m2_digeqs
+        m2_digeqs_cnt += 1
+
+        m1_eqgdiss = my_rdm.get_average_key(
+                                    keys_values={"multiplier": "1", "error": "false"},
+                                    equals=["goal1", "goal2"], unequals=["seq"])
+        print("multiplier 1 - equal goals, different sequence: \n{0}".format(m1_eqgdiss))
+        m1_eqgdiss_avg += m1_eqgdiss
+        m1_eqgdiss_cnt += 1
+
+        m2_eqgdiss = my_rdm.get_average_key(
+                                    keys_values={"multiplier": "2", "error": "false"},
+                                    equals=["goal1", "goal2"], unequals=["seq"])
+        print("multiplier 2 - equal goals, different sequence: \n{0}".format(m2_eqgdiss))
+        m2_eqgdiss_avg += m2_eqgdiss
+        m2_eqgdiss_cnt += 1
+
+        m1_m2 = my_rdm.get_average_key(
+                                    keys_values={"error": "false"},
+                                    equals=["goal1", "goal2", "seq", "step"], unequals=["multiplier"])
+        print("multiplier 1 vs 2, same sequences and steps: \n{0}".format(m1_m2))
+        m1_m2_avg += m1_m2
+        m1_m2_cnt += 1
+
+    print("---------\nTOTALS !!")
+    print(m1_eqgs_avg/m1_eqgs_cnt)
+    print(m2_eqgs_avg/m2_eqgs_cnt)
+    print(m1_digeqs_avg/m1_digeqs_cnt)
+    print(m2_digeqs_avg/m2_digeqs_cnt)
+    print(m1_eqgdiss_avg/m1_eqgdiss_cnt)
+    print(m2_eqgdiss_avg/m2_eqgdiss_cnt)
+    print(m1_m2_avg/m1_m2_cnt)
+    exit()
+        # 2. With amplified goals. (a) RDM (b) MDS (c) t-SNE
+        # THEN compare networks with and without goals?
+        # For this I need 25 networks with goals and 25 without goals.
+        # Make RDM average and MDS average; Euclidian and Spearman.
+
 
 if False: # rdm test
     import numpy as np
@@ -378,13 +613,66 @@ if False:
 
     sys.exit()
 
-if True:
+if False:
+    import cognitiveload.model4 as mod4
     import cognitiveload.model3 as mod3
     import cognitiveload.model2 as mod2
     mod3.FAST_RDM = True
     import cognitiveload.cogloadtask as task
     import rdm
     import tensorflow as tf
+
+    # 0. Mod 4 stuff
+    hrp = mod4.HierarchyGradientParams(regincrease="linear", regstrength=0.00005)#regstrength=0.00005)
+    nnparams = nn.ParamsGoalNet(algorithm=optimizers.SGD,
+                                nonlinearity=tf.nn.tanh,
+                                initialization=utils.NORMAL,
+                                learning_rate=0.01,
+                                size_action=None,  # these will get filled automatically
+                                size_observation=None,  #
+                                size_hidden=50,
+                                L1_reg=0, L2_reg=0)
+
+    stopping = nn.ParamsStopping(max_iterations=20000, min_iterations=1000, check_frequency=200,
+                                 stop_condition=mod4.stop_condition, blanks=True, min_accuracy=1.)
+
+    nnparams.size_hidden = 100
+    nnparams.learning_rate = 0.01
+    nnparams.initialization = utils.NORMAL
+    for i in [1.0, 2.0, 4.0, 10.0]:
+        for j in [100]:
+            print(i)
+            print(j)
+            mod4.BEV_GOAL_MULTIPLIER = i
+            mod4.RDM_PERCENT = j
+            mod4.run_model4_multiple(stopping_params=stopping,
+                                     num_networks=50, from_file="model4_fixed_lr001_reg000005",
+                                     name="model4_fixed_lr001_reg000005_"+str(int(i))+'_' +str(j),
+                                     nnparams=nnparams,
+                                     blanks=True,
+                                     type=rdm.EUCLIDIAN,
+                                     hrp=hrp,
+                                     skips=[0, 6, 28, 46])
+    """
+    mod4.BEV_GOAL_MULTIPLIER = 1.5
+    mod4.run_model4_multiple(stopping_params=stopping,
+                             num_networks=5, #from_file="mod4_normal_l20.0_sig100_sgd_48",
+                             name="50_50_euclidian_bev15",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN,
+                             hrp=hrp)#,
+
+    mod4.BEV_GOAL_MULTIPLIER = 1.0
+    mod4.run_model4_multiple(stopping_params=stopping,
+                             num_networks=5, from_file="mod4_normal_l20.0_sig100_sgd_48",
+                             name="50_50_euclidian_bev10",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN,
+                             hrp=hrp)#,
+    """
+    sys.exit(0)
 
     # 1. one network with tanh. Make RDMs at 1, 10, 100, 1000
     hrp = mod3.HierarchyGradientParams(regincrease="linear", regstrength=0.0)
@@ -466,26 +754,39 @@ if True:
     nnparams.nonlinearity = tf.nn.relu
     nnparams.learning_rate = 0.001
     nnparams.size_hidden = 25
-    #mod3.run_model3_multiple(stopping_params=stopping,
-    #                             num_networks=50,  from_file="he_relu_25_adam_0001_48",
-    #                             name="he_relu_25_adam_0001_48",
-    #                             nnparams=nnparams,
-    #                             blanks=True,
-    #                             type=rdm.EUCLIDIAN)
-
+    mod2.run_model2_multiple(stopping_params=stopping,
+                                 num_networks=50,  from_file="nogoals_he_relu_25_adam_0001",
+                                 name="nogoals_he_relu_25_adam_0001_96",
+                                 nnparams=nnparams,
+                                 blanks=True,
+                                 type=rdm.EUCLIDIAN)
 
     nnparams.algorithm = optimizers.SGD
-    nnparams.initialization = utils.NORMAL
-    nnparams.nonlinearity = tf.nn.tanh
-    nnparams.learning_rate = 0.01
-    nnparams.size_hidden = 30
-    mod3.run_model3_multiple(stopping_params=stopping,
-                             num_networks=50,  from_file="goals_normal_tanh_30_sgd_001_48",
-                             name="goals_normal_tanh_30_sgd_001_48",
+    nnparams.initialization = utils.XAVIER
+    nnparams.nonlinearity = tf.nn.sigmoid
+    nnparams.learning_rate = 0.005
+    nnparams.size_hidden = 100
+    mod2.run_model2_multiple(stopping_params=stopping,
+                             num_networks=50,  from_file="nogoals_xavier_sigmoid_100_sgd_0005_48",
+                             name="nogoals_xavier_sigmoid_100_sgd_0005_96",
                              nnparams=nnparams,
                              blanks=True,
                              type=rdm.EUCLIDIAN,
-                             skips=[11, 30])
+                             skips=None)
+
+    sys.exit()
+    nnparams.algorithm = optimizers.SGD
+    nnparams.initialization = utils.XAVIER
+    nnparams.nonlinearity = tf.nn.sigmoid
+    nnparams.learning_rate = 0.005
+    nnparams.size_hidden = 100
+    mod3.run_model3_multiple(stopping_params=stopping,
+                             num_networks=50,  from_file="goals_uniform_sigmoid_100_sgd_0005_48",
+                             name="goals_uniform_sigmoid_100_sgd_0005_48",
+                             nnparams=nnparams,
+                             blanks=True,
+                             type=rdm.EUCLIDIAN,
+                             skips=None)
 
     sys.exit()
 

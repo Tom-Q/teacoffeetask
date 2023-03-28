@@ -9,18 +9,19 @@ from matplotlib.lines import Line2D
 
 
 #Multidimensional scaling
-def mds(vectors):
-    # Make array from vectors
-    vectors_array = np.stack(vectors, axis=0)
+def mds(matrix):
+    if matrix is list:
+        # Make array from vectors
+        matrix = np.stack(matrix, axis=0)
 
     # Set-up manifold methods
     mds = MDS(n_components=2, metric=True)
     # Plot results
-    Y = mds.fit_transform(vectors_array)
+    Y = mds.fit_transform(matrix)
     print(mds.stress_)
     return Y
 
-def plot_mds_points(mds_y, points, labels=None, style='rx-'):
+def plot_mds_points(mds_y, points, labels=None, style='rx-', fontsize=9):
     toplotx = [mds_y[point, 0] for point in points]
     toploty = [mds_y[point, 1] for point in points]
 
@@ -31,7 +32,7 @@ def plot_mds_points(mds_y, points, labels=None, style='rx-'):
             label = str(i)
         else:
             label = labels[i]
-        plt.text(x * (1 + 0.01), y * (1 + 0.01), label, fontsize=9)
+        plt.text(x * (1 + 0.01), y * (1 + 0.01), label, fontsize=fontsize)
 
     plt.plot(toplotx, toploty, style)
 

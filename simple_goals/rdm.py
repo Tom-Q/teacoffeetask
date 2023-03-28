@@ -21,10 +21,11 @@ CRAPPYNOBIS = "crappynobis"
 class rdm(object):
     def __init__(self, properties, matrix_values = None, vectors=None, type=None):
         """
-        @param properties:
-        @param matrix_values: EITHER THIS or VECTORS + TYPE
+        @param properties: Each property is a dictionary (key + value) describing one time step in the rdm.
+        This enable sorting the RDM according to multiple criteria.
+        @param matrix_values: EITHER numpy matrix of already-computed values, or list of VECTORS + TYPE
         @param vectors:
-        @param type:
+        @param type: type of matrix (euclidian or spearman)
         """
         if matrix_values is not None:
             self.matrix = matrix_values
@@ -243,6 +244,47 @@ class rdm(object):
 
         return new_rdm
 
+    def get_average_key(self, keys_values=None, equals=None, unequals=None): # Gets the average for a key and a value
+        """
+        @param keys_values: dictionaries of key/value conditions (average is made over only those entries for that key and that value)
+        @param equals: list of list of keys that must be equal to each other. E.g. [[key1,key2], [key1, key3, key4]]: key1 must equal key2, 3, and 4.
+        @param unequals: Same except here the values must be different
+        @return: A single average value for those distances
+        """
+        sum = 0.
+        count = 0
+        for i, prop_row in enumerate(self.properties):
+            for j, prop_column in enumerate(self.properties):
+                valid = True
+                # Check that at least one has the correct key/values
+                if keys_values is not None:
+                    for key, value in keys_values.items():
+                        if prop_row[key] != value and prop_column[key] != value:
+                            valid = False
+                            break
+                    if not valid:
+                        continue
+                #Check that both have matching equalities
+                if equals is not None:
+                    for key in equals:
+                        if prop_row[key] != prop_column[key]:
+                            valid = False
+                            break
+                    if not valid:
+                        continue
+                # Check that unequalities are also correct
+                if unequals is not None:
+                    for key in unequals:
+                        if prop_row[key] == prop_column[key]:
+                            valid = False
+                            break
+                    if not valid:
+                        continue
+                sum += self.matrix[i, j]
+                count += 1
+        if count == 0:
+            return 0
+        return sum/count
 
 #  Representational dissimilarity matrices, based on a list of vectors.
 def rdm_spearman(vectors):

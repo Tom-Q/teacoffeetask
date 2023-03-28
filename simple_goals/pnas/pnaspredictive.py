@@ -88,9 +88,9 @@ def accuracy_test_predictive(model, test_number=None):
                 hidden_activation.append(model.context)
 
             # Get some statistics about what was correct and what wasn't
-            choice = np.array(model.h_action_wta).reshape((-1, len(action_targets[0])))
+            choice = np.array(model.h_action_collapsed).reshape((-1, len(action_targets[0])))
             prediction = np.array(model.h_prediction_wta).reshape((-1, len(prediction_targets[0])))
-            model.h_action_wta.clear()
+            model.h_action_collapsed.clear()
             model.h_prediction_wta.clear()
             seq_choices.append(choice)
             seq_predictions.append(prediction)

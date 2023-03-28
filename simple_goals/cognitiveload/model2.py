@@ -61,7 +61,7 @@ def test_network_ari_noblanks(model):
 
         # Now also test whether the model was correct or not: compare targets with actual outputs
         targets = make_targets_ari_noblanks(seq_ari)
-        outputs = [a.flatten() for a in model.h_action_wta]
+        outputs = [a.flatten() for a in model.h_action_collapsed]
         accuracy_sequence = np.zeros_like(accuracy_totals)
         sequence_fail = False
         for i in range(sequence_length):
@@ -104,7 +104,7 @@ def test_network_bev_noblanks(model):
 
         # Now also test whether the model was correct or not: compare targets with actual outputs
         targets = make_targets_bev_noblanks(seq_bev)
-        outputs = [a.flatten() for a in model.h_action_wta]
+        outputs = [a.flatten() for a in model.h_action_collapsed]
         accuracy_sequence = np.zeros_like(accuracy_totals)
         sequence_fail = False
         for i in range(sequence_length):
@@ -392,7 +392,7 @@ def test_network_all(model):
 
                 # Now also test whether the model was correct or not: compare targets with actual outputs
                 targets = make_targets_all(seq_bev, seq_ari, start)
-                outputs = [a.flatten() for a in model.h_action_wta]
+                outputs = [a.flatten() for a in model.h_action_collapsed]
                 accuracy_sequence = np.zeros_like(accuracy_totals)
                 sequence_fail = False
                 for i in range(sequence_length):
@@ -466,7 +466,7 @@ def test_network_ari(model):
 
         # Now also test whether the model was correct or not: compare targets with actual outputs
         targets = make_targets_ari(seq_ari)
-        outputs = [a.flatten() for a in model.h_action_wta]
+        outputs = [a.flatten() for a in model.h_action_collapsed]
         accuracy_sequence = np.zeros_like(accuracy_totals)
         sequence_fail = False
         for i in range(sequence_length):
@@ -518,7 +518,7 @@ def test_network_bev(model):
 
         # Now also test whether the model was correct or not: compare targets with actual outputs
         targets = make_targets_bev(seq_bev)
-        outputs = [a.flatten() for a in model.h_action_wta]
+        outputs = [a.flatten() for a in model.h_action_collapsed]
         accuracy_sequence = np.zeros_like(accuracy_totals)
         sequence_fail = False
         for i in range(sequence_length):
@@ -652,20 +652,25 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
     if delete_blank_states:
         delete_blanks(rdmatrix)
 
+    # For 48x48 matrix, comment out
+    # 'seq1_ari_op2', 'seq1_bev_wf'] in preserve
+    # ("seq1_bev_wf", False), ("seq1_ari_op2", False), (in sort_by)
+
     # Average over the two starts (math first vs. bev first), while keeping everything else
     preserve = ['interleaved',
                 'timestep_seq1',
                 'seq1_type',
                 'seq1_ari_op1',
-                'seq1_bev_tc',
-                'seq1_ari_op2',
-                'seq1_bev_wf']
+                'seq1_bev_tc']
+                #'seq1_ari_op2',
+                #'seq1_bev_wf']
 
     def ignore(prop1, prop2):
-        #if prop1["seq1_type"] == prop2["seq1_type"]:
-        #    for key in ['seq1_ari_op2', 'seq1_bev_wf']:
-        #        if prop1[key] != prop2[key]:
-        #             return True
+
+        if prop1["seq1_type"] == prop2["seq1_type"]:
+            for key in ['seq1_ari_op2', 'seq1_bev_wf']:
+                if prop1[key] != prop2[key]:
+                     return True
 
         if prop1["interleaved"] == "yes" and prop2["interleaved"] == "yes":
             if prop1["start_seq"] != prop2["start_seq"]:
@@ -680,8 +685,8 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
 
     rdmatrix = rdmatrix.average_values(preserve_keys=preserve, ignore_func=ignore)
     rdmatrix.sort_by(("timestep_seq1", False),  ("seq1_ari_op1", False),
-                     ("seq1_bev_wf", False), ("seq1_ari_op2", False),
-                     ("seq1_bev_tc", False), ("seq1_type", True), ("interleaved", False), ("timestep_seq1", False))
+                     #("seq1_bev_wf", False), ("seq1_ari_op2", False),
+                     ("seq1_bev_tc", False), ("seq1_type", True), ("interleaved", False))#, ("timestep_seq1", False))
 
     return rdmatrix
 
