@@ -6,6 +6,7 @@ import analysis
 import goalenv
 from goalenv import environment as env, goalenv2020
 import tensorflow as tf
+import scipy
 
 utils.initialize_random_seeds(1)
 
@@ -15,7 +16,7 @@ import matplotlib.pyplot as plt
 import math
 
 
-if True:  # TRAINING NETWORKS
+if False:  # TRAINING NETWORKS
     for i in range(50):
         for g in [0, 1]:
             model = nn.GoalNet(size_hidden=50, size_observation=29, size_action=19, # 50
@@ -44,48 +45,58 @@ if True:  # TRAINING NETWORKS
 # 1. With goals. (a) RDM (b) MDS (c) t-SNE
 
 if True: # Regenerate all data.
+    results = []
+    #for constant_noise in [0., 0.01, 0.1, 0.2, 0.5, 1.]:
     for constant_noise in [1.]:
-        myfile = open("results.csv", "a")
-        myfile.write("Noise "+ str(constant_noise) +"\n")
-        myfile.close()
-        for goals in [True]:
-            for network_id in range(20):
-                #print(network_id)
-                #print(goals)
-                #network_id=10
-                print("\nNETWORK:" + str(network_id+1))
-                goal_str = "1" if goals else "0"
-                model = utils.load_object("bigmodel1_"+ goal_str + "goals_relu_adam_nonoise", network_id)
-                test_data = goalenv2020.generate_test_data(model, noise=0.,
-                                                           goal1_noise=0., goal2_noise=0.,
-                                                           goals=goals, num_tests=1,
-                                                           goal_multiplier=2.0,
-                                                           sequence_ids=range(21),
-                                                           ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
-                                                           # switch_goal1= (range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
-                                                           # switch_goal2= (range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
-                                                           # switch_sequence=2,
-                                                           #lesion_observation_units=True,
-                                                           #lesion_action_units=True,
-                                                           lesion_goal2_units=False,
-                                                           lesion_goal1_units=False,
-                                                           noise_per_step=False,
-                                                           noise_per_step_to_input=False,
-                                                           disruption_per_step=False,
-                                                           constant_noise=constant_noise,
-                                                           initialization=utils.ZERO_INIT,
-                                                           clamped_goals=False,
-                                                           verbose=False)
-                #utils.save_object("test_data_1", test_data)
+        for goals in [False, True]:
+            if goals:
+                goal_multipliers = [0.5, 0.9, 1.0, 1.01, 1.05, 1.1, 1.2, 1.5, 2.]
+            else:
+                goal_multipliers = [1.0]
+            for goal_multiplier in goal_multipliers:
+                myfile = open("results.csv", "a")
+                myfile.write("Hidden layer noise " + str(constant_noise) + " - Goal: " + str(goals) + " (multiplier:"+str(goal_multiplier)+") \n")
+                myfile.close()
+                for network_id in range(50):
+                    #print(network_id)
+                    #print(goals)
+                    #network_id=10
+                    print("\nNETWORK:" + str(network_id+1))
+                    goal_str = "1" if goals else "0"
+                    model = utils.load_object("bigmodel1_"+ goal_str + "goals_relu_adam_nonoise", network_id)
+                    #print(model.hidden_layer.layer.b.numpy()[0][0])
+                    test_data = goalenv2020.generate_test_data(model, noise=0.,
+                                                               goal1_noise=0., goal2_noise=0.,
+                                                               goals=goals, num_tests=10,
+                                                               goal_multiplier=goal_multiplier,
+                                                               sequence_ids=range(21),
+                                                               ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
+                                                               # switch_goal1= (range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
+                                                               # switch_goal2= (range(14, 23), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
+                                                               # switch_sequence=2,
+                                                               #lesion_observation_units=True,
+                                                               #lesion_action_units=True,
+                                                               lesion_goal2_units=False,
+                                                               lesion_goal1_units=False,
+                                                               noise_per_step=False,
+                                                               noise_per_step_to_input=False,
+                                                               disruption_per_step=False,
+                                                               constant_noise=constant_noise,
+                                                               initialization=utils.ZERO_INIT,
+                                                               clamped_goals=False,
+                                                               verbose=False)
+                    #utils.save_object("test_data_1", test_data)
 
-                test_data = goalenv2020.analyse_test_data(test_data, goals=goals,
-                                                          do_special_representations=False,
-                                                          do_tsne=False,
-                                                          do_rdm=False,
-                                                          mds_range=50,
-                                                          mds_sequences=range(21),
-                                                          verbose=True,
-                                                          append_to_file="results.csv")
+                    result = goalenv2020.analyse_test_data(test_data, goals=goals,
+                                                              do_special_representations=False,
+                                                              do_tsne=False,
+                                                              do_rdm=False,
+                                                              mds_range=50,
+                                                              mds_sequences=range(21),
+                                                              verbose=True,
+                                                              append_to_file="results.csv")
+                    results.append(result)
+
     sys.exit(0)
 if True:  # New Cognitive Load model.
     #a) Load network. Just the last one.

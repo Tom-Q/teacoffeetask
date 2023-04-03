@@ -587,6 +587,7 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
         ))
     else:
         print("Overall totals: {0}/{1} correct, goal errors={2}.".format(total_correct_seq, total_trials, goal_errors))
+    #return [total_correct_seq, total_action_errors, total_subseq_error - total_fullseq_errors, total_fullseq_errors, goal_errors]
     if append_to_file is not None:
         myfile.write("{0};{2};{3};{4};{5};{6};\n".format(
                 total_correct_seq,

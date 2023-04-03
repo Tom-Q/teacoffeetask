@@ -57,7 +57,6 @@ def make_mds(rdm, name, labels, title, pattern):
     plt.clf()
 
 
-
 from matplotlib.ticker import FuncFormatter
 def barplot_figure_errors(filename):
     # goals
