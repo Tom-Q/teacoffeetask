@@ -182,6 +182,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                        single_step_noise=None,
                        clamped_goals=False,
                        constant_noise=0.,
+                       constant_noise_to_input=0.,
                        hidden_goal_multiplier=1,
                        gain_multiplier = 1.,
                        gain_multiplier_from=0,
@@ -287,6 +288,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                                                           #mode=HOLD_RANDOM_OBJECT)
                         # constant level of noise
                         # model.context += np.float32(np.random.normal(0., constant_noise, size=(1, model.size_hidden)))
+                        observation += np.float32(np.random.normal(0., constant_noise_to_input, size=(1, model.size_observation)))
 
                         if seq_to_test == switch_sequence or switch_sequence is None:
                             if switch_goal1 is not None and j in switch_goal1[0]:

@@ -46,15 +46,14 @@ if False:  # TRAINING NETWORKS
 
 if True: # Regenerate all data.
     results = []
-    #for constant_noise in [0., 0.01, 0.1, 0.2, 0.5, 1.]:
-    for constant_noise in [1.]:
+    for constant_noise in [0., 0.01, 0.1, 0.2, 0.5, 1.]:
         for goals in [False, True]:
             if goals:
                 goal_multipliers = [0.5, 0.9, 1.0, 1.01, 1.05, 1.1, 1.2, 1.5, 2.]
             else:
                 goal_multipliers = [1.0]
             for goal_multiplier in goal_multipliers:
-                myfile = open("results.csv", "a")
+                myfile = open("results2.csv", "a")
                 myfile.write("Hidden layer noise " + str(constant_noise) + " - Goal: " + str(goals) + " (multiplier:"+str(goal_multiplier)+") \n")
                 myfile.close()
                 for network_id in range(50):
@@ -79,9 +78,10 @@ if True: # Regenerate all data.
                                                                lesion_goal2_units=False,
                                                                lesion_goal1_units=False,
                                                                noise_per_step=False,
+                                                               constant_noise_to_input=constant_noise,
                                                                noise_per_step_to_input=False,
                                                                disruption_per_step=False,
-                                                               constant_noise=constant_noise,
+                                                               constant_noise=0.,
                                                                initialization=utils.ZERO_INIT,
                                                                clamped_goals=False,
                                                                verbose=False)
@@ -94,7 +94,7 @@ if True: # Regenerate all data.
                                                               mds_range=50,
                                                               mds_sequences=range(21),
                                                               verbose=True,
-                                                              append_to_file="results.csv")
+                                                              append_to_file="results2.csv")
                     results.append(result)
 
     sys.exit(0)
