@@ -45,18 +45,21 @@ if False:  # TRAINING NETWORKS
 # 1. With goals. (a) RDM (b) MDS (c) t-SNE
 
 if True: # Regenerate all data.
+    filename="results3.csv"
     results = []
-    for constant_noise in [0., 0.01, 0.1, 0.2, 0.5, 1.]:
+    #for noise in [0., 0.01, 0.1, 0.2, 0.5, 1.]:
+    for noise in [0.2, 0.5, 1., 2.]:
         for goals in [False, True]:
             if goals:
-                goal_multipliers = [0.5, 0.9, 1.0, 1.01, 1.05, 1.1, 1.2, 1.5, 2.]
+                #goal_multipliers = [0.5, 0.9, 1.0, 1.01, 1.05, 1.1, 1.2, 1.5, 2.]
+                goal_multipliers = [1.0, 1.05, 1.2, 1.5, 2.0]
             else:
                 goal_multipliers = [1.0]
             for goal_multiplier in goal_multipliers:
-                myfile = open("results2.csv", "a")
-                myfile.write("Hidden layer noise " + str(constant_noise) + " - Goal: " + str(goals) + " (multiplier:"+str(goal_multiplier)+") \n")
+                myfile = open(filename, "a")
+                myfile.write("Hidden layer noise " + str(noise) + " - Goal: " + str(goals) + " (multiplier:"+str(goal_multiplier)+") \n")
                 myfile.close()
-                for network_id in range(50):
+                for network_id in range(10):
                     #print(network_id)
                     #print(goals)
                     #network_id=10
@@ -66,7 +69,7 @@ if True: # Regenerate all data.
                     #print(model.hidden_layer.layer.b.numpy()[0][0])
                     test_data = goalenv2020.generate_test_data(model, noise=0.,
                                                                goal1_noise=0., goal2_noise=0.,
-                                                               goals=goals, num_tests=10,
+                                                               goals=goals, num_tests=5,
                                                                goal_multiplier=goal_multiplier,
                                                                sequence_ids=range(21),
                                                                ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
@@ -78,8 +81,9 @@ if True: # Regenerate all data.
                                                                lesion_goal2_units=False,
                                                                lesion_goal1_units=False,
                                                                noise_per_step=False,
-                                                               constant_noise_to_input=constant_noise,
+                                                               constant_noise_to_input=0.,
                                                                noise_per_step_to_input=False,
+                                                               noise_per_step_to_hidden=noise,
                                                                disruption_per_step=False,
                                                                constant_noise=0.,
                                                                initialization=utils.ZERO_INIT,
@@ -94,7 +98,7 @@ if True: # Regenerate all data.
                                                               mds_range=50,
                                                               mds_sequences=range(21),
                                                               verbose=True,
-                                                              append_to_file="results2.csv")
+                                                              append_to_file=filename)
                     results.append(result)
 
     sys.exit(0)

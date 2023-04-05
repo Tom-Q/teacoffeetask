@@ -183,6 +183,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                        clamped_goals=False,
                        constant_noise=0.,
                        constant_noise_to_input=0.,
+                       noise_per_step_to_hidden=0.,
                        hidden_goal_multiplier=1,
                        gain_multiplier = 1.,
                        gain_multiplier_from=0,
@@ -287,7 +288,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                                                           #mode=REINITIALIZE)
                                                           #mode=HOLD_RANDOM_OBJECT)
                         # constant level of noise
-                        # model.context += np.float32(np.random.normal(0., constant_noise, size=(1, model.size_hidden)))
+                        model.context += np.float32(np.random.normal(0., constant_noise, size=(1, model.size_hidden)))
                         observation += np.float32(np.random.normal(0., constant_noise_to_input, size=(1, model.size_observation)))
 
                         if seq_to_test == switch_sequence or switch_sequence is None:
@@ -327,9 +328,12 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                         if lesion_observation_units:
                             observation *= 0.
 
-                        model.feedforward(observation, noise_to_hidden=constant_noise)#, gain_multiplier=gain_multiplier,
-                                          #gain_multiplier_from=gain_multiplier_from,
-                                          #gain_multiplier_to=gain_multiplier_to)
+                        if j == noise_step:
+                            model.feedforward(observation, noise_to_hidden=noise_per_step_to_hidden+constant_noise)#, gain_multiplier=gain_multiplier,
+                                              #gain_multiplier_from=gain_multiplier_from,
+                                              #gain_multiplier_to=gain_multiplier_to)
+                        else:
+                            model.feedforward(observation, noise_to_hidden=constant_noise)
 
                         if j < len(sequence.targets):  # after that it's not defined.
                             target = sequence.targets[j] if goals else sequence.targets_nogoals[j]
