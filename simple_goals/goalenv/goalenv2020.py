@@ -210,17 +210,18 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
         if verbose:
             print("testing sequence: "+str(seqid))
         outputs_per_noise_step = []
-        num_runs = sequence.length if (noise_per_step or disruption_per_step or noise_per_step_to_input) else 1
+        num_runs = 1 #sequence.length if (noise_per_step or disruption_per_step or noise_per_step_to_input or noise_per_step_to_hidden) else 1
 
         for run in range(num_runs):
             if single_step_noise is not None:
                 noise_step = single_step_noise
-            elif noise_per_step or disruption_per_step or noise_per_step_to_input:
+            elif noise_per_step or disruption_per_step or noise_per_step_to_input or noise_per_step_to_hidden:
                 noise_step = run
             else:
                 noise_step = 0
             outputs = []
             for i in range(num_tests):
+                noise_step = np.random.randint(0, sequence.length)
                 sequence_solutions = [alt.targets for alt in sequence.alt_solutions] + [sequence.targets]
                 # Initialize the sequence.
                 init_state = sequence.initial_state
@@ -267,7 +268,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                         #if not isinstance(model.context, np.ndarray):
                         #    model.context = model.context.numpy()  # Doesn't matter here, we're not going to backpropagate thru that.
                         #model.context[0, :model.context.shape[1]//2] *= hidden_goal_multiplier
-                        if goals:
+                        if goals and j == noise_step:
                             model.goal1 *= goal_multiplier
                             model.goal2 *= goal_multiplier
 

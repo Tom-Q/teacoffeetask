@@ -18,7 +18,7 @@ import math
 
 if False:  # TRAINING NETWORKS
     for i in range(50):
-        for g in [0, 1]:
+        for g in [1]:
             model = nn.GoalNet(size_hidden=50, size_observation=29, size_action=19, # 50
                                size_goal1=len(env.GoalEnvData.goals1_list) * g,
                                size_goal2=len(env.GoalEnvData.goals2_list) * g,
@@ -45,17 +45,18 @@ if False:  # TRAINING NETWORKS
 # 1. With goals. (a) RDM (b) MDS (c) t-SNE
 
 if True: # Regenerate all data.
-    filename="results3.csv"
+    filename="results_last_resort.csv"
     results = []
     #for noise in [0., 0.01, 0.1, 0.2, 0.5, 1.]:
-    for noise in [0.2, 0.5, 1., 2.]:
-        for goals in [False, True]:
+    for noise in [0.5, 1., 2.]:
+        for goals in [True, False]:
             if goals:
                 #goal_multipliers = [0.5, 0.9, 1.0, 1.01, 1.05, 1.1, 1.2, 1.5, 2.]
-                goal_multipliers = [1.0, 1.05, 1.2, 1.5, 2.0]
+                goal_multipliers = [1.0, 1.2, 1.5, 2.0]
             else:
                 goal_multipliers = [1.0]
-            for goal_multiplier in goal_multipliers:
+            for goal_multiplier in reversed(goal_multipliers):
+                print("Hidden layer noise " + str(noise) + " - Goal: " + str(goals) + " (multiplier:"+str(goal_multiplier)+") \n")
                 myfile = open(filename, "a")
                 myfile.write("Hidden layer noise " + str(noise) + " - Goal: " + str(goals) + " (multiplier:"+str(goal_multiplier)+") \n")
                 myfile.close()
@@ -69,7 +70,7 @@ if True: # Regenerate all data.
                     #print(model.hidden_layer.layer.b.numpy()[0][0])
                     test_data = goalenv2020.generate_test_data(model, noise=0.,
                                                                goal1_noise=0., goal2_noise=0.,
-                                                               goals=goals, num_tests=5,
+                                                               goals=goals, num_tests=10,
                                                                goal_multiplier=goal_multiplier,
                                                                sequence_ids=range(21),
                                                                ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
@@ -102,6 +103,61 @@ if True: # Regenerate all data.
                     results.append(result)
 
     sys.exit(0)
+
+if True: # Regenerate all data.
+    filename="results4.csv"
+    results = []
+    # print("Hidden layer noise " + str(noise) + " - Goal: " + str(goals) + " (multiplier:"+str(goal_multiplier)+") \n")
+    #myfile = open(filename, "a")
+    #myfile.write("Hidden layer noise " + str(noise) + " - Goal: " + str(goals) + " (multiplier:"+str(goal_multiplier)+") \n")
+    #myfile.close()
+    goal_multiplier = 1.5
+    goals = 1.
+    for network_id in range(50):
+        #print(network_id)
+        #print(goals)
+        #network_id=10
+        print("\nNETWORK:" + str(network_id+1))
+        goal_str = "1" if goals else "0"
+        model = utils.load_object("bigmodel1_"+ goal_str + "goals_relu_adam_nonoise", network_id)
+        goal1 = utils.str_to_onehot("g_1_make_tea", env.GoalEnvData.goals1_list)
+        goal2 = utils.str_to_onehot("g_2_add_cream", env.GoalEnvData.goals2_list)
+        #print(model.hidden_layer.layer.b.numpy()[0][0])
+        test_data = goalenv2020.generate_test_data(model, noise=0.,
+                                                   goal1_noise=0., goal2_noise=0.,
+                                                   goals=goals, num_tests=5,
+                                                   goal_multiplier=goal_multiplier,
+                                                   sequence_ids=[3],  #0=coffee black, 3 = coffee cream, 16 = tea milk
+                                                   #switch_goal1= (range(28, 36), goal1),  # 28, 36 for tea cream. 18, 23 for coffee as tea.
+                                                   switch_goal2= (range(18, 27), goal2), #18-27= coffee cream to milk , 14-23 = tea milk to cream
+                                                   switch_sequence=2,
+                                                   #lesion_observation_units=True,
+                                                   #lesion_action_units=True,
+                                                   lesion_goal2_units=False,
+                                                   lesion_goal1_units=False,
+                                                   noise_per_step=False,
+                                                   constant_noise_to_input=0.,
+                                                   noise_per_step_to_input=False,
+                                                   noise_per_step_to_hidden=False,
+                                                   disruption_per_step=False,
+                                                   constant_noise=0.1,
+                                                   initialization=utils.ZERO_INIT,
+                                                   clamped_goals=False,
+                                                   verbose=True)
+        #utils.save_object("test_data_1", test_data)
+
+        result = goalenv2020.analyse_test_data(test_data, goals=goals,
+                                                  do_special_representations=False,
+                                                  do_tsne=False,
+                                                  do_rdm=False,
+                                                  mds_range=50,
+                                                  mds_sequences=range(21),
+                                                  verbose=True,
+                                                  append_to_file=filename)
+        results.append(result)
+
+    sys.exit(0)
+
 if True:  # New Cognitive Load model.
     #a) Load network. Just the last one.
     #b) Generate test data
