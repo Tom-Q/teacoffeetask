@@ -48,11 +48,11 @@ if True: # Regenerate all data.
     filename="results_last_resort.csv"
     results = []
     #for noise in [0., 0.01, 0.1, 0.2, 0.5, 1.]:
-    for noise in [0.5, 1., 2.]:
+    for noise in [0.5, 1., 2., 3.]:
         for goals in [True, False]:
             if goals:
                 #goal_multipliers = [0.5, 0.9, 1.0, 1.01, 1.05, 1.1, 1.2, 1.5, 2.]
-                goal_multipliers = [1.0, 1.2, 1.5, 2.0]
+                goal_multipliers = [1.0, 1.1, 1.2, 1.5]
             else:
                 goal_multipliers = [1.0]
             for goal_multiplier in reversed(goal_multipliers):
@@ -60,7 +60,7 @@ if True: # Regenerate all data.
                 myfile = open(filename, "a")
                 myfile.write("Hidden layer noise " + str(noise) + " - Goal: " + str(goals) + " (multiplier:"+str(goal_multiplier)+") \n")
                 myfile.close()
-                for network_id in range(10):
+                for network_id in range(20):
                     #print(network_id)
                     #print(goals)
                     #network_id=10
