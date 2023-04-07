@@ -70,7 +70,7 @@ if True: # Regenerate all data.
                     #print(model.hidden_layer.layer.b.numpy()[0][0])
                     test_data = goalenv2020.generate_test_data(model, noise=0.,
                                                                goal1_noise=0., goal2_noise=0.,
-                                                               goals=goals, num_tests=5,
+                                                               goals=goals, num_tests=10,
                                                                goal_multiplier=goal_multiplier,
                                                                sequence_ids=range(21),
                                                                ##[3, 16, 16],;  #0=coffee black, 3 = coffee cream, 16 = tea milk
