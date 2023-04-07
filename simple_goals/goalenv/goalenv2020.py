@@ -268,7 +268,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                         #if not isinstance(model.context, np.ndarray):
                         #    model.context = model.context.numpy()  # Doesn't matter here, we're not going to backpropagate thru that.
                         #model.context[0, :model.context.shape[1]//2] *= hidden_goal_multiplier
-                        if goals and j > noise_step and j <= noise_step + 5:
+                        if goals and j >= noise_step and j <= noise_step + 3:
                             model.goal1 *= goal_multiplier
                             model.goal2 *= goal_multiplier
 
