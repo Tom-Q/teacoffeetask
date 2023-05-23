@@ -244,11 +244,13 @@ class rdm(object):
 
         return new_rdm
 
-    def get_average_key(self, keys_values=None, equals=None, unequals=None): # Gets the average for a key and a value
+    def get_average_key(self, keys_values=None, equals=None, unequals=None, unequals_or=None): # Gets the average for a key and a value
         """
+        Would be nice to have something more general but right now I only need equals/unequals/unequals_or, so no need to solve that little engineering problem in full
         @param keys_values: dictionaries of key/value conditions (average is made over only those entries for that key and that value)
         @param equals: list of list of keys that must be equal to each other. E.g. [[key1,key2], [key1, key3, key4]]: key1 must equal key2, 3, and 4.
         @param unequals: Same except here the values must be different
+        @param unequals_or: At least one of the values must be different
         @return: A single average value for those distances
         """
         sum = 0.
@@ -280,6 +282,15 @@ class rdm(object):
                             break
                     if not valid:
                         continue
+                # Check that "or" inequalities are also correct
+                if unequals_or is not None:
+                    valid = False
+                    for key in unequals_or:
+                        if prop_row[key] != prop_column[key]:
+                            valid = True
+                            break
+                if not valid:
+                    continue
                 sum += self.matrix[i, j]
                 count += 1
         if count == 0:

@@ -210,7 +210,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
         if verbose:
             print("testing sequence: "+str(seqid))
         outputs_per_noise_step = []
-        num_runs = 1 #sequence.length if (noise_per_step or disruption_per_step or noise_per_step_to_input or noise_per_step_to_hidden) else 1
+        num_runs = sequence.length if (noise_per_step or disruption_per_step or noise_per_step_to_input or noise_per_step_to_hidden) else 1
 
         for run in range(num_runs):
             if single_step_noise is not None:
@@ -221,7 +221,7 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                 noise_step = 0
             outputs = []
             for i in range(num_tests):
-                noise_step = np.random.randint(0, sequence.length)
+                #noise_step = np.random.randint(0, sequence.length)
                 sequence_solutions = [alt.targets for alt in sequence.alt_solutions] + [sequence.targets]
                 # Initialize the sequence.
                 init_state = sequence.initial_state
@@ -451,8 +451,9 @@ ACTION = "action"
 def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsne=False, do_loss=False,
                       mds_sequences=None, mds_range=None, noise_steps=None, one_rdm=True,
                       do_special_representations=True, do_dimensionality=True,
-                      verbose=False, append_to_file=None):
-    sequence_ids = range(len(test_data))
+                      verbose=False, append_to_file=None, sequence_ids=None):
+    if sequence_ids is None:
+        sequence_ids = range(len(test_data))
 
 
     if append_to_file is not None:
@@ -489,7 +490,7 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
     total_correct_seq = 0
 
     for i, seq in enumerate(test_data):
-        target_sequence = task.sequences_list[i]
+        target_sequence = task.sequences_list[sequence_ids[i]]#task.sequences_list[i]
         for noise_step, trials in enumerate(seq):
             first_error = [0] * target_sequence.length
             for trial in trials:
@@ -570,8 +571,8 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
                 total_trials += 1
 
             # Need to color the step at which noise is introduced.
-            if VERBOSE:
-                print("Target sequence " + str(i) + " (" + target_sequence.name + ") noise at step " + str(noise_step) + ": errors = " + str(first_error))
+            #if VERBOSE:
+            print("Target sequence " + str(i) + " (" + target_sequence.name + ") noise at step " + str(noise_step) + ": errors = " + str(first_error))
     total_fullseq_errors = num_is_a_target
     total_error = total_trials - total_correct_seq
     total_subseq_error = num_replaced
@@ -854,6 +855,9 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
         plt.savefig("mds")
         plt.clf()
 
+    ranks = []
+    ranks_xaverage = []
+    averages = []
     if do_dimensionality:
         # Turn activations into a matrix or matrices
         matrices = []
@@ -873,11 +877,14 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
         # Now do this for all the sequences combined
         matrix = np.concatenate(matrices, axis=0)
         average = np.average(matrix)
-        #print("rank per tolerance (combined):")
-        #for tolerance in [0.01, 0.1, 1.0, 1.5, 3, 5, 10., 15, 30, 100]:
-        #    print("tol={0}, rank={1}".format(tolerance*average, np.linalg.matrix_rank(matrix, tol=tolerance*average)))
-        #print("average activation value")
-        #print(average)
+        print("rank per tolerance (combined):")
+        for tolerance in [0.01, 0.1, 1.0, 1.5, 3, 5, 10., 15, 30, 100]:
+            print("tol={0}, rank={1}".format(tolerance*average, np.linalg.matrix_rank(matrix, tol=tolerance*average)))
+            ranks_xaverage.append(np.linalg.matrix_rank(matrix, tol=tolerance*average))
+            ranks.append(np.linalg.matrix_rank(matrix, tol=tolerance))
+        print("average activation value")
+        print(average)
+        averages.append(average)
         #np.
         # Compute rank of activation matrix for a given sequence.
         #np.linalg.matrix_rank(mat, tol=0.1)
@@ -905,7 +912,7 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
     else:
         tsne_results = None
 
-    return tsne_results, test_data, num_errors, error_testing_results, goal_errors, activations_flat_rdm, properties_rdm  # Test data is enriched during analysis (first error step)
+    return tsne_results, test_data, num_errors, error_testing_results, goal_errors, activations_flat_rdm, properties_rdm, ranks, ranks_xaverage, averages  # Test data is enriched during analysis (first error step)
 
 
 def reorder_rdm(rdm, labels, targets, mode=ACTION):

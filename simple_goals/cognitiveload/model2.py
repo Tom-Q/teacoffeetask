@@ -652,6 +652,11 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
     if delete_blank_states:
         delete_blanks(rdmatrix)
 
+    # For 96x96 matrix:
+    # comment out first condition "if prop1 seq1 type == " etc
+    # uncomment everything else
+    #
+
     # For 48x48 matrix, comment out
     # 'seq1_ari_op2', 'seq1_bev_wf'] in preserve
     # ("seq1_bev_wf", False), ("seq1_ari_op2", False), (in sort_by)
@@ -661,16 +666,16 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
                 'timestep_seq1',
                 'seq1_type',
                 'seq1_ari_op1',
-                'seq1_bev_tc']
-                #'seq1_ari_op2',
-                #'seq1_bev_wf']
+                'seq1_bev_tc',
+                'seq1_ari_op2',
+                'seq1_bev_wf']
 
     def ignore(prop1, prop2):
 
-        if prop1["seq1_type"] == prop2["seq1_type"]:
-            for key in ['seq1_ari_op2', 'seq1_bev_wf']:
-                if prop1[key] != prop2[key]:
-                     return True
+        #if prop1["seq1_type"] == prop2["seq1_type"]:
+        #    for key in ['seq1_ari_op2', 'seq1_bev_wf']:
+        #        if prop1[key] != prop2[key]:
+        #             return True
 
         if prop1["interleaved"] == "yes" and prop2["interleaved"] == "yes":
             if prop1["start_seq"] != prop2["start_seq"]:
@@ -685,8 +690,8 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
 
     rdmatrix = rdmatrix.average_values(preserve_keys=preserve, ignore_func=ignore)
     rdmatrix.sort_by(("timestep_seq1", False),  ("seq1_ari_op1", False),
-                     #("seq1_bev_wf", False), ("seq1_ari_op2", False),
-                     ("seq1_bev_tc", False), ("seq1_type", True), ("interleaved", False))#, ("timestep_seq1", False))
+                     ("seq1_bev_wf", False), ("seq1_ari_op2", False),
+                     ("seq1_bev_tc", False), ("seq1_type", True), ("interleaved", False))
 
     return rdmatrix
 
@@ -915,7 +920,7 @@ def set_rdm_labels(myrdm):
         if timestep == 0:
             if property["seq1_type"] == "bev":
                 property["label"] += "Coffee" if property["seq1_bev_tc"] == "c" else "Tea"
-                #property["label"] += "water 1st" if property["seq1_bev_wf"] == "1" else "water 2nd"  # remove
+                #property["label"] += " water 1st" if property["seq1_bev_wf"] == "1" else " water 2nd"  # remove
                 if property["interleaved"] == "yes":
                     property["label"] += " (interleaved)"
             else:

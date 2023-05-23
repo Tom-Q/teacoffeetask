@@ -94,8 +94,12 @@ def barplot_figure_errors(filename):
 
 def barplot_figure_ablations(filename):
     # Observation, Actions, Goal1, Goal2, Goal1 & 2,
-    means_action_errors = (67.48, 58.29, 18.10, 3.57, 5.10)
-    means_subseq_errors = (32.48, 22.57, 61.90, 57.10, 7.62)
+    #means_action_errors = (81.48, 58.29, 18.10, 3.57, 5.10)
+    #means_subseq_errors = (32.48, 22.57, 61.90, 57.10, 7.62)
+
+
+    means_action_errors = (81.33, 71.05, 43.52, 7.14, 44.10)
+    means_subseq_errors = (18.57, 18.86, 17.52, 55.71, 51.81)
 
     # no goals
     #means_action_errors = (6.25, 35.41, 59.96, 75.15, 81.25)
@@ -113,7 +117,7 @@ def barplot_figure_ablations(filename):
     ax.set_ylabel('Outcomes')
     ax.set_xlabel('Units lesioned')
     #ax.set_title('Percentage of sequences displaying action or subsequence errors')
-    plt.xticks(ind, ['Observations', 'Actions', 'Goals & subgoals', 'Subgoals only', 'Goals only'], rotation=20)
+    plt.xticks(ind, ['Observations', 'Actions', 'Subgoals', 'Goals', 'Subgoals and Goals'], rotation=20)
     ax.set_yticks([0, 20, 40, 60, 80, 100])
     formatter = FuncFormatter(lambda y, pos: "%d%%" % (y))
     ax.yaxis.set_major_formatter(formatter)
@@ -128,12 +132,12 @@ def barplot_figure_ablations(filename):
 def bargraph_with_without_goalunits(filename):
     # Updated info based on 20 networks of each, 1 run each.
     # goals
-    means_action_errors_goals = (5.27, 34.25, 60.03, 73.98, 80.65)
-    means_subseq_errors_goals = (8.47, 19.24, 19.74, 16.97, 15.19)
+    means_action_errors_goals = (0.02, 0.76, 5.36, 59.88, 93.51)
+    means_subseq_errors_goals = (0.05, 2.33, 18.04, 33.38, 4.63)
 
     # no goals
-    means_action_errors_nogoals = (6.70, 37.78, 61.76, 74.92, 81.76)
-    means_subseq_errors_nogoals = (16.60, 23.06, 22.02, 17.71, 14.63)
+    means_action_errors_nogoals = (0.07, 0.28, 5.72, 50.24, 90.12)
+    means_subseq_errors_nogoals = (0.17, 0.93, 25.86, 43.62, 8.09)
 
     ind = [1., 2., 3., 4., 5.]  # the x locations for the groups
     width = 0.2
@@ -153,7 +157,7 @@ def bargraph_with_without_goalunits(filename):
     ax.set_ylabel('Outcomes')
     ax.set_xlabel('Noise magnitude')
     #ax.set_title('Percentage of sequences displaying action or subsequence errors')
-    plt.xticks(ind, ('1', '2', '3', '4', '5'))
+    plt.xticks(ind, ('0.01', '0.1', '0.2', '0.5', '1.0'))
     ax.set_yticks([0, 20, 40, 60, 80, 100])
     formatter = FuncFormatter(lambda y, pos: "%d%%" % (y))
     ax.yaxis.set_major_formatter(formatter)
@@ -269,6 +273,100 @@ def plot_tsne(filefrom, fileto):
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
 
+    plt.tight_layout()
+    plt.savefig(fileto, format='svg')
+    plt.clf()
+
+
+from numpy import genfromtxt
+import seaborn as sns
+import pandas as pd
+def graph_error_rate_per_step_example(fileto="testfig.svg"):
+    errors = genfromtxt("example_data.csv", delimiter=',')
+
+    trials_per_step = np.zeros_like(errors)
+    for net in range(50):
+        remainders = 100
+        for step in range(50):
+            trials_per_step[net,step] = remainders
+            remainders -= errors[net,step]
+
+    errors = np.divide(errors, trials_per_step)
+    errors *= 100
+    errors = pd.DataFrame(errors, columns=["1: fixate cupboard", "2: open", "3: fixate coffee jar", "4: take", "5: open",
+                          "6: fixate mug", "7: add to mug", "8: fixate coffee jar", "9: close",
+                          "10: fixate cupboard", "11: put down", "12: fixate spoon", "13: take", "14: fixate mug",
+                          "15: stir ", "16: fixate table ", "17: put down ", "18: fixate sugar box ", "19: take",
+                          "20: fixate mug ", "21: add to mug", "22: fixate cupboard", "23: close", "24: fixate spoon",
+                          "25: take", "26: fixate mug", "27: stir", "28: fixate table", "29: put down",
+                          "30: fixate fridge", "31: open", "32: fixate cream", "33: take", "34: fixate mug",
+                          "35: add to mug", "36: fixate fridge", "37: put down", "38: close", "39: fixate spoon",
+                          "40: take", "41: fixate mug", "42: stir", "43: fixate table", "44: put down",
+                          "45: fixatemug", "46: take", "47: sip", "48: fixate table", "49: put down", "50: good coffee!"])
+
+
+
+    plot = sns.barplot(data=errors, orient="h", estimator=np.mean, ci="sd", color='lightblue', errwidth=0.4) #x="Sequence step", y="Error %",
+    plot.set_xlabel('Error rate (%)', fontsize=10)
+    plot.set_ylabel('Sequence steps', fontsize=10)
+    plot.tick_params(labelsize=5)
+    plt.tight_layout()
+
+
+    fig = plot.get_figure()
+    fig.savefig(fileto)
+    #g = sns.catplot(data=errors, x="day", y="total_bill", kind="violin", inner=None)
+    #sns.swarmplot(data=errors, x="day", y="total_bill", color="k", size=3, ax=g.ax)
+
+    #violin_parts = plt.violinplot(errors, widths=.8, showmeans=True, vert=False)
+    #plt.tight_layout()
+    #plt.savefig(fileto, format='svg')
+    #plt.clf()
+
+import matplotlib
+def control_robustness_plot(fileto="robustness.svg"):
+    avgs = [[171.14, 171.08, 170.96, 166.54, 160.62],
+    [77.68, 78.92, 79.7, 81.72, 75.4],
+    [26.34, 29.12, 30.82, 30.88, 30.52],
+    [9.8, 10.82, 10.6, 12.22, 12.3],
+    [3.98, 4.52, 4.98, 5.56, 5.82]]
+
+
+    ci95high = [[173.6845329, 173.6133859, 174.0716106, 169.5290811, 163.9535618],
+    [80.26465809, 81.75490706, 82.7905033, 84.74625468, 78.49463401],
+    [27.93593937, 30.87908066, 32.74981585, 32.7560683, 32.63292482],
+    [10.74519382, 11.81396788, 11.59944187, 13.43023441, 13.53712101],
+    [4.610248366, 5.235382057, 5.658121889, 6.178820266, 6.614942937]]
+
+
+    ci95low = [[168.5954671, 168.5466141, 167.8483894, 163.5509189, 157.2864382],
+    [75.09534191, 76.08509294, 76.6094967, 78.69374532, 72.30536599],
+    [24.74406063, 27.36091934, 28.89018415, 29.0039317, 28.40707518],
+    [8.854806184, 9.826032116, 9.600558128, 11.00976559, 11.06287899],
+    [3.349751634, 3.804617943, 4.301878111, 4.941179734, 5.025057063]]
+
+    for seq in [avgs, ci95high, ci95low]:
+        for i, lvl1 in enumerate(seq):
+            for j, lvl2 in enumerate(lvl1):
+                seq[i][j]= 100*seq[i][j]/210
+
+    fig, ax = plt.subplots()
+    for i in range(0, 5):
+        ax.plot([1.0, 1.25, 1.50, 1.75, 2.0], avgs[i], marker='+', label=str(i+1))
+        ax.fill_between([1.0, 1.25, 1.50, 1.75, 2.0], ci95low[i], ci95high[i], color='b', alpha=.1)
+    plt.xticks(ticks=[1.0, 1.25, 1.50, 1.75, 2.0])
+    plt.yscale("log")
+
+    legend = ax.legend(loc='center left', bbox_to_anchor=(1,0.5), shadow=False)#, fontsize='x-large')
+    legend.set_title("Noise magnitude")
+    ax.yaxis.grid(which='major', color='gray', linestyle='dashed', alpha=0.5)
+    # Show the minor grid as well. Style it in very light gray as a thin,
+    # dotted line.
+    ax.yaxis.grid(which='minor', color='gray', linestyle='dashed', alpha=0.2)
+    ax.set_yticks(ticks=[1, 5,  10, 50, 100])
+    ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    plt.xlabel('Goal multiplier')
+    plt.ylabel('Correct sequences (%)')
     plt.tight_layout()
     plt.savefig(fileto, format='svg')
     plt.clf()
