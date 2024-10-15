@@ -671,7 +671,6 @@ def process_rdmatrix(rdmatrix, delete_blank_states):
                 'seq1_bev_wf']
 
     def ignore(prop1, prop2):
-
         #if prop1["seq1_type"] == prop2["seq1_type"]:
         #    for key in ['seq1_ari_op2', 'seq1_bev_wf']:
         #        if prop1[key] != prop2[key]:

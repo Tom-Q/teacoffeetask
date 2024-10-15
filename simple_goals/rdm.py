@@ -7,6 +7,7 @@ import utils
 import scipy
 from scipy import stats, spatial
 from sklearn import discriminant_analysis as sklda
+from matplotlib.colors import LogNorm, Normalize
 
 # RDM object
 RDM_COLOR_DIVERGING = "RDM COLOR DIVERGING"
@@ -112,10 +113,9 @@ class rdm(object):
             sns.color_palette("magma", as_cmap=True)
 
         if vmin is None and vmax is None:
-            plot = sns.heatmap(self.matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels, center=0)
+            plot = sns.heatmap(self.matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels, center=0)#, norm=LogNorm())
         else:
-            plot = sns.heatmap(self.matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels, vmin=vmin,
-                               vmax=vmax)
+            plot = sns.heatmap(self.matrix, cbar=True, square=True, xticklabels=labels, yticklabels=labels, vmin=vmin, vmax=vmax)#, norm=LogNorm())
 
         # Basically I'll use a small font scale if the plot is huge.
         # Conversely that means the title is no longer visible.
@@ -133,8 +133,6 @@ class rdm(object):
     def average_values(self, preserve_keys, ignore_func):
         """
         @param preserve_keys: differences we wish to preserve. Only average if these are the same.
-        @param average_over_keys: differences we wish to abolish by averaging over them
-        @param dont_cross_keys: function to identify elements to ignore while averaging
         """
         size_old_mat = len(self.properties)
         # 1. Use a hash, based on properties, to form element groups.

@@ -39,11 +39,11 @@ def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorith
         targets = utils.liststr_to_onehot(sequence[1:], pnas2018task.all_outputs)
         # run the network
         #TODO: uncomment
-        with tf.GradientTape() as ptape, tf.GradientTape() as rtape, tf.GradientTape() as ctape:
-            model.PredictionTape = ptape
-            model.RewardTape = rtape
-            model.ControlTape = ctape
-            #with tf.GradientTape(persistent=True) as tape:
+        #with tf.GradientTape() as ptape, tf.GradientTape() as rtape, tf.GradientTape() as ctape:
+            #model.PredictionTape = ptape
+            #model.RewardTape = rtape
+            #model.ControlTape = ctape
+        with tf.GradientTape(persistent=False) as tape:
             for i in range(len(targets)):
                 model.action = np.zeros((1, model.size_action), dtype=np.float32)
                 if noise != 0.:
@@ -57,15 +57,14 @@ def train(model=None, noise=0., iterations=5000, l1reg=0.0, l2reg= 0.0, algorith
             ratios = scripts.evaluate([tchoices], [targets])
             # Train model, record loss.
             if loss_type==MSE:
-                #loss, _ = model.train_MSE(targets, None, None, tape)
-                loss, _ = model.train_MSE(targets, None, None, None)
+                loss, _ = model.train_MSE(tape, targets)
+                #loss, _ = model.train_MSE(targets, None, None, None)
             elif loss_type==CROSS_ENTROPY:
-                # TODO: return this to its original statate
-                #loss, _ = model.train_obsolete(targets, None, None, tape)
-                #else:
-                #loss, _ = model.train(tape, targets)
-                loss = model.train(None, targets)
-        #del tape
+                loss, _ = model.train_obsolete(targets, None, None, tape)
+            else:
+                loss, _ = model.train(tape, targets)
+                #loss = model.train(None, targets)
+        del tape
 
         #if episode % 2 == 0:
             # Monitor progress using rolling averages.
@@ -309,23 +308,36 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
     if save_files:
         if save_name is None:
             save_name = name
-        np.savetxt(save_name+"_rdm.txt", avg_matrix, delimiter="\t", fmt='%.2e')
-    labels = []
-    for i, sequence in enumerate(pnas2018task.seqs):
-        for action in sequence[1:]:
-            labels.append(str(i)+'_'+action)
-    analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
-    if save_files:
-        plt.savefig(save_name+'_rdm')
-    plt.clf()
+        properties = []
+        for i, sequence in enumerate(pnas2018task.seqs):
+            for action in sequence[1:]:
+                prop = {}
+                prop["action"] = action
+                prop["sequence"] = str(i)
+                properties.append(prop)
+        rdm_obj = rdm.rdm(properties, matrix_values=avg_matrix)
+        rdm_obj.plot_rdm(title + " spearman rho matrix")
+        if save_files:
+            plt.savefig(title+'_rdm'+utils.datestr())
+        plt.clf()
 
-    mdsy = analysis.mds(avg_matrix)
-    for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
-        analysis.plot_mds_points(mdsy[6 * i:6 * i + 6], range(6), labels=labels[6 * i:6 * i + 6], style=style)
-    plt.title(title)
-    if save_files:
-        plt.savefig(save_name + '_mds')
-    plt.clf()
+        np.savetxt(save_name+"_rdm.txt", avg_matrix, delimiter="\t", fmt='%.2e')
+    #labels = []
+    #for i, sequence in enumerate(pnas2018task.seqs):
+    #    for action in sequence[1:]:
+    #        labels.append(str(i)+'_'+action)
+    #analysis.plot_rdm(avg_matrix, labels, title + " spearman rho matrix")
+    #if save_files:
+    #    plt.savefig(save_name+'_rdm')
+    #plt.clf()
+
+    #mdsy = analysis.mds(avg_matrix)
+    #for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
+    #    analysis.plot_mds_points(mdsy[6 * i:6 * i + 6], range(6), labels=labels[6 * i:6 * i + 6], style=style)
+    #plt.title(title)
+    #if save_files:
+    #    plt.savefig(save_name + '_mds')
+    #plt.clf()
     return avg_matrix, hidden_activations
 
 

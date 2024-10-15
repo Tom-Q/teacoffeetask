@@ -256,7 +256,7 @@ subsequence_grounds = BehaviorSequence(None, targets_grounds, name="ss_add_groun
 # infuse tea
 actions_teabag = ["a_fixate_cupboard", "a_open", "a_fixate_teabags", "a_take", "a_fixate_mug", "a_add_to_mug"]
 topgoals_teabag = [None] * len(actions_teabag)
-midgoals_teabag = ["g_2_infuse_tea"]  * len(actions_teabag)
+midgoals_teabag = ["g_2_infuse_tea"] * len(actions_teabag)
 targets_teabag = _make_targets(topgoals_teabag, midgoals_teabag, actions_teabag)
 subsequence_teabag = BehaviorSequence(None, targets_teabag, name="ss_infuse_tea", frequency=8)
 

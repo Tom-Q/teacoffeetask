@@ -1,14 +1,14 @@
 from pnas import pnas2018task
 import utils
-from neural import neuralnet as nn
+from neural import neuralnet as nn, layers
 import numpy as np
 import tensorflow as tf
 import scripts
 import analysis
 import matplotlib.pyplot as plt
 
-def train_with_goals(noise=0, iterations=10000, learning_rate=0.1):
-    model = nn.GoalNet(size_hidden=15, size_observation=7, size_action=8, size_goal1=2, size_goal2=0, recurrent_layer=nn.ELMAN)
+def train_with_goals(noise=0, iterations=5000, learning_rate=0.1):
+    model = nn.GoalNet(size_hidden=100, size_observation=9, size_action=8, size_goal1=2, size_goal2=0, recurrent_layer=layers.ELMAN)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.
@@ -278,6 +278,83 @@ def make_rdm_multiple_hierarchy(name, num_networks, title="-", save_files=True, 
             plt.savefig(side_name + '_mds'+utils.datestr())
         plt.clf()
 
+
+import rdm as rdm
+def make_rdm_multiple_goals_actions(name, num_networks, title="---", save_files=True, file_save_name=None, skips=[]):
+    if file_save_name == None:
+        file_save_name = name
+    # Make one rdm for each network
+    #rdmatrices_actions = []
+    #rdmatrices_goals = []
+    rdmatrices = []
+    for i in range(num_networks + len(skips)):
+        # Skip number
+        if skips is not None and i in skips:
+           continue
+        model = utils.load_object(name, i)
+        hidden, goals, actions = accuracy_test_with_goals(model)
+
+        # Turn a list of tensors into a list of np vectors
+        #for j, tensor in enumerate(goals):
+        #    goals[j] = tensor.numpy().reshape(-1)
+
+        #for j, tensor in enumerate(actions):
+        #    actions[j] = tensor.numpy().reshape(-1)
+
+        #rdm_actions=rdm.rdm_euclidian(actions)
+        #rdmatrices_actions.append(rdm_actions)
+
+        #rdm_goals= rdm.rdm_euclidian(goals)
+        #rdmatrices_goals.append(rdm_goals)
+
+        # Merge goals and actions
+        net_outputs = []
+        for idx in range(len(goals)):
+            action = actions[idx].reshape(-1)
+            goal = goals[idx].reshape(-1)
+            net_outputs.append(np.concatenate([action, goal]))
+
+        my_rdm = rdm.rdm_euclidian(net_outputs)
+        rdmatrices.append(my_rdm)
+
+    # Do the same processing for each side (low level/left and high_level/right)
+    #for side in [[rdmatrices_goals, "_goals_actions"], [rdmatrices_actions, "_actions"]]:
+        # Now average over all matrices
+    avg_rdm = None
+    for ind_rdm in rdmatrices:
+        if avg_rdm is None:
+            avg_rdm = ind_rdm
+        else:
+            avg_rdm += ind_rdm
+    avg_rdm /= num_networks
+    side_name = file_save_name
+    np.savetxt(side_name+"_rdm_mat"+utils.datestr()+".txt", avg_rdm, delimiter="\t", fmt='%.2e')
+    labels = []
+    for i, sequence in enumerate(pnas2018task.seqs):
+        for action in sequence[1:]:
+            labels.append(str(i)+'_'+action)
+    properties = []
+    for i, sequence in enumerate(pnas2018task.seqs):
+        for action in sequence[1:]:
+            prop = {}
+            prop["action"] = action
+            prop["sequence"] = str(i)
+            properties.append(prop)
+    rdm_obj = rdm.rdm(properties, matrix_values=avg_rdm)
+    rdm_obj.plot_rdm(title+side_name + " spearman rho matrix")
+    if save_files:
+        plt.savefig(side_name+'_rdm'+utils.datestr())
+    plt.clf()
+
+    mdsy = analysis.mds(avg_rdm)
+    for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
+        analysis.plot_mds_points(mdsy[6 * i:6 * i + 6], range(6), labels=labels[6 * i:6 * i + 6], style=style)
+    plt.title(title+side_name)
+    if save_files:
+        plt.savefig(side_name + '_mds'+utils.datestr())
+    plt.clf()
+
+
 def make_rdm_multiple_hierarchy_nogoals(name, num_networks, title="-", save_files=True, file_save_name=None, cutoff=None):
     if file_save_name == None:
         file_save_name = name
@@ -337,6 +414,8 @@ def make_rdm_multiple_hierarchy_nogoals(name, num_networks, title="-", save_file
 import copy
 def accuracy_test_with_goals(model, gain=[1, 1, 1, 1]):
     hidden_activation = []
+    goal_activation = []
+    action_activation = []
     all_choices = []
     for j, sequence in enumerate(pnas2018task.seqs):
         goal = pnas2018task.goals[j]
@@ -358,6 +437,8 @@ def accuracy_test_with_goals(model, gain=[1, 1, 1, 1]):
                 observation = inputs[i].reshape(1, -1)
                 model.feedforward(observation)
                 hidden_activation.append(model.context)
+                goal_activation.append(copy.deepcopy(model.goal1))
+                action_activation.append(copy.deepcopy(model.action)) # this is the maxxed action.
             # Get some statistics about what was correct and what wasn't
             choice = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
             model.h_action_collapsed.clear()
@@ -372,7 +453,7 @@ def accuracy_test_with_goals(model, gain=[1, 1, 1, 1]):
                 accuracy_totals[j] += 1
     accuracy_totals /= 4
     print(accuracy_totals)
-    return hidden_activation
+    return hidden_activation, goal_activation, action_activation
 
 def accuracy_test_reg_hierarchy(model, model_num=None):
     hidden_activation = []

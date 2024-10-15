@@ -268,9 +268,13 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                         #if not isinstance(model.context, np.ndarray):
                         #    model.context = model.context.numpy()  # Doesn't matter here, we're not going to backpropagate thru that.
                         #model.context[0, :model.context.shape[1]//2] *= hidden_goal_multiplier
-                        if goals and j >= noise_step and j <= noise_step + 2:
-                            model.goal1 *= goal_multiplier
-                            model.goal2 *= goal_multiplier
+                        if goals:# and j >= noise_step and j <= noise_step + 2:
+                            if type(goal_multiplier) is list:
+                                model.goal1 *= goal_multiplier[seq_counter]
+                                model.goal2 *= goal_multiplier[seq_counter]
+                            else:
+                                model.goal1 *= goal_multiplier
+                                model.goal2 *= goal_multiplier
 
                         # Add noise to context layer
                         if j == noise_step:
@@ -311,14 +315,23 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                                 #print("error")
                                 # reset goals. Had overflows so I'm guessing this led to goal1_one_hot being multiplied
                                 # which over many sequences would lead to a crazy big goal. Which obviously would make all results wrong.
-                                model.goal1 = copy.deepcopy(sequence_solutions[0][j-1].goal1_one_hot)
-                                model.goal2 = copy.deepcopy(sequence_solutions[0][j-1].goal2_one_hot)
+                                try:
+                                    model.goal1 = copy.deepcopy(sequence_solutions[0][j-1].goal1_one_hot)
+                                    model.goal2 = copy.deepcopy(sequence_solutions[0][j-1].goal2_one_hot)
+                                except Exception:
+                                    print("woops")
+
 
                             # Remove any incorrect sequences: meaning any where the current goal1 and goal2 don't match.
                             sequence_solutions[:] = [seq for seq in sequence_solutions
                                                      if (np.all(seq[j-1].goal1_one_hot == model.goal1) and
                                                          np.all(seq[j-1].goal2_one_hot == model.goal2))]
 
+                            # have to do it after the first assignment due to the seqence_solutions erasing
+                            # Not super clean but ...
+                            if error:
+                                model.goal1 *= goal_multiplier
+                                model.goal2 *= goal_multiplier
 
                         if lesion_goal1_units:
                             model.goal1 *= 0.
@@ -448,13 +461,13 @@ NONE = "none"
 GOAL = "goal"
 SUBGOAL = "subgoal"
 ACTION = "action"
+from sklearn.decomposition import PCA
 def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsne=False, do_loss=False,
                       mds_sequences=None, mds_range=None, noise_steps=None, one_rdm=True,
-                      do_special_representations=True, do_dimensionality=True,
-                      verbose=False, append_to_file=None, sequence_ids=None):
+                      do_special_representations=True, do_dimensionality=False,
+                      verbose=False, append_to_file=None, sequence_ids=None, net_name=""):
     if sequence_ids is None:
         sequence_ids = range(len(test_data))
-
 
     if append_to_file is not None:
         myfile = open(append_to_file, "a")
@@ -478,6 +491,10 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
     error_on_noise = 0
     error_on_transition = 0
     goal_errors = 0
+    steps_noise_error_replaced = 0
+    steps_noise_error_not_replaced =0
+    steps_noise_error_on_trans = 0
+    steps_noise_error_not_on_trans = 0
 
     num_replaced = 0
     num_omitted = 0
@@ -489,6 +506,8 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
     total_trials = 0
     total_correct_seq = 0
 
+    steps_noise_error_replaced_distrib = [0]*54
+    steps_noise_error_not_replaced_distrib = [0]*54
     for i, seq in enumerate(test_data):
         target_sequence = task.sequences_list[sequence_ids[i]]#task.sequences_list[i]
         for noise_step, trials in enumerate(seq):
@@ -529,6 +548,7 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
                         if all_targets[0].first_error_on_transition(trial):
                             error_on_transition += 1
 
+
                         # This stuff doesn't actually work. Forget it. Only useful bit is "num_replaced"
                         replaced, omitted, added, repeated, more_frequent, is_a_target = all_targets[0].subsequence_analysis(
                             trial)
@@ -539,7 +559,20 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
                         num_more_frequent += more_frequent
                         num_is_a_target += is_a_target
 
-                    # remove the no longer valid alternatives.
+                        steps_to_error = trial.first_error - noise_step
+                        if replaced:
+                            steps_noise_error_replaced_distrib[steps_to_error] += 1
+                            steps_noise_error_replaced += steps_to_error
+                        else:
+                            steps_noise_error_not_replaced_distrib[steps_to_error] += 1
+                            steps_noise_error_not_replaced += steps_to_error
+
+                        if all_targets[0].first_error_on_transition(trial):
+                            steps_noise_error_on_trans += steps_to_error
+                        else:
+                            steps_noise_error_not_on_trans += steps_to_error
+
+
                     for inv in invalid:
                         all_targets.remove(inv)
                         if inv in all_targets_goals:
@@ -566,13 +599,15 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
                     if error:  # If we found an error we can terminate here
                         break
 
+                trial._targets_with_goals_for_pca = all_targets_goals  # Record the actual targets for this trial. (see below)
                 if trial.first_error is None:
                     total_correct_seq += 1
                 total_trials += 1
 
             # Need to color the step at which noise is introduced.
-            #if VERBOSE:
-            print("Target sequence " + str(i) + " (" + target_sequence.name + ") noise at step " + str(noise_step) + ": errors = " + str(first_error))
+            if VERBOSE:
+                print("Target sequence " + str(i) + " (" + target_sequence.name + ") noise at step " + str(noise_step) + ": errors = " + str(first_error))
+
     total_fullseq_errors = num_is_a_target
     total_error = total_trials - total_correct_seq
     total_subseq_error = num_replaced
@@ -589,23 +624,40 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
                 total_fullseq_errors,
                 goal_errors
             ))
-
         print("Overall stats:\n errors on noise step: {0}\n errors on transition: {1}\n average steps noise->error: {2}\n".format(
             error_on_noise, error_on_transition, steps_noise_to_error/num_errors if num_errors>0 else -1
         ))
     else:
         print("Overall totals: {0}/{1} correct, goal errors={2}.".format(total_correct_seq, total_trials, goal_errors))
+
+    steps_noise_error_replaced = steps_noise_error_replaced / num_replaced if num_replaced != 0 else -1
+    steps_noise_error_not_replaced = steps_noise_error_not_replaced / (num_errors - num_replaced) if (num_errors - num_replaced) != 0 else -1
+    steps_noise_error_on_trans = steps_noise_error_on_trans / error_on_transition if error_on_transition != 0 else -1
+    steps_noise_error_not_on_trans = steps_noise_error_not_on_trans / (num_errors - error_on_transition) if (num_errors - error_on_transition) != 0 else -1
+    print(
+        "Noise to error steps analysis:\n avg steps to error - subseq error: {0}\n avg steps to error - action error: {1}\n avg steps to error - on transition: {2}\n avg steps to error - not on transition: {3}\n".format(
+            steps_noise_error_replaced, steps_noise_error_not_replaced, steps_noise_error_on_trans, steps_noise_error_not_on_trans
+        ))
+
     #return [total_correct_seq, total_action_errors, total_subseq_error - total_fullseq_errors, total_fullseq_errors, goal_errors]
     if append_to_file is not None:
-        myfile.write("{0};{2};{3};{4};{5};{6};\n".format(
-                total_correct_seq,
-                total_trials - total_correct_seq,
-                total_action_errors, # action errors.
-                total_subseq_error - total_fullseq_errors, # Are all full sequence errors ALSO subsequence errors?
-                total_fullseq_errors,
-                goal_errors,
-                error_on_transition
+        myfile.write("{0};{1}; {2};{3};;{4};;{5}\n".format(
+                steps_noise_error_replaced,
+                steps_noise_error_not_replaced,
+                steps_noise_error_on_trans,
+                steps_noise_error_not_on_trans,
+                str(steps_noise_error_replaced_distrib)[1:-1],
+                str(steps_noise_error_not_replaced_distrib)[1:-1] # remove the brackets
             ))
+        #myfile.write("{0};{2};{3};{4};{5};{6};\n".format(
+        #        total_correct_seq,
+        #        total_trials - total_correct_seq,
+        #        total_action_errors, # action errors.
+        #        total_subseq_error - total_fullseq_errors, # Are all full sequence errors ALSO subsequence errors?
+        #        total_fullseq_errors,
+        #        goal_errors,
+        #        error_on_transition
+        #    ))
         myfile.close()
 
     error_testing_results = None
@@ -838,7 +890,7 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
         print("mds done")
 
         mdsy_idx = 0
-        colors = mcolors.CSS4_COLORS
+        colors = ['b', 'r', 'g', 'k'] * 10  #
         for i, seq in enumerate(outputs_sequences_flat):
             length = seq.length
             if mds_range is not None and length > mds_range:
@@ -848,11 +900,11 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
                 for j in range(length):
                     labels.append("seq "+ str(i) + ": " + str(j+1))
                 analysis.plot_mds_points(mdsy[mdsy_idx:mdsy_idx + length], range(length), labels=None,#labels,
-                                         style=list(colors.values())[(i)%len(colors)], fontsize=32)
+                                         style=colors[i]+'x-', fontsize=32)#style=list(colors.values())[(i)%len(colors)], fontsize=32)
                 mdsy_idx += length
         plt.title("MDS")
         #plt.show()
-        plt.savefig("mds")
+        plt.savefig("mds"+net_name)
         plt.clf()
 
     ranks = []
@@ -885,7 +937,98 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
         print("average activation value")
         print(average)
         averages.append(average)
-        #np.
+
+        # Dimensionality - PCA:
+        pca = PCA(n_components=20)
+        components = pca.fit(matrix)
+        activations_pcaed = pca.transform(matrix)
+        X_pca = pca.fit_transform(matrix)
+
+
+        action_targets_matrix = []
+        subgoals_targets_matrix = []
+        goals_targets_matrix = []
+        for behavior_sequence in test_data:
+            be = behavior_sequence[0][0] # wtf
+            if be._targets_with_goals_for_pca:
+                for target in be._targets_with_goals_for_pca[0].targets:
+                    action_targets_matrix.append(target.action_one_hot)
+                    subgoals_targets_matrix.append(target.goal2_one_hot)
+                    goals_targets_matrix.append(target.goal1_one_hot)
+            else:
+                raise ValueError("Currently analysis is only possible for zero errors runs")
+        action_targets_matrix = np.concatenate(action_targets_matrix, axis=0)
+        subgoals_targets_matrix = np.concatenate(subgoals_targets_matrix, axis=0)
+        goals_targets_matrix = np.concatenate(goals_targets_matrix, axis=0)
+
+        import scipy.stats
+        def component_analysis(activations_post_pca, categories_one_hot):
+            avg_ts_across_categories = [0.] * 20
+            for category in range(len(categories_one_hot[0])):
+                on_category = []
+                off_category = []
+                sum = activations_post_pca[0] * 0.
+                total = 0
+                for id, act_vector in enumerate(activations_post_pca):
+                    if categories_one_hot[id][category]:
+                        on_category.append(act_vector)
+                        sum+=act_vector
+                        total += 1
+                    else:
+                        off_category.append(act_vector)
+                if total!= 0:
+                    sum /= total
+                #print(action, sum)
+
+                if on_category and off_category:
+                    # t-test to establish significance
+                    on_category = np.stack(on_category)
+                    off_category = np.stack(off_category)
+                    # We want to do this for every column (corresponding to every component).
+                    for component in range(len(off_category[0, :])):
+                        mean = sum[component]
+                        t_stat, pval = scipy.stats.ttest_ind(on_category[:, component], off_category[:, component], alternative='two-sided')
+                        #print(str(component)+'; ' + format(mean, '.2f') + '; '+ format(t_stat, '.2f') + '; ' + format(pval, '.8f'))
+                        avg_ts_across_categories[component] += abs(t_stat)/len(categories_one_hot[0])
+                else:
+                    print("no points for this")
+            #print("avg:"+str(avg_ts_across_categories))
+            return avg_ts_across_categories
+        print("\n\nactions:")
+        avgs_actions = component_analysis(X_pca, action_targets_matrix)
+        print("\n\nsubgoals:")
+        avgs_subgoals = component_analysis(X_pca, subgoals_targets_matrix)
+        print("\n\ngoals:")
+        avgs_goals = component_analysis(X_pca, goals_targets_matrix)
+
+        # Print this in a file
+        utils.write_lists_to_csv("pca_analysis_results", [avgs_actions, avgs_subgoals, avgs_goals])
+        # Now what I want is the average t-stat for the first 10 components, across goals, subgoals, and actions.
+        # The point being to interpret the effect of goals on dimensionality as resulting from using the main component
+        # to represent goals.
+
+
+        # Now correlate X to task elements -->
+        # --> step
+        # --> task (Coffee/tea)
+        # --> subtask (each of them)
+        # --> chosen action
+
+
+
+        # Explained variance
+        explained_variance = pca.explained_variance_ratio_
+        print(explained_variance)
+        sum_explained_variance = 0.
+        print("components: explained variance")
+        for i, var in enumerate(explained_variance):
+            sum_explained_variance+=var
+            print(sum_explained_variance)
+
+        # Now compute explained variance across one sequence, for each component, on one sequence..
+        # use sequence 4/5 (coffee with sugar and dairy)
+
+
         # Compute rank of activation matrix for a given sequence.
         #np.linalg.matrix_rank(mat, tol=0.1)
         #print dimensionality
@@ -898,7 +1041,7 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
         print("Generating t-SNE...")
         activations = np.concatenate(activations_flat, axis=0)
         start = time.time()
-        tsne = TSNE(perplexity=50.0, n_iter=3000)  # Defaults are perplexity=30 and n_iter=1000.
+        tsne = TSNE(perplexity=75.0, n_iter=5000)  # Defaults are perplexity=30 and n_iter=1000.
         # Reducing perplexity captures global structure better. increasing n_iter makes sure we've converged.
         tsne_results = tsne.fit_transform(X=activations)
         print("KL divergence="+str(tsne.kl_divergence_))
@@ -949,7 +1092,7 @@ def reorder_rdm(rdm, labels, targets, mode=ACTION):
 
 
 def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, tsne_actions=False, tsne_sequences=False,
-              tsne_errors=False, tsne_sequence=[], tsne_sequence_interval=[], filename="tsne", annotate=False, save_txt=False):
+              tsne_errors=False, tsne_sequence=[], tsne_sequence_interval=None, filename="tsne", annotate=False, save_txt=False, legend=False):
     # Flatten test data
     outputs_no_noise_step_distinction = []
     for seq_outputs in test_data:
@@ -957,6 +1100,8 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
     outputs_sequences_flat = utils.flatten_onelevel(outputs_no_noise_step_distinction)
 
     plt.figure(figsize=(16, 10))
+    plt.subplots()[1].set_facecolor('white')
+
     # Color points corresponding to sequence 1 in red, color points corresponding to action "add to mug" in blue,
     # Color points corresponding to subgoal "stir" in green
     x = tsne_results[:, 0]
@@ -966,14 +1111,15 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
     if save_txt:
         np.savetxt(filename+"_tsne.txt", tsne_results, delimiter="\t", fmt='%.2e')
 
-    plt.plot(x, y, ',k')
+    #plt.plot(x, y, ',k')
 
     # Add the TSNE plot points to the sequences.
-    counter = 0
+    prev_seqs_len = 0
     for sequence in outputs_sequences_flat:
-        sequence.tsne_coords = tsne_results[counter:counter + sequence.length, :]
-        counter += sequence.length
-
+        seq_length = min(sequence.length, tsne_sequence_interval[1] - tsne_sequence_interval[0] if tsne_sequence_interval is not None else 1000)
+        sequence.tsne_coords = tsne_results[prev_seqs_len:prev_seqs_len + seq_length, :]
+        prev_seqs_len += sequence.length
+    """
     colors = ["aquamarine", "blueviolet", "coral",
               "crimson", "gold", "hotpink",
               "olivedrab", "royalblue", "sienna",
@@ -982,9 +1128,17 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
               "darkseagreen", "goldenrod", "khaki",
               "plum", "maroon", "slateblue", "navyblue",
               "forestgreen", "red", "gray", "black"]
+    """
+    colors = ['m', 'c', 'k', 'g', 'r', 'b']
+    linestyles = ['--', '-', '--', '-', '--', '-']
+    linewidths = ['1.5', '1.5', '1', '1', '0.5', '0.5']
+    labels = ['tea x2', 'coffee x2', 'tea x1', 'coffee x1', 'tea x0', 'coffee x0']
+
     # Now plot whatever fancy shit we want. First the points, errors etc.
     for seqid, sequence in enumerate(outputs_sequences_flat):
         for index, target in enumerate(sequence.targets):
+            if tsne_sequence_interval is not None and (index < tsne_sequence_interval[0] or index >= tsne_sequence_interval[1]):
+                continue  # don't trace stuff that's outside the sequence interval
             idx = len(colors)-1  # black
             if tsne_errors:
                 if sequence.first_error is None or index < sequence.first_error:
@@ -1002,7 +1156,7 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
                     idx = environment.GoalEnvData.actions_list.index(target.action_str)
                 elif tsne_sequences:
                     idx = sequence.target_seq_id
-                plt.plot(sequence.tsne_coords[index, 0], sequence.tsne_coords[index, 1], color=colors[idx], marker=',')
+                #plt.plot(sequence.tsne_coords[index, 0], sequence.tsne_coords[index, 1], color=colors[idx], marker=',')
     # Then the sequences. In that order because we want the sequences on top.
     for seqid, sequence in enumerate(outputs_sequences_flat):
         if seqid in tsne_sequence:
@@ -1013,8 +1167,10 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
                 seq_start=tsne_sequence_interval[0]
                 seq_end=tsne_sequence_interval[1]
             # Plot the whole sequence
-            plt.plot(sequence.tsne_coords[seq_start:seq_end, 0], sequence.tsne_coords[seq_start:seq_end, 1], linestyle='-', linewidth=1.,
-                     color=colors[tsne_sequence.index(seqid)])
+            #idx = tsne_sequence.index(seqid)
+            plt.plot(sequence.tsne_coords[seq_start:seq_end, 0], sequence.tsne_coords[seq_start:seq_end, 1],
+                     linestyle=linestyles[seqid], linewidth=linewidths[seqid],
+                     color=colors[seqid], label=labels[seqid], marker='+', markersize=4)
             # Special points get markers
             # Start
             plt.plot(sequence.tsne_coords[seq_start, 0], sequence.tsne_coords[seq_start, 1],
@@ -1024,46 +1180,62 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
                 plt.plot(sequence.tsne_coords[sequence.noise_step, 0], sequence.tsne_coords[sequence.noise_step, 1],
                          marker='v', color=colors[tsne_sequence.index(seqid)])
             # Finish
-            plt.plot(sequence.tsne_coords[seq_end-1, 0], sequence.tsne_coords[seq_end-1, 1],
-                     marker='o', color=colors[tsne_sequence.index(seqid)])
+            #plt.plot(sequence.tsne_coords[seq_end-1, 0], sequence.tsne_coords[seq_end-1, 1],
+            #         marker='o', color=colors[tsne_sequence.index(seqid)])
             # If there's an error, put a red X there
-            if sequence.first_error is not None and seq_start < sequence.first_error < seq_end:
-                plt.plot(sequence.tsne_coords[sequence.first_error, 0], sequence.tsne_coords[sequence.first_error, 1],
-                          marker='x', color='red')
+            # if sequence.first_error is not None and seq_start < sequence.first_error < seq_end:
+            #    plt.plot(sequence.tsne_coords[sequence.first_error, 0], sequence.tsne_coords[sequence.first_error, 1],
+            #              marker='x', color='red')
             if annotate:
                 # Annotate every point with the corresponding action (and subgoal? and goal?).
                 for i, coords in enumerate(sequence.tsne_coords[seq_start:seq_end, :]):
                     target = sequence.targets[seq_start + i]
                     text = str(seq_start+i+1) #+ ':' + target.goal1_str[4:] + '/' + target.goal2_str[4:] + '/' + target.action_str[2:]
-                    plt.annotate(text, coords)
+                    plt.annotate(text, coords, fontsize='8')
     # Generate legends
 
-    patches = []
-    if tsne_goals:
-        for index, label in enumerate(environment.GoalEnvData.goals1_list):
-            patches.append(mpatches.Patch(color=colors[index], label=label[2:]))
-    elif tsne_subgoals:
-        for index, label in enumerate(environment.GoalEnvData.goals2_list):
-            patches.append(mpatches.Patch(color=colors[index], label=label[2:]))
-    elif tsne_actions:
-        for index, label in enumerate(environment.GoalEnvData.actions_list):
-            patches.append(mpatches.Patch(color=colors[index], label=label[2:]))
-    elif tsne_errors:
-        for index, label in enumerate(["Beyond first mistake", "First mistake", "Before first mistake"]):
-            patches.append(mpatches.Patch(color=colors[-2-index], label=label))
-    elif tsne_sequences:
-        for index, sequence in enumerate(task.sequences_list):
-            patches.append(mpatches.Patch(color=colors[index], label=sequence.name))
-    if tsne_sequence:
-        for seqid in tsne_sequence:
-            patches.append(mlines.Line2D([], [], color=colors[tsne_sequence.index(seqid)], label='Sequence '+str(seqid)))
-        patches.append(mlines.Line2D([], [], color="black", marker="o", label="Final action"))
-        patches.append(mlines.Line2D([], [], color="black", marker=">", label="First action"))
-        patches.append(mlines.Line2D([], [], color="black", marker="v", label="Noise injection"))
-        patches.append(mlines.Line2D([], [], linestyle='', color="red", marker="x", label="First error"))
+    """
+    if custom_legend is None:
+        patches = []
+        if tsne_goals:
+            for index, label in enumerate(environment.GoalEnvData.goals1_list):
+                patches.append(mpatches.Patch(color=colors[index], label=label[2:]))
+        elif tsne_subgoals:
+            for index, label in enumerate(environment.GoalEnvData.goals2_list):
+                patches.append(mpatches.Patch(color=colors[index], label=label[2:]))
+        elif tsne_actions:
+            for index, label in enumerate(environment.GoalEnvData.actions_list):
+                patches.append(mpatches.Patch(color=colors[index], label=label[2:]))
+        elif tsne_errors:
+            for index, label in enumerate(["Beyond first mistake", "First mistake", "Before first mistake"]):
+                patches.append(mpatches.Patch(color=colors[-2-index], label=label))
+        elif tsne_sequences:
+            for index, sequence in enumerate(task.sequences_list):
+                patches.append(mpatches.Patch(color=colors[index], label=sequence.name))
+        if tsne_sequence:
+            for seqid in tsne_sequence:
+                patches.append(mlines.Line2D([], [], color=colors[tsne_sequence.index(seqid)], label='Sequence '+str(seqid)))
+            patches.append(mlines.Line2D([], [], color="black", marker="o", label="Final action"))
+            patches.append(mlines.Line2D([], [], color="black", marker=">", label="First action"))
+            patches.append(mlines.Line2D([], [], color="black", marker="v", label="Noise injection"))
+            patches.append(mlines.Line2D([], [], linestyle='', color="red", marker="x", label="First error"))
 
     #ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.legend(handles=patches, bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0.)
+
+        plt.legend(handles=patches, bbox_to_anchor=(1.02, 1), loc=2, borderaxespad=0.)
+    else:
+        handles = custom_legend[0]
+        labels = custom_legend[1]
+        order = custom_legend[2]
+        plt.legend([handles[idx] for idx in order], [labels[idx] for idx in order], fontsize=16, loc="upper left")
+    """
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    order = [5, 3, 1, 4, 2, 0]
+    if legend:
+        plt.legend([handles[idx] for idx in order], [labels[idx] for idx in order], loc="lower right", fontsize=10)
+
+    plt.grid(color='lightgrey', linestyle='--', linewidth=0.25)
     plt.tight_layout()
     # sns.scatterplot(
     #    x="x", y="y",
@@ -1073,7 +1245,7 @@ def plot_tsne(tsne_results, test_data, tsne_goals=False, tsne_subgoals=False, ts
     #    legend="full",
     #    alpha=0.3
     # )
-    plt.savefig(filename)
+    plt.savefig(filename + 'svg', format='svg', dpi=1200)
 
 
 NUM_TIMESTEPS = 899
@@ -1091,7 +1263,7 @@ def stop_condition(model, noise=0., goal1_noise=0., goal2_noise=0., goals=True, 
                                    disruption_per_step=disruption_per_step,
                                    initialization=context_initialization,
                                    verbose=False)
-    tsne_results, test_data, total_errors, _, goal_errors, _, _ = analyse_test_data(test_data, do_rdm=do_rdm, goals=goals, verbose=False)
+    tsne_results, test_data, total_errors, _, goal_errors, _, _, _, _,_ = analyse_test_data(test_data, do_rdm=do_rdm, goals=goals, verbose=False, sequence_ids=sequence_ids)
     #return total_errors + goal_errors < NUM_TIMESTEPS / 100  # (8 errors or less, or 1% of errors). TODO triple check
     no_errors = total_errors + goal_errors == 0
     if no_errors and BONUS_ITERATIONS == 1:

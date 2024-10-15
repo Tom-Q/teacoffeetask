@@ -3,6 +3,9 @@ import numpy as np
 import utils
 from abc import ABC, abstractmethod
 
+ELMAN = "elman"
+GRU = "gru"
+LSTM = "lstm"
 
 def winner_take_all(a):
     a = a.numpy()
@@ -12,6 +15,17 @@ def winner_take_all(a):
 
 def rounding(a):
     return np.rint(a.numpy())
+
+def make_layer(layer_type, size_input, size_hidden, nonlinearity, initialization=None):
+    if layer_type == ELMAN:
+        return ElmanLayer(size_input, size_hidden, initial_context=None, nonlinearity=nonlinearity, initialization=initialization)
+    elif layer_type == GRU:
+        return GRULayer(size_input, size_hidden)
+    elif layer_type == LSTM:
+        return LSTMLayer(size_input, size_hidden)
+    else:
+        raise NotImplementedError("unknown layer type")
+
 
 class Layer(ABC):
     def __init__(self):
@@ -186,8 +200,8 @@ class LSTMLayer(RecurrentLayer):
             self.h = np.zeros((1, output_size), dtype=np.float32)
             self.c = np.zeros((1, output_size), dtype=np.float32)
         else:
-            self.h = initial_context[0]
-            self.c = initial_context[1]
+            self.h = np.reshape(initial_context[0], (1, -1))
+            self.c = np.reshape(initial_context[1], (1, -1))
 
     def feedforward(self, x):
         # concatenate x and h
@@ -211,7 +225,8 @@ class LSTMLayer(RecurrentLayer):
             self.h = np.zeros((1, self.output_size), dtype=np.float32)
             self.c = np.zeros((1, self.output_size), dtype=np.float32)
         else:
-            raise NotImplementedError("figure this out later")
+            self.h = np.reshape(state[0], (1, -1))
+            self.c = np.reshape(state[1], (1, -1))
 
     @property
     def parameters(self):
@@ -304,6 +319,15 @@ class PredLayerPredFirst(RecurrentLayer):
     @property
     def parameters(self):
         return self.representation_layer.parameters + self.predictive_layer.parameters + self.output_layer.parameters
+
+class ConvLayer(BasicLayer):
+    def __init__(self, observation, num_filters, filter_size):
+        pass
+
+class MaxPoolLayer(BasicLayer):
+    def __init__(self):
+        pass
+
 
 # Reinforcement predlayer.
 # This has the following structure:  (Plus some stop gradients)

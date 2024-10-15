@@ -192,7 +192,7 @@ def accuracy_test(model, name=None, noise=0., initial_context=pnas2018.ZEROS):
 
 
 def train_with_goals(noise=0, iterations=5000, learning_rate=0.1, nonlinearity=tf.nn.sigmoid):
-    model = nn.GoalNet(size_hidden=15, size_observation=8, size_action=8, size_goal1=2, size_goal2=0, nonlinearity=nonlinearity)
+    model = nn.GoalNet(size_hidden=15, size_observation=8, size_action=8, size_goal1=4, size_goal2=0, nonlinearity=nonlinearity)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.
@@ -307,6 +307,7 @@ def make_rdm_multiple_gain(name, num_networks, title="-", save_files=True, skips
 def accuracy_test_with_goals(model, gain=[1, 1, 1, 1]):
     hidden_activation = []
     all_choices = []
+    print("gain: ", gain)
     for j, sequence in enumerate(rewardtask.seqs):
         goal = rewardtask.goals[j]
         seq_choices = []
@@ -330,6 +331,14 @@ def accuracy_test_with_goals(model, gain=[1, 1, 1, 1]):
             choice = np.array(model.h_action_collapsed).reshape((-1, len(targets[0])))
             model.h_action_collapsed.clear()
             seq_choices.append(choice)
+
+        #print(seq_choices)
+        seq = []
+        for choice in seq_choices:
+            for i in range(len(choice)):
+                action_str = utils.onehot_to_str(choice[i,:], rewardtask.all_outputs)
+                seq.append(action_str)
+        print(seq)
 
     # Now evaluate accuracy:
     accuracy_totals = np.zeros((len(rewardtask.seq1) - 1))

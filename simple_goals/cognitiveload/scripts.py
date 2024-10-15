@@ -7,6 +7,7 @@ import tensorflow as tf
 from neural import neuralnet as nn, optimizers
 import utils
 import numpy as np
+import matplotlib.pyplot as plt
 
 def training_and_params():
     mod3.FAST_RDM = True
@@ -817,3 +818,4 @@ def training_and_params():
                                  learning_rate=0.003,
                                  iterations=300000)
     """
+

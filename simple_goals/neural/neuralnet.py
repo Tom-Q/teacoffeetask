@@ -6,7 +6,7 @@ import timeit
 from abc import ABC, abstractmethod
 import copy
 from neural import layers, optimizers
-
+from pnas import pnas2018task as task
 
 # convenience function for stopping parameters since I'll be using this in many places.
 # Checks if it's time to stop training a network
@@ -117,9 +117,285 @@ class NeuralNet(ABC):
 
 ZEROS = "zeros"
 UNIFORM = "uniform"
-ELMAN = "elman"
-GRU = "gru"
-LSTM = "lstm"
+
+
+# A neural net with self-prediction of the hidden layer. Uses LSTM
+class PredictiveACC(NeuralNet):
+    def __init__(self, size_recurrent=15, size_acc=15, algorithm=optimizers.SGD,
+                 learning_rate_behavior=0.1,
+                 learning_rate_acc=0.01,
+                 size_observation=len(task.all_inputs),
+                 size_action=len(task.all_outputs),
+                 initialization=utils.HE,
+                 L1_reg = 0., L2_reg = 0.,
+                 last_action_inputs=False,
+                 nonlinearity=tf.nn.relu,
+                 recurrent_layer=layers.LSTM,
+                 acc_layer=layers.LSTM,
+                 initial_context = UNIFORM):
+        super().__init__(size_observation, size_action, initialization=initialization,
+                         algorithm=algorithm)
+        self.size_recurrent = size_recurrent
+        self.size_acc = size_acc
+        self.nonlinearity = nonlinearity
+        self.initialization = initialization
+        # Whether to feed the last action as another input
+        self.last_action_inputs = last_action_inputs
+        self.learning_rate_behavior=learning_rate_behavior
+        self.learning_rate_acc=learning_rate_acc
+        self.L1_regularization = L1_reg
+        self.L2_regularization = L2_reg
+        self.initial_context = initial_context
+
+        self.action = self.action_activation = self.prediction = None
+
+        self.recurrent_layer = layers.make_layer(recurrent_layer, self.size_observation, self.size_recurrent, self.nonlinearity)
+        self.action_layer = layers.BasicLayer(utils.initialize([self.size_recurrent, self.size_action], self.initialization))
+        self.weights_behavior = self.recurrent_layer.parameters + self.action_layer.parameters
+
+        self.acc_layer = layers.make_layer(acc_layer, size_recurrent, size_acc, self.nonlinearity)
+        self.prediction_layer = layers.BasicLayer(utils.initialize([self.size_acc, self.size_recurrent], utils.XAVIER), nonlinearity=tf.tanh)
+        self.weights_acc = self.acc_layer.parameters + self.prediction_layer.parameters
+
+        self.h_action_activation = []
+        self.h_action_collapsed = []
+        self.h_context = []
+        self.h_prediction = []
+        self.h_acc = []
+        self.history = [self.h_action_activation,
+                        self.h_action_collapsed,
+                        self.h_context,
+                        self.h_prediction,
+                        self.h_acc]
+
+        if initial_context == UNIFORM:
+            self.initial_context_recurrent = np.float32(np.random.uniform(0.01, 0.99, (2, self.size_recurrent)))
+            self.initial_context_acc = np.float32(np.random.uniform(0.01, 0.99, (2, self.size_acc)))
+        elif initial_context == ZEROS:
+            self.initial_context_recurrent = np.float32(np.zeros((2, self.size_recurrent)))
+            self.initial_context_acc = np.float32(np.zeros((2, self.size_acc)))
+
+        self.acc_optimizer = optimizers.make_optimizer(self.algorithm, self.weights_acc)
+        self.behavior_optimizer = optimizers.make_optimizer(self.algorithm, self.weights_behavior)
+
+    def feedforward(self, observation, first_time_step=False):
+        # 1. Compute action
+        self.context_activation = self.recurrent_layer.feedforward(observation)
+        self.action_activation = self.action_layer.feedforward(self.context_activation)
+        self.action = layers.winner_take_all(self.action_activation)
+
+        # 2. compute prediction
+        # Acc activation relies on either last hidden activation (context), or the prediction error
+        self.acc_activation = self.activate_acc(first_time_step)
+        self.prediction = self.prediction_layer.feedforward(self.acc_activation)
+
+        self.save_history()
+
+    def activate_acc(self, first_time_step):
+        return self.acc_layer.feedforward(self.recurrent_layer.h)
+
+    def new_episode(self):
+        # Reinitialize the entire state of the network (anything that could affect the next episode.)
+        self.clear_history()
+        self.recurrent_layer.reset(copy.deepcopy(self.initial_context_recurrent))
+        self.acc_layer.reset(copy.deepcopy(self.initial_context_acc))
+        # the prediction layer is set to predict the initial context exactly; it's not trained.
+        #self.h_prediction.append(copy.deepcopy(self.initial_context_recurrent[0]))
+        #self.h_context.append(copy.deepcopy(self.initial_context_recurrent[0]))
+
+    def clear_history(self):
+        for data in self.history:
+            data.clear()
+
+    def save_history(self):
+        self.h_action_activation.append(copy.deepcopy(self.action_activation))
+        self.h_action_collapsed.append(copy.deepcopy(self.action))
+        self.h_prediction.append(copy.deepcopy(self.prediction))
+        self.h_acc.append(copy.deepcopy(self.acc_layer.h))
+        self.h_context.append(copy.deepcopy(self.recurrent_layer.h))
+
+    def train_behavior(self, tape, targets, extra_loss=0.):
+        loss = 0
+        for i, target in enumerate(targets):
+            loss += tf.nn.softmax_cross_entropy_with_logits(target, self.h_action_activation[i])
+
+        loss += self.L1_regularization * sum([tf.reduce_sum(weights**2) for weights in self.weights_behavior])
+        loss += self.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in self.weights_behavior])
+        loss += extra_loss
+        gradients = tape.gradient(loss, self.weights_behavior)
+        self.behavior_optimizer.update_weights(gradients, self.learning_rate_behavior)
+        return loss
+
+    def train_acc(self, tape, extra_loss=0., iteration=0.):
+        loss = 0
+        for i, context in enumerate(self.h_context):
+            if i == 0:
+                continue
+            prediction = self.h_prediction[i-1]
+            pred_error = context - prediction
+            step_loss = tf.reduce_sum(pred_error**2)  #i+1 because we don't train the first prediction
+            loss += step_loss
+        loss += self.L1_regularization * sum([tf.reduce_sum(weights ** 2) for weights in self.weights_acc])
+        loss += self.L2_regularization * sum([tf.reduce_sum(weights ** 2) for weights in self.weights_acc])
+        loss += extra_loss
+        gradients = tape.gradient(loss, self.weights_acc)
+        self.acc_optimizer.update_weights(gradients, self.learning_rate_acc)
+        return loss
+
+    # Not the ideal way to deal with that but hey.
+    def train(self, tape, targets):
+        raise NotImplementedError("This network class uses two different train methods, for acc and behavior")
+
+# Same as predictive acc but the input to acc is the difference between prediction and reality,
+# rather than the previous inner state
+class UltraPredictiveACC(PredictiveACC):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def activate_acc(self, first_time_step):
+        if first_time_step:
+            prediction_error = self.recurrent_layer.h * 0.
+        else:
+            prediction_error = self.recurrent_layer.h - self.h_prediction[-1]
+        return self.acc_layer.feedforward(prediction_error)
+
+
+# A neural net with self-prediction of the hidden layer. Uses LSTM
+class CriticACC(NeuralNet):
+    def __init__(self, size_recurrent=15, size_acc=15, algorithm=optimizers.SGD,
+                 learning_rate_behavior=0.1,
+                 learning_rate_acc=0.01,
+                 size_observation=len(task.all_inputs),
+                 size_action=len(task.all_outputs),
+                 initialization=utils.HE,
+                 L1_reg = 0., L2_reg = 0.,
+                 last_action_inputs=False,
+                 nonlinearity=tf.nn.relu,
+                 recurrent_layer=layers.LSTM,
+                 acc_layer=layers.LSTM,
+                 initial_context = UNIFORM):
+        super().__init__(size_observation, size_action, initialization=initialization,
+                         algorithm=algorithm)
+        self.size_recurrent = size_recurrent
+        self.size_acc = size_acc
+        self.nonlinearity = nonlinearity
+        self.initialization = initialization
+        # Whether to feed the last action as another input
+        self.last_action_inputs = last_action_inputs
+        self.learning_rate_behavior=learning_rate_behavior
+        self.learning_rate_acc=learning_rate_acc
+        self.L1_regularization = L1_reg
+        self.L2_regularization = L2_reg
+        self.initial_context = initial_context
+
+        self.action = self.action_activation = self.prediction = None
+
+        self.recurrent_layer = layers.make_layer(recurrent_layer, self.size_observation, self.size_recurrent, self.nonlinearity)
+        self.action_layer = layers.BasicLayer(utils.initialize([self.size_recurrent, self.size_action], self.initialization))
+        self.weights_behavior = self.recurrent_layer.parameters + self.action_layer.parameters
+
+        self.acc_layer = layers.make_layer(acc_layer, size_recurrent, size_acc, self.nonlinearity)
+        # the critic output is between 0 (failure) and 1 (success)
+        self.critic_layer = layers.BasicLayer(utils.initialize([size_acc, 1], utils.XAVIER))
+        self.weights_acc = self.acc_layer.parameters + self.critic_layer.parameters
+
+        self.h_action_activation = []
+        self.h_action_collapsed = []
+        self.h_context = []
+        self.h_outcome_activation = []
+        self.h_outcome_prediction = []
+        self.h_acc = []
+        self.history = [self.h_action_activation,
+                        self.h_action_collapsed,
+                        self.h_context,
+                        self.h_outcome_activation,
+                        self.h_outcome_prediction,
+                        self.h_acc]
+
+        if initial_context == UNIFORM:
+            self.initial_context_recurrent = np.float32(np.random.uniform(0.01, 0.99, (2, self.size_recurrent)))
+            self.initial_context_acc = np.float32(np.random.uniform(0.01, 0.99, (2, self.size_acc)))
+        elif initial_context == ZEROS:
+            self.initial_context_recurrent = np.float32(np.zeros((2, self.size_recurrent)))
+            self.initial_context_acc = np.float32(np.zeros((2, self.size_acc)))
+
+        self.acc_optimizer = optimizers.make_optimizer(self.algorithm, self.weights_acc)
+        self.behavior_optimizer = optimizers.make_optimizer(self.algorithm, self.weights_behavior)
+
+    def feedforward(self, observation, first_time_step=False):
+        # 1. Compute action
+        self.context_activation = self.recurrent_layer.feedforward(observation)
+        self.action_activation = self.action_layer.feedforward(self.context_activation)
+        self.action = layers.winner_take_all(self.action_activation)
+
+        # 2. compute prediction
+        # Acc activation relies on either last hidden activation (context), or the prediction error
+        self.acc_activation = self.activate_acc(first_time_step)
+        self.outcome_activation = self.critic_layer.feedforward(self.acc_activation)
+        self.outcome_prediction = tf.sigmoid(self.outcome_activation)
+
+        self.save_history()
+
+    def activate_acc(self, first_time_step):
+        return self.acc_layer.feedforward(self.recurrent_layer.h)
+
+    def new_episode(self):
+        # Reinitialize the entire state of the network (anything that could affect the next episode.)
+        self.clear_history()
+        self.recurrent_layer.reset(copy.deepcopy(self.initial_context_recurrent))
+        self.acc_layer.reset(copy.deepcopy(self.initial_context_acc))
+        # the prediction layer is set to predict the initial context exactly; it's not trained.
+        #self.h_prediction.append(copy.deepcopy(self.initial_context_recurrent[0]))
+        #self.h_context.append(copy.deepcopy(self.initial_context_recurrent[0]))
+
+    def clear_history(self):
+        for data in self.history:
+            data.clear()
+
+    def save_history(self):
+        self.h_action_activation.append(copy.deepcopy(self.action_activation))
+        self.h_action_collapsed.append(copy.deepcopy(self.action))
+        self.h_outcome_activation.append(copy.deepcopy(self.outcome_activation))
+        self.h_outcome_prediction.append(copy.deepcopy(self.outcome_prediction))
+        self.h_acc.append(copy.deepcopy(self.acc_layer.h))
+        self.h_context.append(copy.deepcopy(self.recurrent_layer.h))
+
+    def train_behavior(self, tape, targets, extra_loss=0.):
+        loss = 0
+        for i, target in enumerate(targets):
+            loss += tf.nn.softmax_cross_entropy_with_logits(target, self.h_action_activation[i])
+
+        loss += self.L1_regularization * sum([tf.reduce_sum(weights**2) for weights in self.weights_behavior])
+        loss += self.L2_regularization * sum([tf.reduce_sum(weights**2) for weights in self.weights_behavior])
+        loss += extra_loss
+        gradients = tape.gradient(loss, self.weights_behavior)
+        self.behavior_optimizer.update_weights(gradients, self.learning_rate_behavior)
+        return loss
+
+    def train_acc(self, tape, reward, extra_loss=0.):
+        loss = 0
+        for i, context in enumerate(self.h_context):
+            if i == 0:
+                continue
+            reward = reward * np.ones_like(self.h_outcome_activation[i])  # format the reward to the correct shape
+            step_loss = tf.nn.sigmoid_cross_entropy_with_logits(reward, self.h_outcome_activation[i])
+            loss += step_loss
+        loss += self.L1_regularization * sum([tf.reduce_sum(weights ** 2) for weights in self.weights_acc])
+        loss += self.L2_regularization * sum([tf.reduce_sum(weights ** 2) for weights in self.weights_acc])
+        loss += extra_loss
+        gradients = tape.gradient(loss, self.weights_acc)
+        self.acc_optimizer.update_weights(gradients, self.learning_rate_acc)
+        #print(loss)
+        #print(reward)
+
+        return loss
+
+    # Not the ideal way to deal with that
+    def train(self, tape, targets):
+        raise NotImplementedError("This network class uses two different train methods, for acc and behavior")
+
+
+
 class GoalNet(NeuralNet):
     def __init__(self, size_hidden=15, algorithm=optimizers.SGD, learning_rate=0.1,
                  size_observation=len(tce.TeaCoffeeData.observations_list),
@@ -128,7 +404,7 @@ class GoalNet(NeuralNet):
                  L1_reg = 0., L2_reg = 0.,
                  last_action_inputs=False,
                  nonlinearity=tf.sigmoid, params=None,
-                 recurrent_layer=ELMAN):
+                 recurrent_layer=layers.ELMAN):
         super().__init__(size_observation, size_action, initialization=initialization,
                          algorithm=algorithm, learning_rate=learning_rate, params=params)
         if params is None:
@@ -162,12 +438,12 @@ class GoalNet(NeuralNet):
             self.goal1_activation = self.goal2_activation = None
 
         size_hidden_input = self.size_observation + self.size_action + self.size_goal1 + self.size_goal2
-        if recurrent_layer == ELMAN:
+        if recurrent_layer == layers.ELMAN:
             self.hidden_layer = layers.ElmanLayer(size_hidden_input, self.size_hidden, initial_context=None,
                                                   nonlinearity=self.nonlinearity, initialization=self.initialization)
-        elif recurrent_layer == GRU:
+        elif recurrent_layer == layers.GRU:
             self.hidden_layer = layers.GRULayer(size_hidden_input, self.size_hidden)
-        elif recurrent_layer == LSTM:
+        elif recurrent_layer == layers.LSTM:
             self.hidden_layer = layers.LSTMLayer(size_hidden_input, self.size_hidden)
         else:
             raise NotImplementedError("unknown layer type")
@@ -522,3 +798,9 @@ class ACCNet(NeuralNet):
         for i in range(len(self.parameters)):
             copy.parameters[i].assign(self.parameters[i])
         return copy
+
+
+# Atari network from scratch
+class AtariNet(NeuralNet):
+    def __init__(self):
+        pass# 2 convolutions, then 1 hidden layer.

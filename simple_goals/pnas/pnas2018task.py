@@ -1,6 +1,6 @@
 import numpy as np
 
-all_inputs = ["start", "coffee", "milk", "water", "stir", "tea", "sugar"]
+all_inputs = ["start", "coffee", "milk", "water", "stir", "tea", "sugar", "serve_coffee", "serve_tea"]
 all_outputs = ["coffee", "milk", "water", "stir", "sugar", "tea", "serve_coffee", "serve_tea"]
 seq1 = ["start", "coffee", "water", "stir", "milk", "stir", "serve_coffee"]
 seq2 = ["start", "coffee", "milk", "stir", "water", "stir", "serve_coffee"]

@@ -7,6 +7,15 @@ SGD = "sgd"
 RMSPROP = "rmsprop"
 ADAM = "adam"
 
+# factory method so models don't have to worry about building the optimizer object
+def make_optimizer(type, weights_list):
+    if type == SGD:
+        return SGDOptimizer(weights_list)
+    elif type == ADAM:
+        return AdamOptimizer(weights_list)
+    elif type == RMSPROP:
+        return RMSPropOptimizer(weights_list)
+
 class Optimizer(ABC):
     def __init__(self, weights_list):
         self.weights_list = weights_list
