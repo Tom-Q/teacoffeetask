@@ -262,6 +262,10 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                     output_sequence.losses = [] #total losses
                     output_sequence.losses_actions = []
                     output_sequence.losses_goals = []
+                    # used for svm
+                    #output_sequence.observations = []
+                    #output_sequence.actions = []
+
                     for j in range(max_length):
                         observation = env.observe()
                         # Do this before adding noise, to avoid multiplying the noise.
@@ -341,6 +345,9 @@ def generate_test_data(model, sequence_ids, noise=0., goal1_noise=0., goal2_nois
                             model.action *= 0.
                         if lesion_observation_units:
                             observation *= 0.
+                        # used for svm
+                        #output_sequence.observations.append(copy.deepcopy(observation))
+                        #output_sequence.actions.append(copy.deepcopy(model.action))
 
                         if j == noise_step:
                             model.feedforward(observation, noise_to_hidden=noise_per_step_to_hidden+constant_noise)#, gain_multiplier=gain_multiplier,
@@ -461,8 +468,12 @@ NONE = "none"
 GOAL = "goal"
 SUBGOAL = "subgoal"
 ACTION = "action"
+
+list_svms_accuracies_goals = []
+list_svms_accuracies_subgoals = []
+
 from sklearn.decomposition import PCA
-def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsne=False, do_loss=False,
+def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsne=False, do_loss=False, do_svm=True,
                       mds_sequences=None, mds_range=None, noise_steps=None, one_rdm=True,
                       do_special_representations=True, do_dimensionality=False,
                       verbose=False, append_to_file=None, sequence_ids=None, net_name=""):
@@ -612,6 +623,7 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
     total_error = total_trials - total_correct_seq
     total_subseq_error = num_replaced
     total_action_errors = total_error - total_subseq_error
+    error_testing_results = [21-total_error, total_action_errors, total_subseq_error]
     # There's still a bug in the error counts.
     if verbose:
         print(
@@ -634,10 +646,11 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
     steps_noise_error_not_replaced = steps_noise_error_not_replaced / (num_errors - num_replaced) if (num_errors - num_replaced) != 0 else -1
     steps_noise_error_on_trans = steps_noise_error_on_trans / error_on_transition if error_on_transition != 0 else -1
     steps_noise_error_not_on_trans = steps_noise_error_not_on_trans / (num_errors - error_on_transition) if (num_errors - error_on_transition) != 0 else -1
-    print(
-        "Noise to error steps analysis:\n avg steps to error - subseq error: {0}\n avg steps to error - action error: {1}\n avg steps to error - on transition: {2}\n avg steps to error - not on transition: {3}\n".format(
-            steps_noise_error_replaced, steps_noise_error_not_replaced, steps_noise_error_on_trans, steps_noise_error_not_on_trans
-        ))
+    if verbose:
+        print(
+            "Noise to error steps analysis:\n avg steps to error - subseq error: {0}\n avg steps to error - action error: {1}\n avg steps to error - on transition: {2}\n avg steps to error - not on transition: {3}\n".format(
+                steps_noise_error_replaced, steps_noise_error_not_replaced, steps_noise_error_on_trans, steps_noise_error_not_on_trans
+            ))
 
     #return [total_correct_seq, total_action_errors, total_subseq_error - total_fullseq_errors, total_fullseq_errors, goal_errors]
     if append_to_file is not None:
@@ -660,8 +673,8 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
         #    ))
         myfile.close()
 
-    error_testing_results = None
     if do_loss:
+        error_testing_results = None
         ####################
         # Analysis 3: Loss #
         ####################
@@ -834,6 +847,55 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
     activations_flat = utils.flatten_onelevel(activations)  # all this list wrangling is ugly as hell
     activations_flat_rdm = []
     properties_rdm = []
+
+    import random
+    if do_svm:
+        # for making svm based on inputs. kind of hacky
+        #obss = [seq.observations for seq in outputs_sequences_flat]
+        #obs_flat = utils.flatten_onelevel(obss)
+        #acts = [seq.actions for seq in outputs_sequences_flat]
+        #acts_flat = utils.flatten_onelevel(acts)
+        #zipped_actobs = zip(obs_flat, acts_flat)
+        #inputs_flat = []
+        #for act, ob in zipped_actobs:
+        #    inputs_flat.append(np.concatenate([act, ob], axis=1))
+
+        subgoals_flat = []
+        goals_flat = []
+        for seq in outputs_sequences_flat:  # This doesn't work because the goals and subgoals are not actually recorded.
+            for step in seq._targets_with_goals_for_pca[0].targets:  # jesus this code quality is awful
+                subgoals_flat.append(step.goal2_str)
+                goals_flat.append(step.goal1_str)
+        #activations_flat, goals_flat, subgoals_flat
+        activations_np = [activation.numpy() for activation in activations_flat]
+        # If we want to test predictability purely from inputs
+        #activations_np = inputs_flat
+
+        activations_goals = list(zip(copy.deepcopy(activations_np), goals_flat))
+        random.shuffle(activations_goals)
+
+        percent_training = 10
+
+        train_set_goals = activations_goals[:(len(activations_goals) * percent_training) // 100]
+        test_set_goals = activations_goals[(len(activations_goals)*percent_training) // 100:]
+
+        activations_subgoals = list(zip(copy.deepcopy(activations_np), subgoals_flat))
+        random.shuffle(activations_subgoals)
+        train_set_subgoals = activations_subgoals[:(len(activations_subgoals) * percent_training) // 100]
+        test_set_subgoals = activations_subgoals[(len(activations_subgoals) * percent_training) // 100:]
+
+        for kernel in ['rbf']:#'linear', 'rbf']:
+            for name, train_set, test_set in [("goals", train_set_goals, test_set_goals),
+                                              ("subgoals", train_set_subgoals, test_set_subgoals)]:
+                accuracy = svm_classification(train_set, test_set, kernel)
+                if name == "goals":
+                    list_svms_accuracies_goals.append(accuracy)
+                else:
+                    list_svms_accuracies_subgoals.append(accuracy)
+                #print(name + ":" + kernel + ":" + str(accuracy))
+        #print("svm done")
+
+
     if do_rdm:  # Do the RDM and MDS
         labels = []
         for seqid, seq in enumerate(outputs_sequences_flat):
@@ -1057,6 +1119,18 @@ def analyse_test_data(test_data, goals=True, do_rdm=False, rdm_sort=NONE, do_tsn
 
     return tsne_results, test_data, num_errors, error_testing_results, goal_errors, activations_flat_rdm, properties_rdm, ranks, ranks_xaverage, averages  # Test data is enriched during analysis (first error step)
 
+from sklearn import svm
+def svm_classification(train_set, test_set, kernel):
+    svm_classifier = svm.SVC(kernel=kernel)
+    train_X, train_y = list(zip(*train_set))  # unzip
+    train_X = [row.flatten() for row in train_X]  # make train_X a list of 1-dimensional arrays
+    svm_classifier.fit(train_X, train_y)
+
+    accurate = 0
+    for x, y in test_set:
+        #print(str(svm_classifier.predict(x)[0]) + " =?= " + y)
+        accurate += int(svm_classifier.predict(x)[0] == y)
+    return accurate / len(test_set)
 
 def reorder_rdm(rdm, labels, targets, mode=ACTION):
     if mode == ACTION:

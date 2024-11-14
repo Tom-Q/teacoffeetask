@@ -275,7 +275,7 @@ def make_rdm_multiple(name, num_networks, with_goals=False, title="-", save_file
             continue
         model = utils.load_object(name, i)
         if with_goals:
-            hidden = pnashierarchy.accuracy_test_with_goals(model)
+            hidden, _, _ = pnashierarchy.accuracy_test_with_goals(model)
         else:
             hidden, _ = accuracy_test(model, name=str(i), noise=noise)
         hidden_activations.append(hidden)

@@ -7,8 +7,8 @@ import scripts
 import analysis
 import matplotlib.pyplot as plt
 
-def train_with_goals(noise=0, iterations=5000, learning_rate=0.1):
-    model = nn.GoalNet(size_hidden=100, size_observation=9, size_action=8, size_goal1=2, size_goal2=0, recurrent_layer=layers.ELMAN)
+def train_with_goals(noise=0, iterations=5000, learning_rate=0.1, size_hidden=15):
+    model = nn.GoalNet(size_hidden=size_hidden, size_observation=9, size_action=8, size_goal1=2, size_goal2=0, recurrent_layer=layers.ELMAN)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.
@@ -138,9 +138,9 @@ def train_hierarchical_nogoals(noise=0, iterations=10000, learning_rate=0.1, reg
                     episode, rng_avg_loss, rng_avg_actions, rng_avg_goals))
     return model
 
-def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strength=0.001, reg_increase="linear", num_goals=2):
+def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strength=0.001, reg_increase="linear", num_goals=2, size_hidden=15):
     #model = nn.NeuralNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=2, size_goal2=0)
-    model = nn.GoalNet(size_hidden=15, size_observation=9, size_action=8, size_goal1=num_goals, size_goal2=0)
+    model = nn.GoalNet(size_hidden=size_hidden, size_observation=9, size_action=8, size_goal1=num_goals, size_goal2=0)
     num_episodes = iterations
     model.learning_rate = learning_rate
     model.L2_regularization = 0.
@@ -177,7 +177,7 @@ def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strengt
             cols = model.size_hidden
             # Regularization in the hidden layer weights
             # Recurrent hidden to hidden connections
-            extra_loss = utils.weight_regularization_calculator(model.hidden_layer.w,
+            extra_loss = utils.weight_regularization_calculator(model.hidden_layer.parameters[0],
                                                           [0, model.size_hidden], [0, cols],
                                                           reg_strength, reg_type="recurrent", reg_increase=reg_increase)
             # Prev action to hidden
@@ -186,7 +186,7 @@ def train_hierarchical(noise=0, iterations=10000, learning_rate=0.1, reg_strengt
             #                                               [0, cols],
             #                                               reg_strength, reg_type="input_right", reg_increase=reg_increase)
             # Prev goal to hidden
-            extra_loss += utils.weight_regularization_calculator(model.hidden_layer.w,
+            extra_loss += utils.weight_regularization_calculator(model.hidden_layer.parameters[0],
                                                           [model.size_hidden+9+model.size_action, model.size_hidden+9+model.size_action+num_goals],
                                                           [0, cols],
                                                           reg_strength, reg_type="input_left", reg_increase=reg_increase)
@@ -242,11 +242,11 @@ def make_rdm_multiple_hierarchy(name, num_networks, title="-", save_files=True, 
         # Now cut that in two and make an RDM for each
         cutoff = int(len(hidden[0])//2)
         left_units = [vector[:cutoff] for vector in hidden]
-        rdm_left= analysis.rdm_spearman(left_units)
+        rdm_left= rdm.rdm_spearman(left_units)#analysis.rdm_spearman(left_units)
         rdmatrices_left.append(rdm_left)
 
         right_units = [vector[cutoff:] for vector in hidden]
-        rdm_right = analysis.rdm_spearman(right_units)
+        rdm_right =  rdm.rdm_spearman(right_units)#analysis.rdm_spearman(right_units)
         rdmatrices_right.append(rdm_right)
 
     # Do the same processing for each side (low level/left and high_level/right)
@@ -262,21 +262,36 @@ def make_rdm_multiple_hierarchy(name, num_networks, title="-", save_files=True, 
         side_name = file_save_name+side[1]
         np.savetxt(side_name+"_rdm_mat"+utils.datestr()+".txt", avg_matrix, delimiter="\t", fmt='%.2e')
         labels = []
-        for i, sequence in enumerate(pnas2018task.seqs):
-            for action in sequence[1:]:
-                labels.append(str(i)+'_'+action)
-        analysis.plot_rdm(avg_matrix, labels, title+side_name + " spearman rho matrix")
+        #for i, sequence in enumerate(pnas2018task.seqs):
+        #    for action in sequence[1:]:
+        #        labels.append(str(i)+'_'+action)
+        #analysis.plot_rdm(avg_matrix, labels, title+side_name + " spearman rho matrix")
         if save_files:
-            plt.savefig(side_name+'_rdm'+utils.datestr())
-        plt.clf()
+            save_name = title + side[1]
+            properties = []
+            for i, sequence in enumerate(pnas2018task.seqs):
+                for action in sequence[1:]:
+                    prop = {}
+                    prop["action"] = action
+                    prop["sequence"] = str(i)
+                    properties.append(prop)
+            rdm_obj = rdm.rdm(properties, matrix_values=avg_matrix)
+            rdm_obj.plot_rdm(save_name + " spearman rho matrix")
+            if save_files:
+                plt.savefig(save_name + '_rdm' + utils.datestr())
+            plt.clf()
 
-        mdsy = analysis.mds(avg_matrix)
-        for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
-            analysis.plot_mds_points(mdsy[6 * i:6 * i + 6], range(6), labels=labels[6 * i:6 * i + 6], style=style)
-        plt.title(title+side_name)
-        if save_files:
-            plt.savefig(side_name + '_mds'+utils.datestr())
-        plt.clf()
+            #np.savetxt(save_name + "_rdm.txt", avg_matrix, delimiter="\t", fmt='%.2e')
+            #plt.savefig(save_name+'_rdm'+utils.datestr())
+        #plt.clf()
+
+        #mdsy = analysis.mds(avg_matrix)
+        #for i, style in enumerate(['ro-', 'b|--', 'gx-.', 'k_:']):
+        #    analysis.plot_mds_points(mdsy[6 * i:6 * i + 6], range(6), labels=labels[6 * i:6 * i + 6], style=style)
+        #plt.title(title+side_name)
+        #if save_files:
+        #    plt.savefig(side_name + '_mds'+utils.datestr())
+        #plt.clf()
 
 
 import rdm as rdm
@@ -589,11 +604,11 @@ def make_rdm_multiple_special(name1, name2, num_networks, file_save_name, title,
             # Now cut that in two and make an RDM for each
             cutoff = int(len(hidden[0])//2)
             left_units = [vector[:cutoff] for vector in hidden]
-            rdm_left= analysis.rdm_spearman(left_units)
+            rdm_left= rdm.rdm_spearman(left_units) #analysis.rdm_spearman(left_units)
             rdmatrices_left.append(rdm_left)
 
             right_units = [vector[cutoff:] for vector in hidden]
-            rdm_right = analysis.rdm_spearman(right_units)
+            rdm_right = rdm.rdm_spearman(right_units) #analysis.rdm_spearman(right_units)
             rdmatrices_right.append(rdm_right)
 
         # Do the same processing for each side (low level/left and high_level/right)

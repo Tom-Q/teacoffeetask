@@ -1,7 +1,7 @@
 # Entry point of the program. Mostly loads scripts from scripts, which themselves rely on more serious code.
 import utils
 import sys
-from neural import neuralnet as nn, optimizers, layers
+#from neural import neuralnet as nn, optimizers, layers
 import analysis
 import goalenv
 from goalenv import environment as env, goalenv2020, scripts
@@ -11,8 +11,120 @@ import numpy as np
 
 from pnas import pnas2018, pnashierarchy
 import rdm
+#goalenv.scripts.bargraph_with_without_goalunits_redo("figure4_100units")
+#sys.exit()
 
-utils.initialize_random_seeds(1212455)
+utils.initialize_random_seeds(525685)
+# SVM.
+#model = utils.load_object("bigmodel1_0goals_relu_adam_nonoise")  # no goal model.
+# extract activations.
+import statistics as stats
+import scipy.stats as scistats
+from copy import deepcopy
+if False:  # SVM classification
+    scripts.basic_analysis([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+                           "bigmodel1_0goals_relu_adam_nonoise", False, constant_noise=0)
+    goals_accuracies1 = deepcopy(goalenv2020.list_svms_accuracies_goals)
+    subgoals_accuracies1 = deepcopy(goalenv2020.list_svms_accuracies_subgoals)
+    print(stats.mean(goals_accuracies1), stats.variance(goals_accuracies1))
+    print(stats.mean(subgoals_accuracies1), stats.variance(subgoals_accuracies1))
+    sys.exit()
+    goalenv2020.list_svms_accuracies_goals = []
+    goalenv2020.list_svms_accuracies_subgoals = []
+    scripts.basic_analysis([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+                           "bigmodel1_1goals_relu_adam_nonoise", True, constant_noise=0)
+    goals_accuracies2 = deepcopy(goalenv2020.list_svms_accuracies_goals)
+    subgoals_accuracies2 = deepcopy(goalenv2020.list_svms_accuracies_subgoals)
+    print(stats.mean( goals_accuracies2), stats.variance( goals_accuracies2))
+    print(stats.mean(subgoals_accuracies2), stats.variance(subgoals_accuracies2))
+    goalenv2020.list_svms_accuracies_goals = []
+    goalenv2020.list_svms_accuracies_subgoals = []
+    print("ttests goals / subgoals:")
+    print(scistats.ttest_rel(goals_accuracies1, goals_accuracies2))
+    print(scistats.ttest_rel(subgoals_accuracies1, subgoals_accuracies2))
+    scripts.basic_analysis([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+                           "bigmodel1_0goals_relu_rmsprop_nonoise_100_units", False, constant_noise=0)
+    goals_accuracies1 = deepcopy(goalenv2020.list_svms_accuracies_goals)
+    subgoals_accuracies1 = deepcopy(goalenv2020.list_svms_accuracies_subgoals)
+    print(stats.mean(goals_accuracies1), stats.variance(goals_accuracies1))
+    print(stats.mean(subgoals_accuracies1), stats.variance(subgoals_accuracies1))
+
+    goalenv2020.list_svms_accuracies_goals = []
+    goalenv2020.list_svms_accuracies_subgoals = []
+    scripts.basic_analysis([1, 2, 3, 4, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24, 25],
+                           "bigmodel1_1goals_relu_rmsprop_nonoise_100_units", True, constant_noise=0)
+    goals_accuracies2 = deepcopy(goalenv2020.list_svms_accuracies_goals)
+    subgoals_accuracies2 = deepcopy(goalenv2020.list_svms_accuracies_subgoals)
+    print(stats.mean( goals_accuracies2), stats.variance( goals_accuracies2))
+    print(stats.mean(subgoals_accuracies2), stats.variance(subgoals_accuracies2))
+    goalenv2020.list_svms_accuracies_goals = []
+    goalenv2020.list_svms_accuracies_subgoals = []
+
+    print("ttests goals / subgoals:")
+    print(scistats.ttest_rel(goals_accuracies1, goals_accuracies2))
+    print(scistats.ttest_rel(subgoals_accuracies1, subgoals_accuracies2))
+    sys.exit()
+
+if True:
+    # LARGE MODELS PNAS
+    if False: # train models
+        models = []
+        for i in range(0):
+            model, _ = pnas2018.train(size_hidden=50, iterations=4000)
+            utils.save_object("ctt_nogoals_50units_4000i", model)
+        for i in range(1):
+            model = pnashierarchy.train_with_goals(size_hidden=50, iterations=4500)
+            utils.save_object("ctt_goals_50units_4500i", model)
+        sys.exit()
+        for i in range(20):
+            model, _ = pnas2018.train(size_hidden=100, iterations=3500)
+            utils.save_object("ctt_nogoals_100units_3500i", model)
+
+        for i in range(20):
+            model, _ = pnas2018.train(size_hidden=1000, iterations=2000)
+            utils.save_object("ctt_nogoals_1000units_2000i", model)
+
+        for i in range(20):
+            model = pnashierarchy.train_with_goals(size_hidden=100, iterations=4000)
+
+            utils.save_object("ctt_goals_100units_4000i", model)
+
+        for i in range(20):
+            model = pnashierarchy.train_with_goals(size_hidden=1000, iterations=2500)
+            utils.save_object("ctt_goals_1000units_2500i", model)
+
+    if False: # Hierarchy models
+        for i in range(0):
+            model = pnashierarchy.train_hierarchical(iterations=6500, size_hidden=50, reg_strength=0.0003)
+            utils.save_object("pnashierarchy50_6500_0003", model)
+        for i in range(0):
+            model = pnashierarchy.train_hierarchical(iterations=6500, size_hidden=100, reg_strength=0.00015)
+            utils.save_object("pnashierarchy100_6500_00015", model) # should be 0003
+        for i in range(0):
+            model = pnashierarchy.train_hierarchical(iterations=5500, size_hidden=1000, reg_strength=0.000015)
+            utils.save_object("pnashierarchy1000_5500_000015", model) # should be 0003
+        sys.exit()
+    pnas2018.make_rdm_multiple("ctt_nogoals_50units_4000i", 20, with_goals=False, rdm_type=rdm.SPEARMAN, title="ctt_nogoals_50units_4000i", save_name="ctt_nogoals_50units_4000i")
+    pnas2018.make_rdm_multiple("ctt_goals_50units_4500i", 20, with_goals=True, rdm_type=rdm.SPEARMAN, title="ctt_goals_50units_4500i", save_name="ctt_goals_50units_4500i")
+    sys.exit()
+    #pnas2018.make_rdm_multiple("ctt_nogoals_100units_3500i", 20, with_goals=False, rdm_type=rdm.SPEARMAN,  title="ctt_nogoals_100units_3500i", save_name="ctt_nogoals_100units_3500i")
+    #pnas2018.make_rdm_multiple("ctt_nogoals_1000units_2000i", 20, with_goals=False, rdm_type=rdm.SPEARMAN, title="ctt_nogoals_1000units_2000i", save_name="ctt_nogoals_1000units_2000i")
+    #pnas2018.make_rdm_multiple("ctt_goals_100units_4000i", 20, with_goals=True, rdm_type=rdm.SPEARMAN, title="ctt_goals_100units_4000i", save_name="ctt_goals_100units_4000i")
+    #pnas2018.make_rdm_multiple("ctt_goals_1000units_2500i", 20, with_goals=True, rdm_type=rdm.SPEARMAN, title="ctt_goals_1000units_2500i", save_name="ctt_goals_1000units_2500i")
+
+    pnashierarchy.make_rdm_multiple_hierarchy("pnashierarchy50_6500_0003", 20, skips=[], title="pnashierarchy50_6500_0003")
+    pnashierarchy.make_rdm_multiple_hierarchy("pnashierarchy100_6500_00015", 20, skips=[1, 5, 6, 7, 14, 19, 23, 24, 25, 27],
+                                              title="pnashierarchy100_6500_00015")
+    pnashierarchy.make_rdm_multiple_hierarchy("pnashierarchy1000_5500_000015", 20, skips=[],
+                                              title="pnashierarchy1000_5500_000015")
+
+    #pnashierarchy.make_rdm_multiple("ctt_goals_1000units_2500i", 20, with_goals=True, rdm_type=rdm.SPEARMAN, title="ctt_goals_1000units_2500i", save_name="ctt_goals_1000units_2500i")
+
+    sys.exit(0)
+
+
+
+
 
 #scripts.basic_analysis(range(20), "bigmodel1_1goals_relu_adam_nonoise", True)
 #scripts.basic_analysis(range(20), "bigmodel1_0goals_relu_adam_nonoise", False)
@@ -60,8 +172,42 @@ sys.exit()
 #    utils.save_object("model_with_goals100units_ctt", model)
 
 
-goalenv.scripts.train_networks_100_units(10)
-sys.exit()
+#goalenv.scripts.train_networks_100_units(10)
+#nets = utils.load_objects("bigmodel1_0goals_relu_rmsprop_nonoise_100_units", 10)
+# Test the models (try to train 20 of each).\
+
+
+for noise in [0.01, 0.1, 0.2, 0.5, 1.]:
+    error_testing_results = goalenv.scripts.basic_analysis([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+                                   "bigmodel1_0goals_relu_rmsprop_nonoise_100_units", False, constant_noise=noise)
+    action_errors = sequence_errors = correct = 0
+    for net in error_testing_results:
+        correct += net[3][0]
+        sequence_errors += net[3][2]
+        action_errors += net[3][1]
+
+    num_nets = len(error_testing_results)
+    print("\n\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%" +\
+          "noise="+str(noise)+"\ncorrect:"+ str(correct/num_nets) + "\nseq:" + str(sequence_errors/num_nets), "\nact:"+str(action_errors/num_nets))
+
+for noise in [0.01, 0.1, 0.2, 0.5, 1.]:
+    error_testing_results = goalenv.scripts.basic_analysis([1, 2, 3, 4, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24, 25],
+                                   "bigmodel1_1goals_relu_rmsprop_nonoise_100_units", True, constant_noise=noise)
+    action_errors = sequence_errors = correct = 0
+    for net in error_testing_results:
+        correct += net[3][0]
+        sequence_errors += net[3][2]
+        action_errors += net[3][1]
+
+    num_nets = len(error_testing_results)
+    print("\n\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%" +\
+          "noise="+str(noise)+"\ncorrect:"+ str(correct/num_nets) + "\nseq:" + str(sequence_errors/num_nets), "\nact:"+str(action_errors/num_nets))
+
+# correct: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+# failed: 1, 6, 7, 9, 21, 22, 27,
+# VALID GOAL NETWORKS: [1, 2, 3, 4, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24, 25] "bigmodel1_1goals_relu_rmsprop_nonoise_100_units"
+# VALID FLAT NETWORKS: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] (all of them)
+sys.exit(0)
 #pnas2018.make_rdm_multiple("model_with_goals100units_ctt", 10, with_goals=True, rdm_type=rdm.SPEARMAN)
 pnashierarchy.make_rdm_multiple_goals_actions("model_with_goals", 10)
 sys.exit(0)
@@ -173,96 +319,4 @@ rdm.delete_entry(3)
 rdm.delete_entry(0)
 rdm.save("steps_1to2")
 #rdm_context.save("rdm_ctxt")
-"""
-
-"""
-# peaks subproject
-# PHASE 1.
-import csv
-import scipy.spatial.kdtree
-import geopy
-
-class Summit(object):
-    def __init__(self, elevation, latitude, longitude):
-        self.elevation = elevation
-        self.latitude = latitude
-        self.longitude = longitude
-        self.hash = hash((self.latitude, self.longitude))
-
-# Load the list of summits, constructing summit structs
-summit_list = []
-with open('all-peaks-sorted-p100.txt', 'r') as file:
-    reader = csv.reader(file)
-    for i, row in enumerate(reader):
-        summit_list.append(Summit(row[2], row[0], row[1]))
-        if i % 100000 == 0:
-            print(i)
-        if i > 1000000:  # for now just use 1,000,000 summits for testing purposes
-            break
-
-# Sort the list by elevation
-sorted(summit_list, key=lambda x:x.elevation, reverse=True)
-
-# Make a dict to have a O(1) access to the summits based on coordinates
-summit_dict = {}
-for summit in summit_list:
-    summit_dict[summit.hash] = summit
-
-# Make a ball tree
-from sklearn.neighbors import BallTree
-import numpy as np
-import pandas as pd
-
-cities = pd.DataFrame(data={
-    'name': [...],
-    'lat': [...],
-    'lon': [...]
-})
-
-query_lats = [...]
-query_lons = [...]
-
-bt = BallTree(np.deg2rad(cities[['lat', 'lon']].values), metric='haversine')
-distances, indices = bt.query(np.deg2rad(np.c_[query_lats, query_lons]))
-
-nearest_cities = cities['name'].iloc[indices]
-
-
-tree = scipy.spatial.kdtree.KDTree(data)
-
-R = 6378137 # earth radius in meters.
-# Iterate over each summit, looking for neighbors.
-for summit in summit_list:
-    # evaluate twice the horizon distance
-    horizon_distance = np.sqrt(2 * R * summit.elevation + summit.elevation**2)
-    doubled = horizon_distance * 2
-
-    # look for every mountain within twice horizon distance
-    candidates = tree.query_ball_point((summit.latitude, summit.longitude), doubled)
-    for candidate in candidates:
-
-print("done")
-sys.exit(0)
-
-# Sort it by elevation
-sorted(summits, elevation)
-compute theoretical max visual range
-summits2 = copy(summits)
-sorted(summits2, latitude + longitude) # meaning I need to box them by longitude/latitude.
-for summit in summits:
-    # find all summits which "see each other"
-    # 1. Find all summits within latitude + longitude range
-    for candidate_summits:
-        # 1. Check whether candidate < summit
-        # 2. Check whether they theoretically see each other
-        # 3. Compute the angle from summit 2 to summit 1
-        # if angle < x delete summit from all lists (not a top summit = relevant)
-# Result = list of summits that can't see anything higher than them by looking up
-
-# PHASE 2.
-for summit in summits:
-    visibles = # find all summits which theoretically see this summit.
-    sorted(visibles, elevation)
-    for visible:
-
 """

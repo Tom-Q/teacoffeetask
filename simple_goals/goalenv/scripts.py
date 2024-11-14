@@ -231,7 +231,7 @@ def train_networks_100_units(n):
             model = nn.GoalNet(size_hidden=100, size_observation=29, size_action=19,  # 50
                                size_goal1=len(env.GoalEnvData.goals1_list) * g,
                                size_goal2=len(env.GoalEnvData.goals2_list) * g,
-                               algorithm=optimizers.ADAM, learning_rate=0.001,  # 0.001
+                               algorithm=optimizers.RMSPROP, learning_rate=0.001,  # 0.001
                                L2_reg=0.,  # 0.0001,
                                initialization=utils.HE,  # HE
                                nonlinearity=tf.nn.relu,  # relu
@@ -309,7 +309,7 @@ def control_analysis_1model(model, sequence_id, goal_multiplier):
 
 
 
-def basic_analysis(nets, model_file_name, goals):  # Currently set up for the distance to error analysis. Can also do lots of other things
+def basic_analysis(nets, model_file_name, goals, constant_noise=0):  # Currently set up for the distance to error analysis. Can also do lots of other things
     #filename="distance_to_error_2.csv"
     filename="results_last_resort4.csv"
     results = []
@@ -343,7 +343,7 @@ def basic_analysis(nets, model_file_name, goals):  # Currently set up for the di
                     #goal2 = utils.str_to_onehot("g_2_add_cream", goalenv.environment.GoalEnvData.goals2_list) * 3
                     #goal2 = utils.str_to_onehot("g_2_add_cream", env.GoalEnvData.goals2_list)
                     #goal2 = utils.str_to_onehot("g_2_drink_tea", goalenv.environment.GoalEnvData.goals2_list) * 1.0
-                    test_data = goalenv2020.generate_test_data(model, noise=0.0,
+                    test_data = goalenv2020.generate_test_data(model, noise=0.,
                                                                goal1_noise=0., goal2_noise=0.,
                                                                goals=goals, num_tests=1,
                                                                goal_multiplier=goal_multiplier,
@@ -362,7 +362,7 @@ def basic_analysis(nets, model_file_name, goals):  # Currently set up for the di
                                                                noise_per_step_to_input=False,
                                                                #noise_per_step_to_hidden=2.0,
                                                                disruption_per_step=False,
-                                                               constant_noise=0.,
+                                                               constant_noise=constant_noise,
                                                                initialization=utils.ZERO_INIT,
                                                                clamped_goals=False,
                                                                verbose=False)
@@ -372,7 +372,7 @@ def basic_analysis(nets, model_file_name, goals):  # Currently set up for the di
                                                               do_special_representations=False,
                                                               do_tsne=False,
                                                               do_rdm=False,
-                                                              do_dimensionality=True,
+                                                              do_dimensionality=False, # only possible on no-error samples
                                                               #mds_range=50,
                                                               #mds_sequences=range(21),
                                                               verbose=False,
@@ -385,6 +385,9 @@ def basic_analysis(nets, model_file_name, goals):  # Currently set up for the di
                     #                      filename=str(network_id)+"mds", annotate=True, save_txt=True)
                     #utils.save_object("tsne_results_bigmodel1_yesgoals", tsne_results)
                     #plot_tsne(str(network_id)+"mds_tsne.txt", str(network_id)+"tsne.svg")
+    if True:
+        return results
+
     #import sys
     #sys.exit()
     ranks = []
@@ -1208,7 +1211,7 @@ def basic_analysis2():
     from goalenv import goalenv2020
     from goalenv import environment as env
     import tensorflow as tf
-    for i in range(10):
+    for i in range(0):
         print(i)
         model = nn.GoalNet(size_hidden=100, size_observation=29, size_action=19,
                            size_goal1=len(env.GoalEnvData.goals1_list),
@@ -1229,7 +1232,7 @@ def basic_analysis2():
         utils.save_object("kitchenv_relu_adam_goals_100units", model) #goals
         #utils.save_object("bigmodel1_relu_adam_nonoise_gradient", model)
         #utils.save_object("bigmodel1_yesgoals_relu_adam_nonoise_goaltest", model)
-    for i in range(10):
+    for i in range(0):
         print(i)
         model = nn.GoalNet(size_hidden=100, size_observation=29, size_action=19,
                            size_goal1=0,  #len(env.GoalEnvData.goals1_list),
@@ -1633,6 +1636,56 @@ def bargraph_with_without_goalunits(filename):
     #plt.title(title)
     plt.savefig(filename)
     plt.clf()
+
+def bargraph_with_without_goalunits_redo(filename):
+    # Updated info based on 20 networks of each, 1 run each.
+    # goals
+    means_action_errors_goals = (0.0, 3.33, 36.9, 97.38, 95.24)
+    means_subseq_errors_goals = (0.24, 17.14, 37.14, 2.62, 4.76)
+
+    # no goals
+    means_action_errors_nogoals = (0.0, 3.81, 31.9, 94.52, 94.52)
+    means_subseq_errors_nogoals = (0.24, 20.0, 50.48, 5.48, 5.48)
+
+    ind = [1., 2., 3., 4., 5.]  # the x locations for the groups
+    width = 0.2
+    plt.clf()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    idxs_goals = [id+0.11 for id in ind]
+    plt.rcParams['hatch.color'] = 'white'  # using "edgecolor" causes a white edge to appear in between the different bars.
+    ax.bar(idxs_goals, means_subseq_errors_goals, width, color='orangered', hatch='////')
+    ax.bar(idxs_goals, means_action_errors_goals, width, bottom=means_subseq_errors_goals, color='orange', hatch='////')
+    ax.bar(idxs_goals, [100]*len(means_subseq_errors_goals), width, bottom=[a+b for (a, b) in zip(means_action_errors_goals, means_subseq_errors_goals)], color='bisque', hatch='////')
+
+    idxs_nogoals = [id-0.11 for id in ind]
+    ax.bar(idxs_nogoals, means_subseq_errors_nogoals, width, color='orangered')
+    ax.bar(idxs_nogoals, means_action_errors_nogoals, width, bottom=means_subseq_errors_nogoals, color='orange')
+    ax.bar(idxs_nogoals, [100] * len(means_subseq_errors_goals), width, bottom=[a + b for (a, b) in zip(means_action_errors_nogoals, means_subseq_errors_nogoals)], color='bisque')
+    ax.set_ylabel('Outcomes')
+    ax.set_xlabel('Noise magnitude')
+    #ax.set_title('Percentage of sequences displaying action or subsequence errors')
+    plt.xticks(ind, ('0.01', '0.1', '0.2', '0.5', '1.0'))
+    ax.set_yticks([0, 20, 40, 60, 80, 100])
+    formatter = FuncFormatter(lambda y, pos: "%d%%" % (y))
+    ax.yaxis.set_major_formatter(formatter)
+    ax.set_ylim([0, 100])
+    legend_elements = [patches.Patch(facecolor='orangered', label='Subsequence error'),
+                       patches.Patch(facecolor='orange', label='Action error'),
+                       patches.Patch(facecolor='bisque', label='Correct'),
+                       #Patch(facecolor='white', edgecolor='grey', label='Goals'),
+                       patches.Patch(facecolor='grey', edgecolor='white', label='Flat network'),
+                       patches.Patch(facecolor='grey', edgecolor='white', hatch='////', label='Goal network')]
+
+    ax.legend(handles=legend_elements, loc='upper left')
+
+    #ax.legend(labels=['Subsequence error', 'Action error', 'Success'], loc="upper left")
+    plt.tight_layout()
+    #plt.show()
+    #plt.title(title)
+    plt.savefig(filename)
+    plt.clf()
+
 
 def loss_big_plot(filename="loss_plots"):
     fig = plt.figure()
